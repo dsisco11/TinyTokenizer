@@ -4,11 +4,21 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>TinyTokenizer</PackageId>
+    <Title>TinyTokenizer</Title>
+    <Description>A high-performance, zero-allocation tokenizer library for .NET that parses text into abstract tokens using ReadOnlySpan for maximum efficiency.</Description>
+    <Authors>David Sisco</Authors>
+    <PackageTags>tokenizer;parser;span;memory;performance;zero-allocation</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/dsisco11/TinyTokenizer</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="TinyTokenizer.Tests\**" />
-    <None Remove="TinyTokenizer.Tests\**" />
+    <None Include="../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
