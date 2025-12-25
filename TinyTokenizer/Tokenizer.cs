@@ -1,0 +1,235 @@
+using System.Collections.Immutable;
+
+namespace TinyTokenizer;
+
+/// <summary>
+/// A high-performance tokenizer that parses text into a series of tokens using <see cref="ReadOnlySpan{T}"/>.
+/// This is a ref struct to allow holding spans internally during parsing.
+/// </summary>
+public ref struct Tokenizer
+{
+    #region Fields
+
+    private readonly ReadOnlyMemory<char> _source;
+    private readonly ReadOnlySpan<char> _span;
+    private readonly TokenizerOptions _options;
+    private int _position;
+
+    #endregion
+
+    #region Delimiter Mappings
+
+    private static readonly Dictionary<char, char> OpenToClose = new()
+    {
+        ['{'] = '}',
+        ['['] = ']',
+        ['('] = ')'
+    };
+
+    private static readonly Dictionary<char, TokenType> OpenToTokenType = new()
+    {
+        ['{'] = TokenType.BraceBlock,
+        ['['] = TokenType.BracketBlock,
+        ['('] = TokenType.ParenthesisBlock
+    };
+
+    private static readonly HashSet<char> ClosingDelimiters = new() { '}', ']', ')' };
+
+    #endregion
+
+    #region Constructors
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="Tokenizer"/> with the specified source and options.
+    /// </summary>
+    /// <param name="source">The source text to tokenize.</param>
+    /// <param name="options">The tokenizer options. If null, default options are used.</param>
+    public Tokenizer(ReadOnlyMemory<char> source, TokenizerOptions? options = null)
+    {
+        _source = source;
+        _span = source.Span;
+        _options = options ?? TokenizerOptions.Default;
+        _position = 0;
+    }
+
+    #endregion
+
+    #region Public Methods
+
+    /// <summary>
+    /// Tokenizes the source text and returns an immutable array of tokens.
+    /// </summary>
+    /// <returns>An immutable array of tokens parsed from the source.</returns>
+    public ImmutableArray<Token> Tokenize()
+    {
+        return TokenizeInternal(null);
+    }
+
+    #endregion
+
+    #region Private Methods
+
+    /// <summary>
+    /// Internal tokenization method that handles recursive block parsing.
+    /// </summary>
+    /// <param name="expectedCloser">The expected closing delimiter when parsing inside a block, or null for top-level.</param>
+    /// <returns>An immutable array of tokens.</returns>
+    private ImmutableArray<Token> TokenizeInternal(char? expectedCloser)
+    {
+        var tokens = ImmutableArray.CreateBuilder<Token>();
+
+        while (_position < _span.Length)
+        {
+            char current = _span[_position];
+
+            // Check for expected closing delimiter (when inside a block)
+            if (expectedCloser.HasValue && current == expectedCloser.Value)
+            {
+                // Don't consume the closer; let the caller handle it
+                break;
+            }
+
+            // Check for unexpected closing delimiter
+            if (ClosingDelimiters.Contains(current))
+            {
+                tokens.Add(new ErrorToken(
+                    _source.Slice(_position, 1),
+                    $"Unexpected closing delimiter '{current}'",
+                    _position));
+                _position++;
+                continue;
+            }
+
+            // Check for opening delimiter (start of block)
+            if (OpenToClose.TryGetValue(current, out char closer))
+            {
+                var blockToken = ParseBlock(current, closer);
+                tokens.Add(blockToken);
+                continue;
+            }
+
+            // Check for symbol
+            if (_options.Symbols.Contains(current))
+            {
+                tokens.Add(new SymbolToken(_source.Slice(_position, 1)));
+                _position++;
+                continue;
+            }
+
+            // Check for whitespace
+            if (char.IsWhiteSpace(current))
+            {
+                tokens.Add(ParseWhitespace());
+                continue;
+            }
+
+            // Otherwise, it's text
+            tokens.Add(ParseText());
+        }
+
+        return tokens.ToImmutable();
+    }
+
+    /// <summary>
+    /// Parses a block starting at the current position.
+    /// </summary>
+    /// <param name="opener">The opening delimiter character.</param>
+    /// <param name="closer">The expected closing delimiter character.</param>
+    /// <returns>A <see cref="BlockToken"/> or <see cref="ErrorToken"/> if the block is malformed.</returns>
+    private Token ParseBlock(char opener, char closer)
+    {
+        int startPosition = _position;
+        TokenType blockType = OpenToTokenType[opener];
+
+        // Consume the opening delimiter
+        _position++;
+        int innerStart = _position;
+
+        // Recursively tokenize the inner content
+        var children = TokenizeInternal(closer);
+
+        int innerEnd = _position;
+
+        // Check if we found the closing delimiter
+        if (_position < _span.Length && _span[_position] == closer)
+        {
+            // Consume the closing delimiter
+            _position++;
+
+            var fullContent = _source.Slice(startPosition, _position - startPosition);
+            var innerContent = _source.Slice(innerStart, innerEnd - innerStart);
+
+            return new BlockToken(
+                fullContent,
+                innerContent,
+                children,
+                blockType,
+                opener,
+                closer);
+        }
+        else
+        {
+            // Unclosed block - emit error token for the opening delimiter
+            // The children are lost, but we've already advanced past them
+            return new ErrorToken(
+                _source.Slice(startPosition, 1),
+                $"Unclosed block starting with '{opener}'",
+                startPosition);
+        }
+    }
+
+    /// <summary>
+    /// Parses whitespace starting at the current position.
+    /// </summary>
+    /// <returns>A <see cref="WhitespaceToken"/>.</returns>
+    private WhitespaceToken ParseWhitespace()
+    {
+        int start = _position;
+
+        while (_position < _span.Length && char.IsWhiteSpace(_span[_position]))
+        {
+            _position++;
+        }
+
+        return new WhitespaceToken(_source.Slice(start, _position - start));
+    }
+
+    /// <summary>
+    /// Parses text starting at the current position.
+    /// Text ends when a delimiter, symbol, or whitespace is encountered.
+    /// </summary>
+    /// <returns>A <see cref="TextToken"/>.</returns>
+    private TextToken ParseText()
+    {
+        int start = _position;
+
+        while (_position < _span.Length)
+        {
+            char current = _span[_position];
+
+            // Stop at delimiters
+            if (OpenToClose.ContainsKey(current) || ClosingDelimiters.Contains(current))
+            {
+                break;
+            }
+
+            // Stop at symbols
+            if (_options.Symbols.Contains(current))
+            {
+                break;
+            }
+
+            // Stop at whitespace
+            if (char.IsWhiteSpace(current))
+            {
+                break;
+            }
+
+            _position++;
+        }
+
+        return new TextToken(_source.Slice(start, _position - start));
+    }
+
+    #endregion
+}
