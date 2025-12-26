@@ -1,15 +1,13 @@
 using System.Buffers;
 using System.Collections.Immutable;
 using System.IO.Pipelines;
-using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace TinyTokenizer;
 
 /// <summary>
-/// An async tokenizer that streams tokens from a <see cref="PipeReader"/> using
-/// <see cref="IAsyncEnumerable{T}"/> for on-demand parsing without pre-loading all tokens.
-/// Uses the two-level architecture: Lexer (Level 1) → TokenParser (Level 2).
+/// An async tokenizer that reads from a <see cref="PipeReader"/> and produces tokens.
+/// Buffers the entire input, then uses the sync Lexer + TokenParser pipeline.
 /// </summary>
 public sealed class AsyncPipeTokenizer : IAsyncDisposable
 {
@@ -55,32 +53,52 @@ public sealed class AsyncPipeTokenizer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Streams tokens asynchronously from the input.
-    /// Uses the two-level Lexer → TokenParser architecture for clean streaming.
+    /// Tokenizes the input asynchronously and returns all tokens.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of tokens.</returns>
-    public IAsyncEnumerable<Token> TokenizeAsync(
+    /// <returns>An immutable array of tokens.</returns>
+    public async Task<ImmutableArray<Token>> TokenizeAsync(
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // Create an async enumerable of memory chunks from the reader
-        var chunks = ReadChunksAsync(cancellationToken);
+        // Step 1: Read all input into memory
+        var input = await ReadAllAsync(cancellationToken).ConfigureAwait(false);
 
-        // Level 1: Lexer produces SimpleTokens from chunks
-        var simpleTokens = _lexer.LexAsync(chunks, cancellationToken);
-
-        // Level 2: TokenParser produces semantic Tokens from SimpleTokens
-        return _parser.ParseAsync(simpleTokens, cancellationToken);
+        // Step 2: Sync lex → parse
+        var simpleTokens = _lexer.Lex(input);
+        return _parser.ParseToArray(simpleTokens);
     }
 
     /// <summary>
-    /// Reads character chunks from the underlying pipe reader.
+    /// Tokenizes the input asynchronously and yields tokens as they are parsed.
+    /// Note: This still buffers all input before parsing, but yields incrementally.
     /// </summary>
-    private async IAsyncEnumerable<ReadOnlyMemory<char>> ReadChunksAsync(
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An enumerable of tokens.</returns>
+    public async IAsyncEnumerable<Token> TokenizeStreamingAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Step 1: Read all input into memory
+        var input = await ReadAllAsync(cancellationToken).ConfigureAwait(false);
+
+        // Step 2: Sync lex → parse, yielding each token
+        var simpleTokens = _lexer.Lex(input);
+        foreach (var token in _parser.Parse(simpleTokens))
+        {
+            yield return token;
+        }
+    }
+
+    /// <summary>
+    /// Reads all characters from the underlying reader into memory.
+    /// </summary>
+    private async Task<ReadOnlyMemory<char>> ReadAllAsync(CancellationToken cancellationToken)
+    {
+        var buffer = new List<char>();
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -88,41 +106,32 @@ public sealed class AsyncPipeTokenizer : IAsyncDisposable
             var readResult = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             if (readResult.IsCanceled)
-            {
-                yield break;
-            }
+                break;
 
-            var buffer = readResult.Buffer;
-            bool isCompleted = readResult.IsCompleted;
-
-            if (!buffer.IsEmpty)
+            var charBuffer = readResult.Buffer;
+            if (!charBuffer.IsEmpty)
             {
-                // Copy to a new array since buffer may be reused
-                var chars = new char[buffer.Length];
-                for (int i = 0; i < buffer.Length; i++)
+                for (int i = 0; i < charBuffer.Length; i++)
                 {
-                    chars[i] = buffer.Span[i];
+                    buffer.Add(charBuffer.Span[i]);
                 }
-                
-                _reader.AdvanceTo((int)buffer.Length);
-                
-                yield return chars.AsMemory();
+                _reader.AdvanceTo((int)charBuffer.Length);
             }
 
-            if (isCompleted)
-            {
-                yield break;
-            }
+            if (readResult.IsCompleted)
+                break;
         }
+
+        return buffer.ToArray().AsMemory();
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (!_disposed)
-        {
-            _disposed = true;
-            await _reader.DisposeAsync().ConfigureAwait(false);
-        }
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        await _reader.DisposeAsync().ConfigureAwait(false);
     }
 }

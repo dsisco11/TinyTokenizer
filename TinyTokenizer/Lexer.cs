@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
 
 namespace TinyTokenizer;
 
 /// <summary>
 /// A stateless lexer that classifies characters into simple tokens.
 /// Level 1 of the two-level tokenizer architecture.
-/// Never backtracks and never fails — purely streaming character classification.
+/// Never backtracks and never fails — pure character classification.
 /// </summary>
 public sealed class Lexer
 {
@@ -35,8 +34,6 @@ public sealed class Lexer
     public Lexer(TokenizerOptions options) : this(options.Symbols)
     {
     }
-
-    #region Synchronous Lexing
 
     /// <summary>
     /// Lexes the input into simple tokens.
@@ -99,7 +96,7 @@ public sealed class Lexer
                 continue;
             }
 
-            // Digits (consecutive digit characters only - no decimal handling here)
+            // Digits (consecutive digit characters only)
             if (char.IsDigit(c))
             {
                 while (position < length && char.IsDigit(input.Span[position]))
@@ -154,186 +151,13 @@ public sealed class Lexer
         return [.. Lex(input)];
     }
 
-    #endregion
-
-    #region Asynchronous Lexing
-
     /// <summary>
-    /// Lexes a stream of characters into simple tokens asynchronously.
+    /// Lexes the input string into an immutable array of simple tokens.
     /// </summary>
-    /// <param name="chars">The async enumerable of characters.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of simple tokens.</returns>
-    public async IAsyncEnumerable<SimpleToken> LexAsync(
-        IAsyncEnumerable<char> chars,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public ImmutableArray<SimpleToken> LexToArray(string input)
     {
-        long position = 0;
-        var buffer = new List<char>();
-        SimpleTokenType? currentType = null;
-        long tokenStart = 0;
-
-        await foreach (var c in chars.WithCancellation(cancellationToken))
-        {
-            var charType = ClassifyChar(c);
-
-            // Handle newlines specially
-            if (c == '\r' || c == '\n')
-            {
-                // Flush any pending token
-                if (buffer.Count > 0 && currentType.HasValue)
-                {
-                    yield return CreateToken(currentType.Value, buffer, tokenStart);
-                    buffer.Clear();
-                    currentType = null;
-                }
-
-                // For \r, we need to peek for \n
-                if (c == '\r')
-                {
-                    buffer.Add(c);
-                    tokenStart = position;
-                    currentType = SimpleTokenType.Newline;
-                    // Will be flushed on next char or end
-                }
-                else // \n
-                {
-                    if (currentType == SimpleTokenType.Newline && buffer.Count == 1 && buffer[0] == '\r')
-                    {
-                        // This is \r\n - add \n and emit
-                        buffer.Add(c);
-                        yield return CreateToken(SimpleTokenType.Newline, buffer, tokenStart);
-                        buffer.Clear();
-                        currentType = null;
-                    }
-                    else
-                    {
-                        yield return new SimpleToken(SimpleTokenType.Newline, new[] { c }.AsMemory(), position);
-                    }
-                }
-
-                position++;
-                continue;
-            }
-
-            // Flush pending \r if next char is not \n
-            if (currentType == SimpleTokenType.Newline && buffer.Count == 1 && buffer[0] == '\r')
-            {
-                yield return CreateToken(SimpleTokenType.Newline, buffer, tokenStart);
-                buffer.Clear();
-                currentType = null;
-            }
-
-            // Single-character tokens
-            if (IsSingleCharType(charType))
-            {
-                // Flush any pending token
-                if (buffer.Count > 0 && currentType.HasValue)
-                {
-                    yield return CreateToken(currentType.Value, buffer, tokenStart);
-                    buffer.Clear();
-                    currentType = null;
-                }
-
-                yield return new SimpleToken(charType, new[] { c }.AsMemory(), position);
-                position++;
-                continue;
-            }
-
-            // Groupable tokens (Text, Whitespace, Numeric)
-            if (currentType == charType)
-            {
-                buffer.Add(c);
-            }
-            else
-            {
-                // Type changed - flush previous token
-                if (buffer.Count > 0 && currentType.HasValue)
-                {
-                    yield return CreateToken(currentType.Value, buffer, tokenStart);
-                    buffer.Clear();
-                }
-
-                buffer.Add(c);
-                currentType = charType;
-                tokenStart = position;
-            }
-
-            position++;
-        }
-
-        // Flush remaining buffer
-        if (buffer.Count > 0 && currentType.HasValue)
-        {
-            yield return CreateToken(currentType.Value, buffer, tokenStart);
-        }
+        return [.. Lex(input)];
     }
-
-    /// <summary>
-    /// Lexes a stream of memory chunks into simple tokens asynchronously.
-    /// </summary>
-    public async IAsyncEnumerable<SimpleToken> LexAsync(
-        IAsyncEnumerable<ReadOnlyMemory<char>> chunks,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        long absolutePosition = 0;
-        var pendingBuffer = new List<char>();
-        SimpleTokenType? pendingType = null;
-        long pendingStart = 0;
-
-        await foreach (var chunk in chunks.WithCancellation(cancellationToken))
-        {
-            // Lex the chunk
-            foreach (var token in Lex(chunk))
-            {
-                var adjustedToken = new SimpleToken(
-                    token.Type,
-                    token.Content,
-                    absolutePosition + token.Position);
-
-                // Check if we can merge with pending (same type)
-                if (pendingType.HasValue && CanMerge(pendingType.Value, adjustedToken.Type))
-                {
-                    // Merge into pending buffer
-                    AppendToBuffer(pendingBuffer, adjustedToken.Content);
-                }
-                else
-                {
-                    // Flush pending if any
-                    if (pendingBuffer.Count > 0 && pendingType.HasValue)
-                    {
-                        yield return CreateToken(pendingType.Value, pendingBuffer, pendingStart);
-                        pendingBuffer.Clear();
-                    }
-
-                    // Check if this token might need merging with next chunk
-                    if (IsAtChunkBoundary(token, chunk) && CanMergeAcrossChunks(adjustedToken.Type))
-                    {
-                        pendingType = adjustedToken.Type;
-                        pendingStart = adjustedToken.Position;
-                        AppendToBuffer(pendingBuffer, adjustedToken.Content);
-                    }
-                    else
-                    {
-                        pendingType = null;
-                        yield return adjustedToken;
-                    }
-                }
-            }
-
-            absolutePosition += chunk.Length;
-        }
-
-        // Flush remaining pending
-        if (pendingBuffer.Count > 0 && pendingType.HasValue)
-        {
-            yield return CreateToken(pendingType.Value, pendingBuffer, pendingStart);
-        }
-    }
-
-    #endregion
-
-    #region Helper Methods
 
     /// <summary>
     /// Classifies a single character that should always be its own token.
@@ -357,113 +181,4 @@ public sealed class Lexer
             _ => null
         };
     }
-
-    /// <summary>
-    /// Classifies a character into its token type.
-    /// </summary>
-    private SimpleTokenType ClassifyChar(char c)
-    {
-        var singleChar = ClassifySingleChar(c);
-        if (singleChar.HasValue)
-            return singleChar.Value;
-
-        if (c == '\r' || c == '\n')
-            return SimpleTokenType.Newline;
-
-        if (char.IsWhiteSpace(c))
-            return SimpleTokenType.Whitespace;
-
-        if (char.IsDigit(c))
-            return SimpleTokenType.Digits;
-
-        if (_symbols.Contains(c))
-            return SimpleTokenType.Symbol;
-
-        return SimpleTokenType.Text;
-    }
-
-    /// <summary>
-    /// Checks if a token type is always a single character.
-    /// </summary>
-    private static bool IsSingleCharType(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.OpenBrace => true,
-            SimpleTokenType.CloseBrace => true,
-            SimpleTokenType.OpenBracket => true,
-            SimpleTokenType.CloseBracket => true,
-            SimpleTokenType.OpenParen => true,
-            SimpleTokenType.CloseParen => true,
-            SimpleTokenType.SingleQuote => true,
-            SimpleTokenType.DoubleQuote => true,
-            SimpleTokenType.Backslash => true,
-            SimpleTokenType.Slash => true,
-            SimpleTokenType.Asterisk => true,
-            SimpleTokenType.Dot => true,
-            SimpleTokenType.Symbol => true,
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Checks if two token types can be merged.
-    /// </summary>
-    private static bool CanMerge(SimpleTokenType current, SimpleTokenType next)
-    {
-        if (current != next)
-            return false;
-
-        return current switch
-        {
-            SimpleTokenType.Text => true,
-            SimpleTokenType.Whitespace => true,
-            SimpleTokenType.Digits => true,
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Checks if a token type can be merged across chunk boundaries.
-    /// </summary>
-    private static bool CanMergeAcrossChunks(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.Text => true,
-            SimpleTokenType.Whitespace => true,
-            SimpleTokenType.Digits => true,
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Checks if a token is at the end of its chunk.
-    /// </summary>
-    private static bool IsAtChunkBoundary(SimpleToken token, ReadOnlyMemory<char> chunk)
-    {
-        return token.Position + token.Length == chunk.Length;
-    }
-
-    /// <summary>
-    /// Creates a token from a buffer.
-    /// </summary>
-    private static SimpleToken CreateToken(SimpleTokenType type, List<char> buffer, long position)
-    {
-        var content = buffer.ToArray().AsMemory();
-        return new SimpleToken(type, content, position);
-    }
-
-    /// <summary>
-    /// Appends memory content to a buffer without using Span in async context.
-    /// </summary>
-    private static void AppendToBuffer(List<char> buffer, ReadOnlyMemory<char> content)
-    {
-        for (int i = 0; i < content.Length; i++)
-        {
-            buffer.Add(content.Span[i]);
-        }
-    }
-
-    #endregion
 }

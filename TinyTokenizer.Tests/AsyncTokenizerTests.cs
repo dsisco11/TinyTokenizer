@@ -19,13 +19,8 @@ public class AsyncTokenizerTests
         var bytes = encoding.GetBytes(source);
         using var stream = new MemoryStream(bytes);
 
-        var tokens = new List<Token>();
-        await foreach (var token in stream.TokenizeAsync(options, encoding))
-        {
-            tokens.Add(token);
-        }
-
-        return tokens;
+        var tokens = await stream.TokenizeAsync(options, encoding);
+        return [.. tokens];
     }
 
     private static async Task<List<Token>> TokenizeChunkedAsync(
@@ -37,13 +32,8 @@ public class AsyncTokenizerTests
         var bytes = Encoding.UTF8.GetBytes(source);
         using var stream = new ChunkedMemoryStream(bytes, chunkSize);
 
-        var tokens = new List<Token>();
-        await foreach (var token in stream.TokenizeAsync(options))
-        {
-            tokens.Add(token);
-        }
-
-        return tokens;
+        var tokens = await stream.TokenizeAsync(options);
+        return [.. tokens];
     }
 
     #endregion
@@ -299,11 +289,7 @@ public class AsyncTokenizerTests
         var bytes = Encoding.UTF8.GetBytes("/* comment */");
         using var stream = new ChunkedMemoryStream(bytes, chunkSize: 4);
         
-        var tokens = new List<Token>();
-        await foreach (var token in stream.TokenizeAsync(options))
-        {
-            tokens.Add(token);
-        }
+        var tokens = await stream.TokenizeAsync(options);
 
         Assert.Single(tokens);
         var comment = Assert.IsType<CommentToken>(tokens[0]);
@@ -432,15 +418,11 @@ public class AsyncTokenizerTests
         var bytes = Encoding.UTF8.GetBytes("hello world foo bar baz");
         using var stream = new MemoryStream(bytes);
 
-        var tokenCount = 0;
         cts.Cancel(); // Cancel immediately
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var token in stream.TokenizeAsync(cancellationToken: cts.Token))
-            {
-                tokenCount++;
-            }
+            await stream.TokenizeAsync(cancellationToken: cts.Token);
         });
     }
 
@@ -450,13 +432,9 @@ public class AsyncTokenizerTests
         var bytes = Encoding.UTF8.GetBytes("hello world");
         using var stream = new MemoryStream(bytes);
 
-        var tokens = new List<Token>();
-        await foreach (var token in stream.TokenizeAsync())
-        {
-            tokens.Add(token);
-        }
+        var tokens = await stream.TokenizeAsync();
 
-        Assert.Equal(3, tokens.Count);
+        Assert.Equal(3, tokens.Length);
     }
 
     #endregion
@@ -469,13 +447,9 @@ public class AsyncTokenizerTests
         var bytes = Encoding.UTF8.GetBytes("hello world");
         using var stream = new MemoryStream(bytes);
 
-        var tokens = new List<Token>();
-        await foreach (var token in stream.TokenizeAsync())
-        {
-            tokens.Add(token);
-        }
+        var tokens = await stream.TokenizeAsync();
 
-        Assert.Equal(3, tokens.Count);
+        Assert.Equal(3, tokens.Length);
     }
 
     [Fact]
@@ -494,13 +468,9 @@ public class AsyncTokenizerTests
     {
         var bytes = Encoding.UTF8.GetBytes("hello world");
 
-        var tokens = new List<Token>();
-        await foreach (var token in bytes.TokenizeAsync())
-        {
-            tokens.Add(token);
-        }
+        var tokens = await bytes.TokenizeAsync();
 
-        Assert.Equal(3, tokens.Count);
+        Assert.Equal(3, tokens.Length);
     }
 
     [Fact]
