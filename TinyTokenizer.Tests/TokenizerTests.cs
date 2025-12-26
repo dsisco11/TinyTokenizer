@@ -30,12 +30,12 @@ public class TokenizerTests
     }
 
     [Fact]
-    public void Tokenize_PlainText_ReturnsSingleTextToken()
+    public void Tokenize_PlainText_ReturnsSingleIdentToken()
     {
         var tokens = Tokenize("hello");
 
         Assert.Single(tokens);
-        var token = Assert.IsType<TextToken>(tokens[0]);
+        var token = Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("hello", token.ContentSpan.ToString());
     }
 
@@ -65,9 +65,9 @@ public class TokenizerTests
         var tokens = Tokenize("hello world");
 
         Assert.Equal(3, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     #endregion
@@ -132,9 +132,9 @@ public class TokenizerTests
         Assert.Single(tokens);
         var block = Assert.IsType<BlockToken>(tokens[0]);
         Assert.Equal(3, block.Children.Length);
-        Assert.IsType<TextToken>(block.Children[0]);
+        Assert.IsType<IdentToken>(block.Children[0]);
         Assert.IsType<WhitespaceToken>(block.Children[1]);
-        Assert.IsType<TextToken>(block.Children[2]);
+        Assert.IsType<IdentToken>(block.Children[2]);
     }
 
     #endregion
@@ -179,7 +179,7 @@ public class TokenizerTests
 
         Assert.Equal(2, tokens.Length);
 
-        var text = Assert.IsType<TextToken>(tokens[0]);
+        var text = Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("func", text.ContentSpan.ToString());
 
         var block = Assert.IsType<BlockToken>(tokens[1]);
@@ -230,7 +230,7 @@ public class TokenizerTests
 
         Assert.Equal(2, tokens.Length);
         Assert.IsType<ErrorToken>(tokens[0]);
-        Assert.IsType<TextToken>(tokens[1]);
+        Assert.IsType<IdentToken>(tokens[1]);
         Assert.Equal("hello", tokens[1].ContentSpan.ToString());
     }
 
@@ -292,11 +292,11 @@ public class TokenizerTests
         var tokens = Tokenize("path/to/file");
 
         Assert.Equal(5, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<SymbolToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
         Assert.IsType<SymbolToken>(tokens[3]);
-        Assert.IsType<TextToken>(tokens[4]);
+        Assert.IsType<IdentToken>(tokens[4]);
     }
 
     #endregion
@@ -310,11 +310,11 @@ public class TokenizerTests
         var tokens = Tokenize("a$b_c", options);
 
         Assert.Equal(5, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<SymbolToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
         Assert.IsType<SymbolToken>(tokens[3]);
-        Assert.IsType<TextToken>(tokens[4]);
+        Assert.IsType<IdentToken>(tokens[4]);
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public class TokenizerTests
 
         // Without / as symbol, "a/b" is one text token
         Assert.Single(tokens);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("a/b", tokens[0].ContentSpan.ToString());
     }
 
@@ -473,7 +473,7 @@ public class TokenizerTests
         Assert.Equal(2, tokens.Length);
         var symbol = Assert.IsType<SymbolToken>(tokens[0]);
         Assert.Equal('"', symbol.Symbol);
-        var text = Assert.IsType<TextToken>(tokens[1]);
+        var text = Assert.IsType<IdentToken>(tokens[1]);
         Assert.Equal("hello", text.ContentSpan.ToString());
     }
 
@@ -485,7 +485,7 @@ public class TokenizerTests
         Assert.Equal(2, tokens.Length);
         var symbol = Assert.IsType<SymbolToken>(tokens[0]);
         Assert.Equal('\'', symbol.Symbol);
-        var text = Assert.IsType<TextToken>(tokens[1]);
+        var text = Assert.IsType<IdentToken>(tokens[1]);
         Assert.Equal("hello", text.ContentSpan.ToString());
     }
 
@@ -495,7 +495,7 @@ public class TokenizerTests
         var tokens = Tokenize("name=\"value\"");
 
         Assert.Equal(3, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<SymbolToken>(tokens[1]);
         var str = Assert.IsType<StringToken>(tokens[2]);
         Assert.Equal("value", str.Value.ToString());
@@ -547,7 +547,7 @@ public class TokenizerTests
         var comment = Assert.IsType<CommentToken>(tokens[0]);
         Assert.Equal("// comment", comment.ContentSpan.ToString());
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     [Fact]
@@ -647,7 +647,7 @@ public class TokenizerTests
         Assert.Equal(4, tokens.Length);
         Assert.IsType<CommentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
         Assert.IsType<BlockToken>(tokens[3]);
     }
 
@@ -683,9 +683,9 @@ public class TokenizerTests
     {
         var tokens = Tokenize("{a} [b] (c)");
 
-        var textTokens = tokens.OfTokenType<TextToken>().ToList();
+        var IdentTokens = tokens.OfTokenType<IdentToken>().ToList();
 
-        Assert.Equal(3, textTokens.Count);
+        Assert.Equal(3, IdentTokens.Count);
     }
 
     [Fact]
@@ -693,9 +693,9 @@ public class TokenizerTests
     {
         var tokens = Tokenize("{a {b}}");
 
-        var textTokens = tokens.OfTokenType<TextToken>().ToList();
+        var IdentTokens = tokens.OfTokenType<IdentToken>().ToList();
 
-        Assert.Equal(2, textTokens.Count);
+        Assert.Equal(2, IdentTokens.Count);
     }
 
     #endregion

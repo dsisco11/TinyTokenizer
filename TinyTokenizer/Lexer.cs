@@ -115,7 +115,7 @@ public sealed class Lexer
                 continue;
             }
 
-            // Text (everything else that forms identifier-like content)
+            // Identifier (everything else that forms identifier-like content)
             while (position < length)
             {
                 char current = input.Span[position];
@@ -130,7 +130,7 @@ public sealed class Lexer
 
             if (position > start)
             {
-                yield return new SimpleToken(SimpleTokenType.Text, input.Slice(start, position - start), start);
+                yield return new SimpleToken(SimpleTokenType.Ident, input.Slice(start, position - start), start);
             }
         }
     }

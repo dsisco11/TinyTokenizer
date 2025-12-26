@@ -38,13 +38,13 @@ public class LexerParserTests
     }
 
     [Fact]
-    public void Lexer_PlainText_ReturnsSingleTextToken()
+    public void Lexer_PlainText_ReturnsSingleIdentToken()
     {
         var lexer = new Lexer();
         var tokens = lexer.LexToArray("hello");
 
         Assert.Single(tokens);
-        Assert.Equal(SimpleTokenType.Text, tokens[0].Type);
+        Assert.Equal(SimpleTokenType.Ident, tokens[0].Type);
         Assert.Equal("hello", tokens[0].ContentSpan.ToString());
     }
 
@@ -172,12 +172,12 @@ public class LexerParserTests
     }
 
     [Fact]
-    public void TokenParser_PlainText_ReturnsSingleTextToken()
+    public void TokenParser_PlainText_ReturnsSingleIdentToken()
     {
         var tokens = Tokenize("hello");
 
         Assert.Single(tokens);
-        var token = Assert.IsType<TextToken>(tokens[0]);
+        var token = Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("hello", token.ContentSpan.ToString());
         Assert.Equal(0, token.Position);
     }
@@ -208,9 +208,9 @@ public class LexerParserTests
         var tokens = Tokenize("hello world");
 
         Assert.Equal(3, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     #endregion
@@ -341,7 +341,7 @@ public class LexerParserTests
         var dot = Assert.IsType<SymbolToken>(tokens[1]);
         Assert.Equal('.', dot.Symbol);
         
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     #endregion
@@ -417,9 +417,9 @@ public class LexerParserTests
         var tokens = "hello world".AsMemory().Tokenize();
 
         Assert.Equal(3, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     [Fact]
@@ -428,9 +428,9 @@ public class LexerParserTests
         var tokens = "hello world".TokenizeToTokens();
 
         Assert.Equal(3, tokens.Length);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     #endregion

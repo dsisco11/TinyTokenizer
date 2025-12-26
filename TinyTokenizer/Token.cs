@@ -22,12 +22,12 @@ public abstract record Token(ReadOnlyMemory<char> Content, TokenType Type, long 
 #region Concrete Token Types
 
 /// <summary>
-/// Represents plain text content that is not a block, symbol, or whitespace.
+/// Represents identifier/text content that is not a block, symbol, or whitespace.
 /// </summary>
-/// <param name="Content">The text content.</param>
+/// <param name="Content">The identifier content.</param>
 /// <param name="Position">The absolute position in the source where this token starts.</param>
-public sealed record TextToken(ReadOnlyMemory<char> Content, long Position = 0) 
-    : Token(Content, TokenType.Text, Position);
+public sealed record IdentToken(ReadOnlyMemory<char> Content, long Position = 0) 
+    : Token(Content, TokenType.Ident, Position);
 
 /// <summary>
 /// Represents whitespace characters (spaces, tabs, newlines).

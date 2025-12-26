@@ -157,11 +157,11 @@ public sealed class TokenParser
         reader.Advance();
         yield return token.Type switch
         {
-            SimpleTokenType.Text => new TextToken(token.Content, token.Position),
+            SimpleTokenType.Ident => new IdentToken(token.Content, token.Position),
             SimpleTokenType.Whitespace => new WhitespaceToken(token.Content, token.Position),
             SimpleTokenType.Newline => new WhitespaceToken(token.Content, token.Position),
             SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
-            _ => new TextToken(token.Content, token.Position)
+            _ => new IdentToken(token.Content, token.Position)
         };
     }
 

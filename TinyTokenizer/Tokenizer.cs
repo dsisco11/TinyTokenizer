@@ -201,8 +201,8 @@ public ref struct Tokenizer
     /// Parses text starting at the current position.
     /// Text ends when a delimiter, symbol, or whitespace is encountered.
     /// </summary>
-    /// <returns>A <see cref="TextToken"/>.</returns>
-    private TextToken ParseText()
+    /// <returns>A <see cref="IdentToken"/>.</returns>
+    private IdentToken ParseText()
     {
         int start = _position;
 
@@ -237,7 +237,7 @@ public ref struct Tokenizer
             _position++;
         }
 
-        return new TextToken(_source.Slice(start, _position - start), start);
+        return new IdentToken(_source.Slice(start, _position - start), start);
     }
 
     /// <summary>

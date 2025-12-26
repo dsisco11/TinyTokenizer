@@ -24,19 +24,19 @@ var tokenizer = new Tokenizer("func(a, b)".AsMemory());
 var tokens = tokenizer.Tokenize();
 
 // tokens contains:
-// - TextToken("func")
+// - IdentToken("func")
 // - BlockToken("(a, b)") with children:
-//   - TextToken("a")
+//   - IdentToken("a")
 //   - SymbolToken(",")
 //   - WhitespaceToken(" ")
-//   - TextToken("b")
+//   - IdentToken("b")
 ```
 
 ## Token Types
 
 | Type | Description | Example |
 |------|-------------|---------|
-| `TextToken` | Plain text content | `hello`, `func`, `123` |
+| `IdentToken` | Identifier/text content | `hello`, `func`, `123` |
 | `WhitespaceToken` | Spaces, tabs, newlines | ` `, `\t`, `\n` |
 | `SymbolToken` | Configurable symbol characters | `/`, `:`, `,`, `;` |
 | `BlockToken` | Declaration blocks with delimiters | `{...}`, `[...]`, `(...)` |
@@ -101,7 +101,7 @@ var tokens = tokenizer.Tokenize();
 
 // tokens contains:
 // - ErrorToken("}", "Unexpected closing delimiter '}'", position: 0)
-// - TextToken("hello")
+// - IdentToken("hello")
 // - ErrorToken("{", "Unclosed block starting with '{'", position: 6)
 
 // Check for errors
@@ -126,7 +126,7 @@ bool hasErrors = tokens.HasErrors();
 IEnumerable<ErrorToken> errors = tokens.GetErrors();
 
 // Get all tokens of a specific type (including nested)
-IEnumerable<TextToken> textTokens = tokens.OfTokenType<TextToken>();
+IEnumerable<IdentToken> IdentTokens = tokens.OfTokenType<IdentToken>();
 IEnumerable<BlockToken> blocks = tokens.OfTokenType<BlockToken>();
 ```
 

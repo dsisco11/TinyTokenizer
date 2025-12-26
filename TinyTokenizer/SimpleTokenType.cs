@@ -7,9 +7,9 @@ namespace TinyTokenizer;
 public enum SimpleTokenType
 {
     /// <summary>
-    /// A sequence of text characters (letters, digits, underscores, etc.).
+    /// A sequence of identifier characters (letters, digits, underscores, etc.).
     /// </summary>
-    Text,
+    Ident,
 
     /// <summary>
     /// A sequence of whitespace characters (spaces, tabs) excluding newlines.

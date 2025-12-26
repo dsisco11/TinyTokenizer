@@ -49,12 +49,12 @@ public class AsyncTokenizerTests
     }
 
     [Fact]
-    public async Task TokenizeAsync_PlainText_ReturnsSingleTextToken()
+    public async Task TokenizeAsync_PlainText_ReturnsSingleIdentToken()
     {
         var tokens = await TokenizeStringAsync("hello");
 
         Assert.Single(tokens);
-        var token = Assert.IsType<TextToken>(tokens[0]);
+        var token = Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("hello", token.ContentSpan.ToString());
     }
 
@@ -83,9 +83,9 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync("hello world");
 
         Assert.Equal(3, tokens.Count);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
     }
 
     #endregion
@@ -224,10 +224,10 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeChunkedAsync("hello world", chunkSize: 3);
 
         Assert.Equal(3, tokens.Count);
-        Assert.IsType<TextToken>(tokens[0]);
+        Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("hello", tokens[0].ContentSpan.ToString());
         Assert.IsType<WhitespaceToken>(tokens[1]);
-        Assert.IsType<TextToken>(tokens[2]);
+        Assert.IsType<IdentToken>(tokens[2]);
         Assert.Equal("world", tokens[2].ContentSpan.ToString());
     }
 
@@ -311,7 +311,7 @@ public class AsyncTokenizerTests
         Assert.Equal(4, tokens.Count);
         
         // Find the function name
-        Assert.Contains(tokens, t => t is TextToken txt && txt.ContentSpan.ToString() == "func");
+        Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "func");
         
         // Find the blocks
         var parenBlock = tokens.OfType<BlockToken>().Single(b => b.Type == TokenType.ParenthesisBlock);
@@ -404,7 +404,7 @@ public class AsyncTokenizerTests
 
         Assert.Equal(2, tokens.Count);
         Assert.IsType<ErrorToken>(tokens[0]);
-        Assert.IsType<TextToken>(tokens[1]);
+        Assert.IsType<IdentToken>(tokens[1]);
     }
 
     #endregion
@@ -497,7 +497,7 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync(code);
 
         Assert.True(tokens.Count > 5, $"Expected more than 5 tokens, got {tokens.Count}");
-        Assert.Contains(tokens, t => t is TextToken txt && txt.ContentSpan.ToString() == "function");
+        Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "function");
         Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.ParenthesisBlock });
         Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.BraceBlock });
     }
@@ -510,7 +510,7 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeChunkedAsync(code, chunkSize: 5);
 
         Assert.True(tokens.Count > 5, $"Expected more than 5 tokens, got {tokens.Count}");
-        Assert.Contains(tokens, t => t is TextToken txt && txt.ContentSpan.ToString() == "function");
+        Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "function");
         Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.ParenthesisBlock });
         Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.BraceBlock });
     }
