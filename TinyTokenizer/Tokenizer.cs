@@ -366,15 +366,7 @@ public ref struct Tokenizer
             return false;
         }
 
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (_span[position + i] != value[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return _span.Slice(position, value.Length).SequenceEqual(value.AsSpan());
     }
 
     /// <summary>
@@ -392,23 +384,48 @@ public ref struct Tokenizer
         if (style.IsMultiLine)
         {
             // Multi-line comment: look for the end delimiter
-            while (_position < _span.Length)
+            var remaining = _span[_position..];
+            var endSpan = style.End.AsSpan();
+            
+            while (remaining.Length > 0)
             {
+                // Find the first character of the end delimiter
+                int idx = remaining.IndexOf(endSpan[0]);
+                if (idx < 0)
+                {
+                    // End delimiter not found, consume everything
+                    _position = _span.Length;
+                    break;
+                }
+
+                _position += idx;
+                
+                // Check if full end delimiter matches
                 if (MatchesAt(_position, style.End!))
                 {
                     _position += style.End!.Length;
                     break;
                 }
+                
+                // Not a match, advance past this character and continue
                 _position++;
+                remaining = _span[_position..];
             }
-            // If we reach end of input without finding closer, include everything
         }
         else
         {
             // Single-line comment: consume until end of line
-            while (_position < _span.Length && _span[_position] != '\n' && _span[_position] != '\r')
+            var remaining = _span[_position..];
+            int idx = remaining.IndexOfAny('\n', '\r');
+            
+            if (idx < 0)
             {
-                _position++;
+                // No newline found, consume to end
+                _position = _span.Length;
+            }
+            else
+            {
+                _position += idx;
             }
         }
 
