@@ -17,26 +17,6 @@ public ref struct Tokenizer
 
     #endregion
 
-    #region Delimiter Mappings
-
-    private static readonly Dictionary<char, char> OpenToClose = new()
-    {
-        ['{'] = '}',
-        ['['] = ']',
-        ['('] = ')'
-    };
-
-    private static readonly Dictionary<char, TokenType> OpenToTokenType = new()
-    {
-        ['{'] = TokenType.BraceBlock,
-        ['['] = TokenType.BracketBlock,
-        ['('] = TokenType.ParenthesisBlock
-    };
-
-    private static readonly HashSet<char> ClosingDelimiters = new() { '}', ']', ')' };
-
-    #endregion
-
     #region Constructors
 
     /// <summary>
@@ -90,7 +70,7 @@ public ref struct Tokenizer
             }
 
             // Check for unexpected closing delimiter
-            if (ClosingDelimiters.Contains(current))
+            if (TokenizerCore.IsClosingDelimiter(current))
             {
                 tokens.Add(new ErrorToken(
                     _source.Slice(_position, 1),
@@ -101,7 +81,7 @@ public ref struct Tokenizer
             }
 
             // Check for opening delimiter (start of block)
-            if (OpenToClose.TryGetValue(current, out char closer))
+            if (TokenizerCore.TryGetClosingDelimiter(current, out char closer))
             {
                 var blockToken = ParseBlock(current, closer);
                 tokens.Add(blockToken);
@@ -133,7 +113,7 @@ public ref struct Tokenizer
             // Check for symbol
             if (_options.Symbols.Contains(current))
             {
-                tokens.Add(new SymbolToken(_source.Slice(_position, 1)));
+                tokens.Add(new SymbolToken(_source.Slice(_position, 1), _position));
                 _position++;
                 continue;
             }
@@ -161,7 +141,7 @@ public ref struct Tokenizer
     private Token ParseBlock(char opener, char closer)
     {
         int startPosition = _position;
-        TokenType blockType = OpenToTokenType[opener];
+        TokenizerCore.TryGetBlockTokenType(opener, out TokenType blockType);
 
         // Consume the opening delimiter
         _position++;
@@ -187,7 +167,8 @@ public ref struct Tokenizer
                 children,
                 blockType,
                 opener,
-                closer);
+                closer,
+                startPosition);
         }
         else
         {
@@ -213,15 +194,15 @@ public ref struct Tokenizer
             _position++;
         }
 
-        return new WhitespaceToken(_source.Slice(start, _position - start));
+        return new WhitespaceToken(_source.Slice(start, _position - start), start);
     }
 
     /// <summary>
     /// Parses text starting at the current position.
     /// Text ends when a delimiter, symbol, or whitespace is encountered.
     /// </summary>
-    /// <returns>A <see cref="TextToken"/>.</returns>
-    private TextToken ParseText()
+    /// <returns>A <see cref="IdentToken"/>.</returns>
+    private IdentToken ParseText()
     {
         int start = _position;
 
@@ -230,7 +211,7 @@ public ref struct Tokenizer
             char current = _span[_position];
 
             // Stop at delimiters
-            if (OpenToClose.ContainsKey(current) || ClosingDelimiters.Contains(current))
+            if (TokenizerCore.IsOpeningDelimiter(current) || TokenizerCore.IsClosingDelimiter(current))
             {
                 break;
             }
@@ -256,7 +237,7 @@ public ref struct Tokenizer
             _position++;
         }
 
-        return new TextToken(_source.Slice(start, _position - start));
+        return new IdentToken(_source.Slice(start, _position - start), start);
     }
 
     /// <summary>
@@ -287,7 +268,7 @@ public ref struct Tokenizer
             if (current == quote)
             {
                 _position++;
-                return new StringToken(_source.Slice(start, _position - start), quote);
+                return new StringToken(_source.Slice(start, _position - start), quote, start);
             }
 
             _position++;
@@ -295,7 +276,7 @@ public ref struct Tokenizer
 
         // Unterminated string - reset position and emit the quote as a symbol
         _position = start + 1;
-        return new SymbolToken(_source.Slice(start, 1));
+        return new SymbolToken(_source.Slice(start, 1), start);
     }
 
     /// <summary>
@@ -334,7 +315,7 @@ public ref struct Tokenizer
         }
 
         var numericType = hasDecimalPoint ? NumericType.FloatingPoint : NumericType.Integer;
-        return new NumericToken(_source.Slice(start, _position - start), numericType);
+        return new NumericToken(_source.Slice(start, _position - start), numericType, start);
     }
 
     /// <summary>
@@ -429,7 +410,7 @@ public ref struct Tokenizer
             }
         }
 
-        return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine);
+        return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine, start);
     }
 
     #endregion

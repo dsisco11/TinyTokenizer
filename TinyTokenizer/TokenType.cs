@@ -42,9 +42,9 @@ public enum TokenType
     Symbol,
 
     /// <summary>
-    /// Plain text content.
+    /// Identifier/text content.
     /// </summary>
-    Text,
+    Ident,
 
     /// <summary>
     /// Whitespace characters (spaces, tabs, newlines).

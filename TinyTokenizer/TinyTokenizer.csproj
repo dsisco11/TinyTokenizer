@@ -10,12 +10,16 @@
     <Title>TinyTokenizer</Title>
     <Description>A high-performance, zero-allocation tokenizer library for .NET that parses text into abstract tokens using ReadOnlySpan for maximum efficiency.</Description>
     <Authors>David Sisco</Authors>
-    <PackageTags>tokenizer;parser;span;memory;performance;zero-allocation</PackageTags>
+    <PackageTags>tokenizer;parser;span;memory;performance;zero-allocation;async;streaming</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/dsisco11/TinyTokenizer</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="\" />

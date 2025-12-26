@@ -49,6 +49,9 @@ public sealed record TokenizerOptions
 
     /// <summary>
     /// The default set of symbol characters recognized by the tokenizer.
+    /// Note: Some characters like '.', '/', '*', and '\\' have dedicated SimpleTokenType values
+    /// in the two-level architecture (Lexer + TokenParser), but are still included here
+    /// for backward compatibility with the original Tokenizer.
     /// </summary>
     private static readonly ImmutableHashSet<char> DefaultSymbols = ImmutableHashSet.Create(
         '/', ':', ',', ';', '=', '+', '-', '*', '<', '>', '!', '&', '|', '.', '@', '#', '?', '%', '^', '~', '\\'
