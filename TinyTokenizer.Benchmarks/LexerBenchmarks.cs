@@ -2,6 +2,8 @@ using System.Buffers;
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Reports;
 
 namespace TinyTokenizer.Benchmarks;
 
@@ -10,7 +12,8 @@ namespace TinyTokenizer.Benchmarks;
 /// a baseline implementation using ImmutableHashSet.
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 10)]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[CategoriesColumn]
 public class LexerBenchmarks
 {
     #region Test Data
