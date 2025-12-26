@@ -108,6 +108,20 @@ public ref struct Tokenizer
                 continue;
             }
 
+            // Check for string literal (single or double quotes)
+            if (current == '"' || current == '\'')
+            {
+                tokens.Add(ParseString(current));
+                continue;
+            }
+
+            // Check for numeric literal
+            if (char.IsDigit(current) || (current == '.' && _position + 1 < _span.Length && char.IsDigit(_span[_position + 1])))
+            {
+                tokens.Add(ParseNumeric());
+                continue;
+            }
+
             // Check for symbol
             if (_options.Symbols.Contains(current))
             {
@@ -225,10 +239,94 @@ public ref struct Tokenizer
                 break;
             }
 
+            // Stop at quotes (string literals)
+            if (current == '"' || current == '\'')
+            {
+                break;
+            }
+
             _position++;
         }
 
         return new TextToken(_source.Slice(start, _position - start));
+    }
+
+    /// <summary>
+    /// Parses a string literal starting at the current position.
+    /// </summary>
+    /// <param name="quote">The quote character (' or ").</param>
+    /// <returns>A <see cref="StringToken"/> or <see cref="SymbolToken"/> if the string is unterminated.</returns>
+    private Token ParseString(char quote)
+    {
+        int start = _position;
+
+        // Consume the opening quote
+        _position++;
+
+        while (_position < _span.Length)
+        {
+            char current = _span[_position];
+
+            // Check for escape sequence
+            if (current == '\\' && _position + 1 < _span.Length)
+            {
+                // Skip the escape character and the next character
+                _position += 2;
+                continue;
+            }
+
+            // Check for closing quote
+            if (current == quote)
+            {
+                _position++;
+                return new StringToken(_source.Slice(start, _position - start), quote);
+            }
+
+            _position++;
+        }
+
+        // Unterminated string - reset position and emit the quote as a symbol
+        _position = start + 1;
+        return new SymbolToken(_source.Slice(start, 1));
+    }
+
+    /// <summary>
+    /// Parses a numeric literal starting at the current position.
+    /// Supports integers and floating-point numbers.
+    /// </summary>
+    /// <returns>A <see cref="NumericToken"/>.</returns>
+    private NumericToken ParseNumeric()
+    {
+        int start = _position;
+        bool hasDecimalPoint = false;
+
+        while (_position < _span.Length)
+        {
+            char current = _span[_position];
+
+            if (char.IsDigit(current))
+            {
+                _position++;
+                continue;
+            }
+
+            // Allow one decimal point
+            if (current == '.' && !hasDecimalPoint)
+            {
+                // Check if there's a digit after the decimal point
+                if (_position + 1 < _span.Length && char.IsDigit(_span[_position + 1]))
+                {
+                    hasDecimalPoint = true;
+                    _position++;
+                    continue;
+                }
+            }
+
+            break;
+        }
+
+        var numericType = hasDecimalPoint ? NumericType.FloatingPoint : NumericType.Integer;
+        return new NumericToken(_source.Slice(start, _position - start), numericType);
     }
 
     #endregion
