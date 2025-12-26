@@ -43,14 +43,16 @@ public sealed record BlockToken : Token
     /// <param name="type">The token type indicating the delimiter type.</param>
     /// <param name="openingDelimiter">The opening delimiter character.</param>
     /// <param name="closingDelimiter">The closing delimiter character.</param>
+    /// <param name="position">The absolute position in the source where this block starts.</param>
     public BlockToken(
         ReadOnlyMemory<char> fullContent,
         ReadOnlyMemory<char> innerContent,
         ImmutableArray<Token> children,
         TokenType type,
         char openingDelimiter,
-        char closingDelimiter)
-        : base(fullContent, type)
+        char closingDelimiter,
+        long position = 0)
+        : base(fullContent, type, position)
     {
         FullContent = fullContent;
         InnerContent = innerContent;
