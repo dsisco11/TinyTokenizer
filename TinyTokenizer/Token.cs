@@ -62,4 +62,10 @@ public sealed record StringToken(ReadOnlyMemory<char> Content, char Quote)
         : ReadOnlySpan<char>.Empty;
 }
 
+/// <summary>
+/// Represents a comment token.
+/// </summary>
+public sealed record CommentToken(ReadOnlyMemory<char> Content, bool IsMultiLine) 
+    : Token(Content, TokenType.Comment);
+
 #endregion

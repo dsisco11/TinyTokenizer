@@ -62,6 +62,11 @@ public enum TokenType
     String,
 
     /// <summary>
+    /// A comment (single-line or multi-line).
+    /// </summary>
+    Comment,
+
+    /// <summary>
     /// An error token indicating a parsing failure.
     /// </summary>
     Error

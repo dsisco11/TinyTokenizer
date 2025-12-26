@@ -108,6 +108,14 @@ public ref struct Tokenizer
                 continue;
             }
 
+            // Check for comment
+            var commentStyle = TryMatchCommentStart();
+            if (commentStyle is not null)
+            {
+                tokens.Add(ParseComment(commentStyle));
+                continue;
+            }
+
             // Check for string literal (single or double quotes)
             if (current == '"' || current == '\'')
             {
@@ -327,6 +335,84 @@ public ref struct Tokenizer
 
         var numericType = hasDecimalPoint ? NumericType.FloatingPoint : NumericType.Integer;
         return new NumericToken(_source.Slice(start, _position - start), numericType);
+    }
+
+    /// <summary>
+    /// Tries to match a comment start delimiter at the current position.
+    /// </summary>
+    /// <returns>The matched <see cref="CommentStyle"/> or null if no match.</returns>
+    private CommentStyle? TryMatchCommentStart()
+    {
+        foreach (var style in _options.CommentStyles)
+        {
+            if (MatchesAt(_position, style.Start))
+            {
+                return style;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if the given string matches at the specified position.
+    /// </summary>
+    /// <param name="position">The position to check at.</param>
+    /// <param name="value">The string to match.</param>
+    /// <returns>True if the string matches at the position.</returns>
+    private bool MatchesAt(int position, string value)
+    {
+        if (position + value.Length > _span.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (_span[position + i] != value[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a comment starting at the current position.
+    /// </summary>
+    /// <param name="style">The comment style to parse.</param>
+    /// <returns>A <see cref="CommentToken"/>.</returns>
+    private CommentToken ParseComment(CommentStyle style)
+    {
+        int start = _position;
+
+        // Consume the start delimiter
+        _position += style.Start.Length;
+
+        if (style.IsMultiLine)
+        {
+            // Multi-line comment: look for the end delimiter
+            while (_position < _span.Length)
+            {
+                if (MatchesAt(_position, style.End!))
+                {
+                    _position += style.End!.Length;
+                    break;
+                }
+                _position++;
+            }
+            // If we reach end of input without finding closer, include everything
+        }
+        else
+        {
+            // Single-line comment: consume until end of line
+            while (_position < _span.Length && _span[_position] != '\n' && _span[_position] != '\r')
+            {
+                _position++;
+            }
+        }
+
+        return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine);
     }
 
     #endregion
