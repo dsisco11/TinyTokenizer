@@ -42,4 +42,30 @@ public sealed record SymbolToken(ReadOnlyMemory<char> Content)
     public char Symbol => Content.Span[0];
 }
 
+/// <summary>
+/// Represents a numeric literal (integer or floating-point).
+/// </summary>
+public sealed record NumericToken(ReadOnlyMemory<char> Content, NumericType NumericType) 
+    : Token(Content, TokenType.Numeric);
+
+/// <summary>
+/// Represents a string literal delimited by single or double quotes.
+/// </summary>
+public sealed record StringToken(ReadOnlyMemory<char> Content, char Quote) 
+    : Token(Content, TokenType.String)
+{
+    /// <summary>
+    /// Gets the string value without the surrounding quotes.
+    /// </summary>
+    public ReadOnlySpan<char> Value => Content.Span.Length >= 2 
+        ? Content.Span[1..^1] 
+        : ReadOnlySpan<char>.Empty;
+}
+
+/// <summary>
+/// Represents a comment token.
+/// </summary>
+public sealed record CommentToken(ReadOnlyMemory<char> Content, bool IsMultiLine) 
+    : Token(Content, TokenType.Comment);
+
 #endregion
