@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace TinyTokenizer;
 
@@ -9,7 +11,48 @@ namespace TinyTokenizer;
 /// </summary>
 public sealed class Lexer
 {
-    private readonly ImmutableHashSet<char> _symbols;
+    #region Static SearchValues
+
+    /// <summary>
+    /// All characters that have dedicated single-char token types.
+    /// Used for fast rejection before the switch in ClassifySingleChar.
+    /// </summary>
+    private static readonly SearchValues<char> SingleCharTokens =
+        SearchValues.Create("{}[]()'\"\\/.*");
+
+    /// <summary>
+    /// All Unicode whitespace characters excluding CR and LF.
+    /// Built by enumerating all char values where char.IsWhiteSpace is true.
+    /// </summary>
+    private static readonly SearchValues<char> NonNewlineWhitespace = BuildNonNewlineWhitespace();
+
+    /// <summary>
+    /// Builds the SearchValues for all whitespace characters except \r and \n.
+    /// </summary>
+    private static SearchValues<char> BuildNonNewlineWhitespace()
+    {
+        var whitespaceChars = new List<char>();
+        for (int i = 0; i <= char.MaxValue; i++)
+        {
+            char c = (char)i;
+            if (char.IsWhiteSpace(c) && c != '\r' && c != '\n')
+            {
+                whitespaceChars.Add(c);
+            }
+        }
+        return SearchValues.Create(CollectionsMarshal.AsSpan(whitespaceChars));
+    }
+
+    #endregion
+
+    #region Instance Fields
+
+    private readonly SearchValues<char> _symbols;
+    private readonly SearchValues<char> _identTerminators;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of <see cref="Lexer"/> with default symbol set.
@@ -24,7 +67,11 @@ public sealed class Lexer
     /// <param name="symbols">The set of characters to classify as symbols.</param>
     public Lexer(ImmutableHashSet<char> symbols)
     {
-        _symbols = symbols;
+        // Build SearchValues for symbols (vectorized Contains)
+        _symbols = SearchValues.Create(symbols.ToArray());
+
+        // Build identifier terminators: whitespace + single-char tokens + symbols
+        _identTerminators = BuildIdentTerminators(symbols);
     }
 
     /// <summary>
@@ -34,6 +81,36 @@ public sealed class Lexer
     public Lexer(TokenizerOptions options) : this(options.Symbols)
     {
     }
+
+    /// <summary>
+    /// Builds a SearchValues containing all characters that terminate an identifier.
+    /// </summary>
+    private static SearchValues<char> BuildIdentTerminators(ImmutableHashSet<char> symbols)
+    {
+        var terminators = new HashSet<char>();
+
+        // Add all non-newline whitespace
+        for (int i = 0; i <= char.MaxValue; i++)
+        {
+            char c = (char)i;
+            if (char.IsWhiteSpace(c))
+            {
+                terminators.Add(c);
+            }
+        }
+
+        // Add single-char token characters
+        terminators.UnionWith("{}[]()'\"\\/.*");
+
+        // Add configured symbols
+        terminators.UnionWith(symbols);
+
+        return SearchValues.Create(CollectionsMarshal.AsSpan(terminators.ToList()));
+    }
+
+    #endregion
+
+    #region Public Methods
 
     /// <summary>
     /// Lexes the input into simple tokens.
@@ -50,16 +127,20 @@ public sealed class Lexer
 
         while (position < length)
         {
+            // Note: Access input.Span fresh each iteration (cannot store across yield)
             char c = input.Span[position];
             int start = position;
 
-            // Single-character tokens with dedicated types
-            var singleCharType = ClassifySingleChar(c);
-            if (singleCharType.HasValue)
+            // Fast path: check if char is a single-char token using SearchValues
+            if (SingleCharTokens.Contains(c))
             {
-                position++;
-                yield return new SimpleToken(singleCharType.Value, input.Slice(start, 1), start);
-                continue;
+                var singleCharType = ClassifySingleChar(c);
+                if (singleCharType.HasValue)
+                {
+                    position++;
+                    yield return new SimpleToken(singleCharType.Value, input.Slice(start, 1), start);
+                    continue;
+                }
             }
 
             // Newline (handle \r\n as single token)
@@ -82,28 +163,23 @@ public sealed class Lexer
                 continue;
             }
 
-            // Whitespace (excluding newlines)
-            if (char.IsWhiteSpace(c))
+            // Whitespace (excluding newlines) - use vectorized IndexOfAnyExcept
+            if (NonNewlineWhitespace.Contains(c))
             {
-                while (position < length)
-                {
-                    char current = input.Span[position];
-                    if (!char.IsWhiteSpace(current) || current == '\n' || current == '\r')
-                        break;
-                    position++;
-                }
-                yield return new SimpleToken(SimpleTokenType.Whitespace, input.Slice(start, position - start), start);
+                int wsEnd = input.Span[position..].IndexOfAnyExcept(NonNewlineWhitespace);
+                int wsLength = wsEnd < 0 ? length - position : wsEnd;
+                position += wsLength;
+                yield return new SimpleToken(SimpleTokenType.Whitespace, input.Slice(start, wsLength), start);
                 continue;
             }
 
-            // Digits (consecutive digit characters only)
-            if (char.IsDigit(c))
+            // Digits (consecutive digit characters only) - use vectorized IndexOfAnyExceptInRange
+            if (char.IsAsciiDigit(c))
             {
-                while (position < length && char.IsDigit(input.Span[position]))
-                {
-                    position++;
-                }
-                yield return new SimpleToken(SimpleTokenType.Digits, input.Slice(start, position - start), start);
+                int digitEnd = input.Span[position..].IndexOfAnyExceptInRange('0', '9');
+                int digitLength = digitEnd < 0 ? length - position : digitEnd;
+                position += digitLength;
+                yield return new SimpleToken(SimpleTokenType.Digits, input.Slice(start, digitLength), start);
                 continue;
             }
 
@@ -115,22 +191,14 @@ public sealed class Lexer
                 continue;
             }
 
-            // Identifier (everything else that forms identifier-like content)
-            while (position < length)
-            {
-                char current = input.Span[position];
-                if (char.IsWhiteSpace(current) ||
-                    ClassifySingleChar(current).HasValue ||
-                    _symbols.Contains(current))
-                {
-                    break;
-                }
-                position++;
-            }
+            // Identifier (everything else) - use vectorized IndexOfAny for terminators
+            int identEnd = input.Span[position..].IndexOfAny(_identTerminators);
+            int identLength = identEnd < 0 ? length - position : identEnd;
 
-            if (position > start)
+            if (identLength > 0)
             {
-                yield return new SimpleToken(SimpleTokenType.Ident, input.Slice(start, position - start), start);
+                position += identLength;
+                yield return new SimpleToken(SimpleTokenType.Ident, input.Slice(start, identLength), start);
             }
         }
     }
@@ -159,8 +227,13 @@ public sealed class Lexer
         return [.. Lex(input)];
     }
 
+    #endregion
+
+    #region Private Methods
+
     /// <summary>
     /// Classifies a single character that should always be its own token.
+    /// Uses fast rejection via SearchValues before the switch.
     /// </summary>
     private static SimpleTokenType? ClassifySingleChar(char c)
     {
@@ -181,4 +254,6 @@ public sealed class Lexer
             _ => null
         };
     }
+
+    #endregion
 }
