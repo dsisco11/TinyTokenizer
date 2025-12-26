@@ -227,38 +227,37 @@ public class AsyncTokenizerTests
 
     #region Chunked Stream Tests (Simulating Network/File I/O)
 
-    // Note: These tests are for future streaming improvements.
-    // The current implementation works best with contiguous buffers.
-    // Chunked streaming with partial tokens across boundaries is a known limitation.
-
     [Fact]
     public async Task TokenizeAsync_ChunkedStream_SimpleText_Works()
     {
-        // Using larger chunk size to avoid token boundary issues
-        var tokens = await TokenizeChunkedAsync("hello world", chunkSize: 20);
+        // Test with small chunks that split tokens
+        var tokens = await TokenizeChunkedAsync("hello world", chunkSize: 3);
 
         Assert.Equal(3, tokens.Count);
         Assert.IsType<TextToken>(tokens[0]);
+        Assert.Equal("hello", tokens[0].ContentSpan.ToString());
         Assert.IsType<WhitespaceToken>(tokens[1]);
         Assert.IsType<TextToken>(tokens[2]);
+        Assert.Equal("world", tokens[2].ContentSpan.ToString());
     }
 
     [Fact]
-    public async Task TokenizeAsync_ChunkedStream_BlockInSingleChunk_Works()
+    public async Task TokenizeAsync_ChunkedStream_BlockAcrossChunks_Works()
     {
-        // Block entirely in one chunk
-        var tokens = await TokenizeChunkedAsync("{content}", chunkSize: 20);
+        // Block split across chunks
+        var tokens = await TokenizeChunkedAsync("{content}", chunkSize: 4);
 
         Assert.Single(tokens);
         var block = Assert.IsType<BlockToken>(tokens[0]);
         Assert.Equal("{content}", block.FullContentSpan.ToString());
+        Assert.Equal("content", block.InnerContentSpan.ToString());
     }
 
     [Fact]
-    public async Task TokenizeAsync_ChunkedStream_StringInSingleChunk_Works()
+    public async Task TokenizeAsync_ChunkedStream_StringAcrossChunks_Works()
     {
-        // String entirely in one chunk
-        var tokens = await TokenizeChunkedAsync("\"hello world\"", chunkSize: 20);
+        // String split across chunks
+        var tokens = await TokenizeChunkedAsync("\"hello world\"", chunkSize: 5);
 
         Assert.Single(tokens);
         var str = Assert.IsType<StringToken>(tokens[0]);
@@ -266,14 +265,85 @@ public class AsyncTokenizerTests
     }
 
     [Fact]
-    public async Task TokenizeAsync_ChunkedStream_NestedBlocksInSingleChunk_Works()
+    public async Task TokenizeAsync_ChunkedStream_NestedBlocks_Works()
     {
-        // Nested blocks entirely in one chunk
-        var tokens = await TokenizeChunkedAsync("{[()]}", chunkSize: 20);
+        // Nested blocks with very small chunks
+        var tokens = await TokenizeChunkedAsync("{[()]}", chunkSize: 2);
 
         Assert.Single(tokens);
         var block = Assert.IsType<BlockToken>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
+        Assert.Single(block.Children);
+        
+        var innerBlock = Assert.IsType<BlockToken>(block.Children[0]);
+        Assert.Equal(TokenType.BracketBlock, innerBlock.Type);
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_ChunkedStream_StringWithEscape_Works()
+    {
+        // String with escape sequence split across chunks
+        var tokens = await TokenizeChunkedAsync("\"hello\\\"world\"", chunkSize: 4);
+
+        Assert.Single(tokens);
+        var str = Assert.IsType<StringToken>(tokens[0]);
+        Assert.Equal("\"hello\\\"world\"", str.ContentSpan.ToString());
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_ChunkedStream_MultiLineComment_Works()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleMultiLine);
+        
+        // Multi-line comment split across chunks
+        var bytes = Encoding.UTF8.GetBytes("/* comment */");
+        using var stream = new ChunkedMemoryStream(bytes, chunkSize: 4);
+        
+        var tokens = new List<Token>();
+        await foreach (var token in stream.TokenizeAsync(options))
+        {
+            tokens.Add(token);
+        }
+
+        Assert.Single(tokens);
+        var comment = Assert.IsType<CommentToken>(tokens[0]);
+        Assert.Equal("/* comment */", comment.ContentSpan.ToString());
+        Assert.True(comment.IsMultiLine);
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_ChunkedStream_MixedContent_Works()
+    {
+        // Mixed content with small chunks
+        var tokens = await TokenizeChunkedAsync("func(a, b) { x = 1; }", chunkSize: 3);
+
+        // The two-level tokenizer produces semantic tokens:
+        // - func (text)
+        // - (a, b) as a parenthesis block
+        // - space (whitespace)  
+        // - { x = 1; } as a brace block
+        Assert.Equal(4, tokens.Count);
+        
+        // Find the function name
+        Assert.Contains(tokens, t => t is TextToken txt && txt.ContentSpan.ToString() == "func");
+        
+        // Find the blocks
+        var parenBlock = tokens.OfType<BlockToken>().Single(b => b.Type == TokenType.ParenthesisBlock);
+        Assert.Equal("(a, b)", parenBlock.ContentSpan.ToString());
+        
+        var braceBlock = tokens.OfType<BlockToken>().Single(b => b.Type == TokenType.BraceBlock);
+        Assert.Equal("{ x = 1; }", braceBlock.ContentSpan.ToString());
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_ChunkedStream_Numbers_Works()
+    {
+        var tokens = await TokenizeChunkedAsync("123.456", chunkSize: 2);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal("123.456", num.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num.NumericType);
     }
 
     #endregion
@@ -463,11 +533,39 @@ public class AsyncTokenizerTests
     }
 
     [Fact]
+    public async Task TokenizeAsync_ComplexCode_Chunked_ParsesCorrectly()
+    {
+        var code = "function test(a, b) { return a + b; }";
+
+        var tokens = await TokenizeChunkedAsync(code, chunkSize: 5);
+
+        Assert.True(tokens.Count > 5, $"Expected more than 5 tokens, got {tokens.Count}");
+        Assert.Contains(tokens, t => t is TextToken txt && txt.ContentSpan.ToString() == "function");
+        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.ParenthesisBlock });
+        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.BraceBlock });
+    }
+
+    [Fact]
     public async Task TokenizeAsync_JsonLike_ParsesCorrectly()
     {
         var json = """{"name": "test", "value": 123}""";
 
         var tokens = await TokenizeStringAsync(json);
+
+        Assert.Single(tokens);
+        var block = Assert.IsType<BlockToken>(tokens[0]);
+        Assert.Equal(TokenType.BraceBlock, block.Type);
+
+        // Should have strings for keys and values
+        Assert.Contains(block.Children, t => t is StringToken);
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_JsonLike_Chunked_ParsesCorrectly()
+    {
+        var json = """{"name": "test", "value": 123}""";
+
+        var tokens = await TokenizeChunkedAsync(json, chunkSize: 4);
 
         Assert.Single(tokens);
         var block = Assert.IsType<BlockToken>(tokens[0]);
@@ -489,6 +587,21 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync(builder.ToString());
 
         // Each token + space = 2 tokens per iteration, minus trailing space handling
+        Assert.True(tokens.Count >= 100, $"Expected at least 100 tokens, got {tokens.Count}");
+    }
+
+    [Fact]
+    public async Task TokenizeAsync_LargeInput_Chunked_CompletesSuccessfully()
+    {
+        var builder = new StringBuilder();
+        for (int i = 0; i < 100; i++)
+        {
+            builder.Append($"token{i} ");
+        }
+
+        var tokens = await TokenizeChunkedAsync(builder.ToString(), chunkSize: 10);
+
+        // Each token + space = 2 tokens per iteration
         Assert.True(tokens.Count >= 100, $"Expected at least 100 tokens, got {tokens.Count}");
     }
 

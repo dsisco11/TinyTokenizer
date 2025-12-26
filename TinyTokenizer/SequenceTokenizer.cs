@@ -16,6 +16,7 @@ public ref struct SequenceTokenizer
     private readonly TokenizerOptions _options;
     private readonly TokenizerState _state;
     private readonly bool _isCompleted;
+    private long _lastSafePosition; // Position up to which we can safely consume
 
     #endregion
 
@@ -38,6 +39,7 @@ public ref struct SequenceTokenizer
         _options = options ?? TokenizerOptions.Default;
         _state = state ?? new TokenizerState();
         _isCompleted = isCompleted;
+        _lastSafePosition = 0;
     }
 
     #endregion
@@ -52,17 +54,34 @@ public ref struct SequenceTokenizer
     {
         var tokens = ImmutableArray.CreateBuilder<Token>();
         string? errorMessage = null;
+        bool needMoreData = false;
 
         try
         {
-            TokenizeInternal(tokens, null);
+            // Resume from partial token if any
+            if (_state.Mode != ParseMode.Normal)
+            {
+                needMoreData = !ResumePartialToken(tokens);
+                if (needMoreData && !_isCompleted)
+                {
+                    return CreateNeedMoreDataResult(tokens);
+                }
+            }
+
+            if (!needMoreData)
+            {
+                TokenizeInternal(tokens, null, ref needMoreData);
+            }
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
         }
 
-        var consumed = _reader.Position;
+        // Determine consumed position
+        var consumed = needMoreData && !_isCompleted
+            ? _reader.Sequence.GetPosition(_lastSafePosition)
+            : _reader.Position;
         var examined = _reader.Sequence.End;
 
         // Determine status
@@ -70,6 +89,10 @@ public ref struct SequenceTokenizer
         if (errorMessage != null)
         {
             status = ParseStatus.Error;
+        }
+        else if (needMoreData && !_isCompleted)
+        {
+            status = ParseStatus.NeedMoreData;
         }
         else if (_reader.End && _isCompleted)
         {
@@ -81,8 +104,7 @@ public ref struct SequenceTokenizer
         }
         else
         {
-            // At end but not completed - need more data
-            status = _state.Mode == ParseMode.Normal ? ParseStatus.Complete : ParseStatus.NeedMoreData;
+            status = ParseStatus.Complete;
         }
 
         return new ParseResult
@@ -95,6 +117,161 @@ public ref struct SequenceTokenizer
         };
     }
 
+    private ParseResult CreateNeedMoreDataResult(ImmutableArray<Token>.Builder tokens)
+    {
+        return new ParseResult
+        {
+            Tokens = tokens.ToImmutable(),
+            Status = ParseStatus.NeedMoreData,
+            Consumed = _reader.Sequence.GetPosition(_lastSafePosition),
+            Examined = _reader.Sequence.End,
+            ErrorMessage = null
+        };
+    }
+
+    /// <summary>
+    /// Resumes parsing a partial token from previous buffer.
+    /// </summary>
+    /// <returns>True if token was completed, false if still need more data.</returns>
+    private bool ResumePartialToken(ImmutableArray<Token>.Builder tokens)
+    {
+        switch (_state.Mode)
+        {
+            case ParseMode.InString:
+                return ResumeString(tokens);
+            case ParseMode.InMultiLineComment:
+                return ResumeMultiLineComment(tokens);
+            case ParseMode.InSingleLineComment:
+                return ResumeSingleLineComment(tokens);
+            case ParseMode.InBlock:
+                // Blocks are handled differently - they accumulate children
+                return true;
+            default:
+                _state.ClearPartialToken();
+                return true;
+        }
+    }
+
+    private bool ResumeString(ImmutableArray<Token>.Builder tokens)
+    {
+        char quote = _state.StringQuote ?? '"';
+        bool escaped = _state.IsEscaped;
+
+        while (_reader.TryPeek(out char current))
+        {
+            if (escaped)
+            {
+                _state.PartialBuffer.Append(current);
+                _reader.Advance(1);
+                escaped = false;
+                _state.IsEscaped = false;
+                continue;
+            }
+
+            if (current == '\\')
+            {
+                _state.PartialBuffer.Append(current);
+                _reader.Advance(1);
+                escaped = true;
+                _state.IsEscaped = true;
+                continue;
+            }
+
+            if (current == quote)
+            {
+                _state.PartialBuffer.Append(current);
+                _reader.Advance(1);
+                
+                // Complete the string token
+                var content = _state.PartialBuffer.ToString().AsMemory();
+                tokens.Add(new StringToken(content, quote, _state.TokenStartPosition));
+                _state.ClearPartialToken();
+                _lastSafePosition = _reader.Consumed;
+                return true;
+            }
+
+            _state.PartialBuffer.Append(current);
+            _reader.Advance(1);
+        }
+
+        // Still need more data
+        _state.IsEscaped = escaped;
+        return false;
+    }
+
+    private bool ResumeMultiLineComment(ImmutableArray<Token>.Builder tokens)
+    {
+        var style = _state.CurrentCommentStyle;
+        if (style?.End == null) return true;
+
+        var endSpan = style.End.AsSpan();
+
+        while (_reader.TryPeek(out char current))
+        {
+            _state.PartialBuffer.Append(current);
+            _reader.Advance(1);
+
+            // Check if buffer ends with the end delimiter
+            if (_state.PartialBuffer.Length >= style.End.Length)
+            {
+                bool matches = true;
+                int bufferLen = _state.PartialBuffer.Length;
+                for (int i = 0; i < style.End.Length; i++)
+                {
+                    if (_state.PartialBuffer[bufferLen - style.End.Length + i] != endSpan[i])
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches)
+                {
+                    var content = _state.PartialBuffer.ToString().AsMemory();
+                    tokens.Add(new CommentToken(content, IsMultiLine: true, _state.TokenStartPosition));
+                    _state.ClearPartialToken();
+                    _lastSafePosition = _reader.Consumed;
+                    return true;
+                }
+            }
+        }
+
+        // Still need more data
+        return false;
+    }
+
+    private bool ResumeSingleLineComment(ImmutableArray<Token>.Builder tokens)
+    {
+        while (_reader.TryPeek(out char current))
+        {
+            if (current == '\n' || current == '\r')
+            {
+                // End of single-line comment (don't consume newline)
+                var content = _state.PartialBuffer.ToString().AsMemory();
+                tokens.Add(new CommentToken(content, IsMultiLine: false, _state.TokenStartPosition));
+                _state.ClearPartialToken();
+                _lastSafePosition = _reader.Consumed;
+                return true;
+            }
+
+            _state.PartialBuffer.Append(current);
+            _reader.Advance(1);
+        }
+
+        // At end of buffer
+        if (_isCompleted)
+        {
+            // EOF counts as end of single-line comment
+            var content = _state.PartialBuffer.ToString().AsMemory();
+            tokens.Add(new CommentToken(content, IsMultiLine: false, _state.TokenStartPosition));
+            _state.ClearPartialToken();
+            _lastSafePosition = _reader.Consumed;
+            return true;
+        }
+
+        return false;
+    }
+
     #endregion
 
     #region Private Methods
@@ -102,7 +279,7 @@ public ref struct SequenceTokenizer
     /// <summary>
     /// Internal tokenization method that handles recursive block parsing.
     /// </summary>
-    private void TokenizeInternal(ImmutableArray<Token>.Builder tokens, char? expectedCloser)
+    private void TokenizeInternal(ImmutableArray<Token>.Builder tokens, char? expectedCloser, ref bool needMoreData)
     {
         while (_reader.TryPeek(out char current))
         {
@@ -120,14 +297,23 @@ public ref struct SequenceTokenizer
                 var content = ExtractContent(1);
                 tokens.Add(new ErrorToken(content, $"Unexpected closing delimiter '{current}'", tokenStart));
                 _reader.Advance(1);
+                _lastSafePosition = _reader.Consumed;
                 continue;
             }
 
             // Check for opening delimiter (start of block)
             if (TokenizerCore.TryGetClosingDelimiter(current, out char closer))
             {
-                var blockToken = ParseBlock(current, closer, tokenStart);
-                tokens.Add(blockToken);
+                var blockToken = ParseBlock(current, closer, tokenStart, ref needMoreData);
+                if (blockToken != null)
+                {
+                    tokens.Add(blockToken);
+                    _lastSafePosition = _reader.Consumed;
+                }
+                else if (needMoreData)
+                {
+                    return;
+                }
                 continue;
             }
 
@@ -135,16 +321,14 @@ public ref struct SequenceTokenizer
             var commentStyle = TryMatchCommentStart();
             if (commentStyle is not null)
             {
-                var token = ParseComment(commentStyle, tokenStart);
+                var token = ParseComment(commentStyle, tokenStart, ref needMoreData);
                 if (token != null)
                 {
                     tokens.Add(token);
+                    _lastSafePosition = _reader.Consumed;
                 }
-                else if (!_isCompleted)
+                else if (needMoreData)
                 {
-                    // Need more data for comment
-                    _state.BeginPartialToken(ParseMode.InMultiLineComment, tokenStart);
-                    _state.CurrentCommentStyle = commentStyle;
                     return;
                 }
                 continue;
@@ -153,16 +337,14 @@ public ref struct SequenceTokenizer
             // Check for string literal
             if (current == '"' || current == '\'')
             {
-                var token = ParseString(current, tokenStart);
+                var token = ParseString(current, tokenStart, ref needMoreData);
                 if (token != null)
                 {
                     tokens.Add(token);
+                    _lastSafePosition = _reader.Consumed;
                 }
-                else if (!_isCompleted)
+                else if (needMoreData)
                 {
-                    // Need more data for string
-                    _state.BeginPartialToken(ParseMode.InString, tokenStart);
-                    _state.StringQuote = current;
                     return;
                 }
                 continue;
@@ -173,6 +355,7 @@ public ref struct SequenceTokenizer
             {
                 var token = ParseNumeric(tokenStart);
                 tokens.Add(token);
+                _lastSafePosition = _reader.Consumed;
                 continue;
             }
 
@@ -182,6 +365,7 @@ public ref struct SequenceTokenizer
                 var content = ExtractContent(1);
                 tokens.Add(new SymbolToken(content, tokenStart));
                 _reader.Advance(1);
+                _lastSafePosition = _reader.Consumed;
                 continue;
             }
 
@@ -190,12 +374,14 @@ public ref struct SequenceTokenizer
             {
                 var token = ParseWhitespace(tokenStart);
                 tokens.Add(token);
+                _lastSafePosition = _reader.Consumed;
                 continue;
             }
 
             // Otherwise, it's text
             var textToken = ParseText(tokenStart);
             tokens.Add(textToken);
+            _lastSafePosition = _reader.Consumed;
         }
     }
 
@@ -207,7 +393,7 @@ public ref struct SequenceTokenizer
     /// <summary>
     /// Parses a block starting at the current position.
     /// </summary>
-    private Token ParseBlock(char opener, char closer, long startPosition)
+    private Token? ParseBlock(char opener, char closer, long startPosition, ref bool needMoreData)
     {
         TokenizerCore.TryGetBlockTokenType(opener, out TokenType blockType);
 
@@ -219,7 +405,14 @@ public ref struct SequenceTokenizer
 
         // Recursively tokenize the inner content
         var children = ImmutableArray.CreateBuilder<Token>();
-        TokenizeInternal(children, closer);
+        TokenizeInternal(children, closer, ref needMoreData);
+
+        if (needMoreData)
+        {
+            // Rewind to before the block
+            _reader.Rewind(_reader.Consumed - readerStartPos);
+            return null;
+        }
 
         long innerEnd = _reader.Consumed;
 
@@ -242,9 +435,16 @@ public ref struct SequenceTokenizer
                 closer,
                 startPosition);
         }
+        else if (!_isCompleted)
+        {
+            // Need more data - rewind and signal
+            _reader.Rewind(_reader.Consumed - readerStartPos);
+            needMoreData = true;
+            return null;
+        }
         else
         {
-            // Unclosed block - emit error token
+            // Unclosed block at EOF - emit error token
             var errorContent = ExtractContentFromPosition(readerStartPos, 1);
             return new ErrorToken(
                 errorContent,
@@ -304,7 +504,7 @@ public ref struct SequenceTokenizer
     /// <summary>
     /// Parses a string literal starting at the current position.
     /// </summary>
-    private Token? ParseString(char quote, long startPosition)
+    private Token? ParseString(char quote, long startPosition, ref bool needMoreData)
     {
         long start = _reader.Consumed;
 
@@ -340,8 +540,19 @@ public ref struct SequenceTokenizer
             return new SymbolToken(content, startPosition);
         }
 
-        // Need more data
+        // Need more data - save state for resumption
+        _state.BeginPartialToken(ParseMode.InString, startPosition);
+        _state.StringQuote = quote;
+        
+        // Copy what we have so far to the partial buffer
+        var partialSlice = _reader.Sequence.Slice(start, _reader.Consumed - start);
+        foreach (var segment in partialSlice)
+        {
+            _state.PartialBuffer.Append(segment.Span);
+        }
+        
         _reader.Rewind(_reader.Consumed - start);
+        needMoreData = true;
         return null;
     }
 
@@ -416,7 +627,7 @@ public ref struct SequenceTokenizer
     /// <summary>
     /// Parses a comment starting at the current position.
     /// </summary>
-    private CommentToken? ParseComment(CommentStyle style, long startPosition)
+    private CommentToken? ParseComment(CommentStyle style, long startPosition, ref bool needMoreData)
     {
         long start = _reader.Consumed;
 
@@ -451,8 +662,19 @@ public ref struct SequenceTokenizer
                 return new CommentToken(content, IsMultiLine: true, startPosition);
             }
 
-            // Need more data
+            // Need more data - save state for resumption
+            _state.BeginPartialToken(ParseMode.InMultiLineComment, startPosition);
+            _state.CurrentCommentStyle = style;
+            
+            // Copy what we have so far to the partial buffer
+            var partialSlice = _reader.Sequence.Slice(start, _reader.Consumed - start);
+            foreach (var segment in partialSlice)
+            {
+                _state.PartialBuffer.Append(segment.Span);
+            }
+            
             _reader.Rewind(_reader.Consumed - start);
+            needMoreData = true;
             return null;
         }
         else
@@ -463,6 +685,25 @@ public ref struct SequenceTokenizer
                 if (c == '\n' || c == '\r')
                     break;
                 _reader.Advance(1);
+            }
+
+            // Check if we hit end of buffer without newline (and not completed)
+            if (_reader.End && !_isCompleted)
+            {
+                // Need more data - save state for resumption
+                _state.BeginPartialToken(ParseMode.InSingleLineComment, startPosition);
+                _state.CurrentCommentStyle = style;
+                
+                // Copy what we have so far to the partial buffer
+                var partialSlice = _reader.Sequence.Slice(start, _reader.Consumed - start);
+                foreach (var segment in partialSlice)
+                {
+                    _state.PartialBuffer.Append(segment.Span);
+                }
+                
+                _reader.Rewind(_reader.Consumed - start);
+                needMoreData = true;
+                return null;
             }
 
             var content = ExtractContentFromPosition(start, (int)(_reader.Consumed - start));

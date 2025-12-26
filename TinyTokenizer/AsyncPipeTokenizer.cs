@@ -9,12 +9,13 @@ namespace TinyTokenizer;
 /// <summary>
 /// An async tokenizer that streams tokens from a <see cref="PipeReader"/> using
 /// <see cref="IAsyncEnumerable{T}"/> for on-demand parsing without pre-loading all tokens.
+/// Uses the two-level architecture: Lexer (Level 1) → TokenParser (Level 2).
 /// </summary>
 public sealed class AsyncPipeTokenizer : IAsyncDisposable
 {
     private readonly DecodingPipeReader _reader;
-    private readonly TokenizerOptions _options;
-    private readonly TokenizerState _state;
+    private readonly Lexer _lexer;
+    private readonly TokenParser _parser;
     private bool _disposed;
 
     /// <summary>
@@ -29,8 +30,9 @@ public sealed class AsyncPipeTokenizer : IAsyncDisposable
         Encoding? encoding = null)
     {
         _reader = new DecodingPipeReader(pipeReader, encoding, leaveOpen: false);
-        _options = options ?? TokenizerOptions.Default;
-        _state = new TokenizerState();
+        var opts = options ?? TokenizerOptions.Default;
+        _lexer = new Lexer(opts);
+        _parser = new TokenParser(opts);
     }
 
     /// <summary>
@@ -47,23 +49,38 @@ public sealed class AsyncPipeTokenizer : IAsyncDisposable
         bool leaveOpen = false)
     {
         _reader = DecodingPipeReader.Create(stream, encoding, leaveOpen);
-        _options = options ?? TokenizerOptions.Default;
-        _state = new TokenizerState();
+        var opts = options ?? TokenizerOptions.Default;
+        _lexer = new Lexer(opts);
+        _parser = new TokenParser(opts);
     }
 
     /// <summary>
     /// Streams tokens asynchronously from the input.
+    /// Uses the two-level Lexer → TokenParser architecture for clean streaming.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of tokens.</returns>
-    public async IAsyncEnumerable<Token> TokenizeAsync(
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<Token> TokenizeAsync(
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // Buffer for accumulating partial data
-        var accumulatedBuffer = new ArrayBufferWriter<char>();
-        
+        // Create an async enumerable of memory chunks from the reader
+        var chunks = ReadChunksAsync(cancellationToken);
+
+        // Level 1: Lexer produces SimpleTokens from chunks
+        var simpleTokens = _lexer.LexAsync(chunks, cancellationToken);
+
+        // Level 2: TokenParser produces semantic Tokens from SimpleTokens
+        return _parser.ParseAsync(simpleTokens, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads character chunks from the underlying pipe reader.
+    /// </summary>
+    private async IAsyncEnumerable<ReadOnlyMemory<char>> ReadChunksAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -78,150 +95,24 @@ public sealed class AsyncPipeTokenizer : IAsyncDisposable
             var buffer = readResult.Buffer;
             bool isCompleted = readResult.IsCompleted;
 
-            // Combine with any accumulated partial data
-            ReadOnlySequence<char> sequenceToProcess;
-            if (accumulatedBuffer.WrittenCount > 0)
+            if (!buffer.IsEmpty)
             {
-                // Append new data to accumulated buffer
-                if (!buffer.IsEmpty)
+                // Copy to a new array since buffer may be reused
+                var chars = new char[buffer.Length];
+                for (int i = 0; i < buffer.Length; i++)
                 {
-                    buffer.Span.CopyTo(accumulatedBuffer.GetSpan(buffer.Span.Length));
-                    accumulatedBuffer.Advance(buffer.Span.Length);
+                    chars[i] = buffer.Span[i];
                 }
                 
-                sequenceToProcess = new ReadOnlySequence<char>(accumulatedBuffer.WrittenMemory);
-            }
-            else
-            {
-                sequenceToProcess = new ReadOnlySequence<char>(buffer);
+                _reader.AdvanceTo((int)buffer.Length);
+                
+                yield return chars.AsMemory();
             }
 
-            if (sequenceToProcess.IsEmpty && isCompleted)
+            if (isCompleted)
             {
-                // Handle any remaining state (unclosed blocks, etc.)
-                foreach (var errorToken in FlushRemainingState())
-                {
-                    yield return errorToken;
-                }
                 yield break;
             }
-
-            // Parse the current buffer (using helper to avoid ref struct in async method)
-            var result = ParseSequence(sequenceToProcess, isCompleted);
-
-            // Yield all parsed tokens
-            foreach (var token in result.Tokens)
-            {
-                yield return token;
-            }
-
-            // Handle result status
-            switch (result.Status)
-            {
-                case ParseStatus.Complete:
-                    // All done
-                    _reader.AdvanceTo((int)buffer.Length);
-                    accumulatedBuffer.Clear();
-                    yield break;
-
-                case ParseStatus.NeedMoreData:
-                    // Save unconsumed data for next iteration
-                    var consumedLength = sequenceToProcess.GetOffset(result.Consumed);
-                    var remainingLength = sequenceToProcess.Length - consumedLength;
-                    
-                    if (remainingLength > 0)
-                    {
-                        var remaining = sequenceToProcess.Slice(result.Consumed);
-                        accumulatedBuffer.Clear();
-                        remaining.CopyTo(accumulatedBuffer.GetSpan((int)remaining.Length));
-                        accumulatedBuffer.Advance((int)remaining.Length);
-                    }
-                    else
-                    {
-                        accumulatedBuffer.Clear();
-                    }
-                    
-                    _reader.AdvanceTo((int)buffer.Length);
-
-                    if (isCompleted)
-                    {
-                        // No more data coming, flush what we have
-                        foreach (var errorToken in FlushRemainingState())
-                        {
-                            yield return errorToken;
-                        }
-                        yield break;
-                    }
-                    break;
-
-                case ParseStatus.Continue:
-                case ParseStatus.Error:
-                    // Continue processing, advance past consumed
-                    var consumed = sequenceToProcess.GetOffset(result.Consumed);
-                    var leftover = sequenceToProcess.Length - consumed;
-                    
-                    if (leftover > 0)
-                    {
-                        var leftoverSlice = sequenceToProcess.Slice(result.Consumed);
-                        accumulatedBuffer.Clear();
-                        leftoverSlice.CopyTo(accumulatedBuffer.GetSpan((int)leftoverSlice.Length));
-                        accumulatedBuffer.Advance((int)leftoverSlice.Length);
-                    }
-                    else
-                    {
-                        accumulatedBuffer.Clear();
-                    }
-                    
-                    _reader.AdvanceTo((int)buffer.Length);
-
-                    if (isCompleted)
-                    {
-                        yield break;
-                    }
-                    break;
-            }
-
-            // Update absolute position
-            _state.AbsolutePosition += sequenceToProcess.GetOffset(result.Consumed);
-        }
-    }
-
-    /// <summary>
-    /// Helper method to parse a sequence without ref struct in async context.
-    /// </summary>
-    private ParseResult ParseSequence(ReadOnlySequence<char> sequence, bool isCompleted)
-    {
-        var tokenizer = new SequenceTokenizer(sequence, _options, _state, isCompleted);
-        return tokenizer.Tokenize();
-    }
-
-    /// <summary>
-    /// Flushes any remaining state as error tokens.
-    /// </summary>
-    private IEnumerable<ErrorToken> FlushRemainingState()
-    {
-        // Handle unclosed blocks
-        while (_state.BlockStack.Count > 0)
-        {
-            var block = _state.BlockStack.Pop();
-            yield return new ErrorToken(
-                ReadOnlyMemory<char>.Empty,
-                $"Unclosed block starting with '{block.OpeningDelimiter}' at position {block.StartPosition}",
-                block.StartPosition);
-        }
-
-        // Handle partial tokens
-        if (_state.Mode != ParseMode.Normal && _state.PartialBuffer.Length > 0)
-        {
-            var content = _state.PartialBuffer.ToString().AsMemory();
-            var message = _state.Mode switch
-            {
-                ParseMode.InString => $"Unterminated string literal starting at position {_state.TokenStartPosition}",
-                ParseMode.InMultiLineComment => $"Unterminated multi-line comment starting at position {_state.TokenStartPosition}",
-                _ => $"Incomplete token at position {_state.TokenStartPosition}"
-            };
-
-            yield return new ErrorToken(content, message, _state.TokenStartPosition);
         }
     }
 
