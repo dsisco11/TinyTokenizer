@@ -1,27 +1,36 @@
 # TinyTokenizer
 
-A high-performance, zero-allocation tokenizer library for .NET that parses text into abstract tokens using `ReadOnlySpan<char>` for maximum efficiency.
+A high-performance, zero-allocation tokenizer library for .NET 8+ that parses text into abstract tokens using `ReadOnlySpan<char>` and SIMD-optimized `SearchValues<char>` for maximum efficiency.
 
 ## Features
 
 - **Zero-allocation parsing** — Uses `ReadOnlySpan<char>` internally for fast, allocation-free text traversal
+- **SIMD-optimized** — Uses .NET 8's `SearchValues<char>` for vectorized character matching
+- **Two-level architecture** — Lexer (character classification) + TokenParser (semantic parsing)
+- **Async streaming** — Tokenize `Stream` and `PipeReader` sources with `IAsyncEnumerable<Token>`
 - **Recursive declaration blocks** — Automatically parses nested `{}`, `[]`, and `()` blocks with child tokens
+- **String literals** — Supports single and double-quoted strings with escape sequences
+- **Numeric literals** — Parses integers and floating-point numbers
+- **Comment support** — Configurable single-line and multi-line comment styles
 - **Configurable symbols** — Define which characters are recognized as symbol tokens
 - **Immutable tokens** — All token types are immutable record classes
 - **Error recovery** — Gracefully handles malformed input with `ErrorToken` and continues parsing
 
 ## Installation
 
-Add a reference to the `TinyTokenizer` project or include the source files in your solution.
+```bash
+dotnet add package TinyTokenizer
+```
+
+Or add a reference to the `TinyTokenizer` project in your solution.
 
 ## Quick Start
 
 ```csharp
 using TinyTokenizer;
 
-// Create a tokenizer with source text
-var tokenizer = new Tokenizer("func(a, b)".AsMemory());
-var tokens = tokenizer.Tokenize();
+// Simple tokenization
+var tokens = "func(a, b)".TokenizeToTokens();
 
 // tokens contains:
 // - IdentToken("func")
@@ -30,52 +39,161 @@ var tokens = tokenizer.Tokenize();
 //   - SymbolToken(",")
 //   - WhitespaceToken(" ")
 //   - IdentToken("b")
+
+// With options
+var options = TokenizerOptions.Default
+    .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+var tokens = "x = 42; // comment".TokenizeToTokens(options);
+```
+
+## Architecture
+
+TinyTokenizer uses a two-level tokenization architecture:
+
+### Level 1: Lexer
+
+The `Lexer` is a stateless character classifier that never backtracks and never fails. It produces `SimpleToken` instances representing atomic character sequences:
+
+- `Ident` — identifier characters
+- `Whitespace` — spaces, tabs (excluding newlines)
+- `Newline` — `\n` or `\r\n` (separate for single-line comment detection)
+- `Digits` — consecutive digit characters
+- `Symbol` — configured symbol characters
+- `Dot`, `Slash`, `Asterisk`, `Backslash` — special characters for parsing
+- `OpenBrace/CloseBrace`, `OpenBracket/CloseBracket`, `OpenParen/CloseParen`
+- `SingleQuote`, `DoubleQuote`
+
+### Level 2: TokenParser
+
+The `TokenParser` combines simple tokens into semantic tokens:
+
+- **Block parsing** — recursive nesting of `{}`, `[]`, `()`
+- **String literals** — quoted strings with escape sequences
+- **Numeric literals** — integers and floating-point numbers
+- **Comments** — single-line and multi-line
+- **Error recovery** — produces `ErrorToken` for malformed input
+
+```csharp
+// Using two-level API directly
+var lexer = new Lexer(options);
+var parser = new TokenParser(options);
+
+var simpleTokens = lexer.Lex(source);
+var tokens = parser.ParseToArray(simpleTokens);
 ```
 
 ## Token Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `IdentToken` | Identifier/text content | `hello`, `func`, `123` |
-| `WhitespaceToken` | Spaces, tabs, newlines | ` `, `\t`, `\n` |
-| `SymbolToken` | Configurable symbol characters | `/`, `:`, `,`, `;` |
-| `BlockToken` | Declaration blocks with delimiters | `{...}`, `[...]`, `(...)` |
-| `ErrorToken` | Parsing errors (unmatched delimiters) | `}` without opening `{` |
+| Type              | Description                           | Example                     |
+| ----------------- | ------------------------------------- | --------------------------- |
+| `IdentToken`      | Identifier/text content               | `hello`, `func`, `_name`    |
+| `WhitespaceToken` | Spaces, tabs, newlines                | ` `, `\t`, `\n`             |
+| `SymbolToken`     | Configurable symbol characters        | `/`, `:`, `,`, `;`          |
+| `NumericToken`    | Integer or floating-point numbers     | `123`, `3.14`, `.5`         |
+| `StringToken`     | Quoted string literals                | `"hello"`, `'c'`            |
+| `CommentToken`    | Single or multi-line comments         | `// comment`, `/* block */` |
+| `BlockToken`      | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`   |
+| `ErrorToken`      | Parsing errors (unmatched delimiters) | `}` without opening `{`     |
 
-### BlockToken Properties
+### Token Properties
 
 ```csharp
-var tokenizer = new Tokenizer("{inner content}".AsMemory());
-var tokens = tokenizer.Tokenize();
-var block = (BlockToken)tokens[0];
+// All tokens have Position tracking
+var token = tokens[0];
+long position = token.Position;  // Character offset in source
 
-block.FullContent;      // "{inner content}" (includes delimiters)
-block.InnerContent;     // "inner content" (excludes delimiters)
-block.Children;         // ImmutableArray<Token> of parsed inner tokens
-block.OpeningDelimiter; // '{'
-block.ClosingDelimiter; // '}'
-block.Type;             // TokenType.BraceBlock
+// NumericToken
+var num = (NumericToken)token;
+num.NumericType;  // NumericType.Integer or NumericType.FloatingPoint
+
+// StringToken
+var str = (StringToken)token;
+str.Quote;  // '"' or '\''
+str.Value;  // Content without quotes (ReadOnlySpan<char>)
+
+// CommentToken
+var comment = (CommentToken)token;
+comment.IsMultiLine;  // true for /* */, false for //
+
+// BlockToken
+var block = (BlockToken)token;
+block.FullContent;       // "{inner content}" (includes delimiters)
+block.InnerContent;      // "inner content" (excludes delimiters)
+block.Children;          // ImmutableArray<Token> of parsed inner tokens
+block.OpeningDelimiter;  // '{'
+block.ClosingDelimiter;  // '}'
+```
+
+## Async Tokenization
+
+Tokenize streams and pipes asynchronously:
+
+```csharp
+using TinyTokenizer;
+
+// From Stream
+await using var stream = File.OpenRead("source.txt");
+var tokens = await stream.TokenizeAsync();
+
+// Streaming with IAsyncEnumerable
+await foreach (var token in stream.TokenizeStreamingAsync())
+{
+    Console.WriteLine(token);
+}
+
+// From PipeReader
+var pipeReader = PipeReader.Create(stream);
+var tokens = await pipeReader.TokenizeAsync();
+
+// With custom encoding
+var tokens = await stream.TokenizeAsync(
+    options: TokenizerOptions.Default,
+    encoding: Encoding.UTF8,
+    leaveOpen: false,
+    cancellationToken: ct);
 ```
 
 ## Configuration
 
-Customize the tokenizer with `TokenizerOptions`:
+### Symbols
 
 ```csharp
 // Default symbols: / : , ; = + - * < > ! & | . @ # ? % ^ ~ \
 var options = TokenizerOptions.Default;
 
 // Add custom symbols
-options = TokenizerOptions.Default.WithAdditionalSymbols('$', '_');
+options = options.WithAdditionalSymbols('$', '_');
 
-// Remove symbols (they become part of text tokens)
-options = TokenizerOptions.Default.WithoutSymbols('/');
+// Remove symbols (they become part of identifier tokens)
+options = options.WithoutSymbols('/');
 
 // Replace entire symbol set
-options = TokenizerOptions.Default.WithSymbols(':', ',', ';');
+options = options.WithSymbols(':', ',', ';');
+```
 
-// Use with tokenizer
-var tokenizer = new Tokenizer(source.AsMemory(), options);
+### Comment Styles
+
+```csharp
+// Built-in comment styles
+CommentStyle.CStyleSingleLine   // //
+CommentStyle.CStyleMultiLine    // /* */
+CommentStyle.HashSingleLine     // #
+CommentStyle.SqlSingleLine      // --
+CommentStyle.HtmlComment        // <!-- -->
+
+// Configure tokenizer with comments
+var options = TokenizerOptions.Default
+    .WithCommentStyles(
+        CommentStyle.CStyleSingleLine,
+        CommentStyle.CStyleMultiLine);
+
+// Add additional comment styles
+options = options.WithAdditionalCommentStyles(CommentStyle.HashSingleLine);
+
+// Custom comment style
+var customComment = new CommentStyle("REM", null);  // Single-line ending at newline
+var blockComment = new CommentStyle("(*", "*)");    // Multi-line Pascal-style
 ```
 
 ## Nested Blocks
@@ -83,12 +201,11 @@ var tokenizer = new Tokenizer(source.AsMemory(), options);
 Declaration blocks are parsed recursively:
 
 ```csharp
-var tokenizer = new Tokenizer("{outer [inner (deepest)]}".AsMemory());
-var tokens = tokenizer.Tokenize();
+var tokens = "{outer [inner (deepest)]}".TokenizeToTokens();
 
-var braceBlock = (BlockToken)tokens[0];           // {outer [inner (deepest)]}
-var bracketBlock = (BlockToken)braceBlock.Children[2];  // [inner (deepest)]
-var parenBlock = (BlockToken)bracketBlock.Children[2];  // (deepest)
+var braceBlock = (BlockToken)tokens[0];                  // {outer [inner (deepest)]}
+var bracketBlock = (BlockToken)braceBlock.Children[2];   // [inner (deepest)]
+var parenBlock = (BlockToken)bracketBlock.Children[2];   // (deepest)
 ```
 
 ## Error Handling
@@ -96,8 +213,7 @@ var parenBlock = (BlockToken)bracketBlock.Children[2];  // (deepest)
 The tokenizer produces `ErrorToken` for malformed input and continues parsing:
 
 ```csharp
-var tokenizer = new Tokenizer("}hello{".AsMemory());
-var tokens = tokenizer.Tokenize();
+var tokens = "}hello{".TokenizeToTokens();
 
 // tokens contains:
 // - ErrorToken("}", "Unexpected closing delimiter '}'", position: 0)
@@ -126,26 +242,91 @@ bool hasErrors = tokens.HasErrors();
 IEnumerable<ErrorToken> errors = tokens.GetErrors();
 
 // Get all tokens of a specific type (including nested)
-IEnumerable<IdentToken> IdentTokens = tokens.OfTokenType<IdentToken>();
+IEnumerable<IdentToken> idents = tokens.OfTokenType<IdentToken>();
 IEnumerable<BlockToken> blocks = tokens.OfTokenType<BlockToken>();
+IEnumerable<NumericToken> numbers = tokens.OfTokenType<NumericToken>();
+```
+
+## Benchmarks
+
+Performance comparison of the optimized `SearchValues<char>` implementation vs the baseline `ImmutableHashSet<char>`:
+
+| Input Size        | Baseline | Optimized | Speedup   |
+| ----------------- | -------- | --------- | --------- |
+| Small (~50 chars) | 377 ns   | 245 ns    | **1.54x** |
+| Medium (~1KB)     | 6,866 ns | 3,020 ns  | **2.27x** |
+| Large (~100KB)    | 1,907 μs | 781 μs    | **2.44x** |
+| JSON (~10KB)      | 130 μs   | 87 μs     | **1.51x** |
+| Whitespace-heavy  | 9,808 ns | 3,661 ns  | **2.68x** |
+
+Run benchmarks yourself:
+
+```bash
+dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter "*"
 ```
 
 ## API Reference
 
+### Extension Methods
+
+```csharp
+// String extensions
+ImmutableArray<Token> TokenizeToTokens(this string source, TokenizerOptions? options = null)
+
+// ReadOnlyMemory<char> extensions
+ImmutableArray<Token> Tokenize(this ReadOnlyMemory<char> source, TokenizerOptions? options = null)
+
+// Stream extensions
+Task<ImmutableArray<Token>> TokenizeAsync(this Stream, TokenizerOptions?, Encoding?, bool leaveOpen, CancellationToken)
+IAsyncEnumerable<Token> TokenizeStreamingAsync(this Stream, TokenizerOptions?, Encoding?, bool leaveOpen, CancellationToken)
+
+// PipeReader extensions
+Task<ImmutableArray<Token>> TokenizeAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
+IAsyncEnumerable<Token> TokenizeStreamingAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
+```
+
 ### Tokenizer (ref struct)
 
 ```csharp
-// Constructor
-public Tokenizer(ReadOnlyMemory<char> source, TokenizerOptions? options = null)
+public ref struct Tokenizer
+{
+    public Tokenizer(ReadOnlyMemory<char> source, TokenizerOptions? options = null);
+    public ImmutableArray<Token> Tokenize();
+}
+```
 
-// Tokenize the source
-public ImmutableArray<Token> Tokenize()
+### Lexer
+
+```csharp
+public sealed class Lexer
+{
+    public Lexer();
+    public Lexer(ImmutableHashSet<char> symbols);
+    public Lexer(TokenizerOptions options);
+
+    public IEnumerable<SimpleToken> Lex(ReadOnlyMemory<char> input);
+    public IEnumerable<SimpleToken> Lex(string input);
+    public ImmutableArray<SimpleToken> LexToArray(ReadOnlyMemory<char> input);
+}
+```
+
+### TokenParser
+
+```csharp
+public sealed class TokenParser
+{
+    public TokenParser();
+    public TokenParser(TokenizerOptions options);
+
+    public IEnumerable<Token> Parse(IEnumerable<SimpleToken> simpleTokens);
+    public ImmutableArray<Token> ParseToArray(IEnumerable<SimpleToken> simpleTokens);
+}
 ```
 
 ### Token (abstract record)
 
 ```csharp
-public abstract record Token(ReadOnlyMemory<char> Content, TokenType Type)
+public abstract record Token(ReadOnlyMemory<char> Content, TokenType Type, long Position)
 {
     public ReadOnlySpan<char> ContentSpan { get; }
 }
@@ -160,8 +341,11 @@ public enum TokenType
     BracketBlock,     // [ ]
     ParenthesisBlock, // ( )
     Symbol,           // configurable characters
-    Text,             // plain text
+    Ident,            // identifiers
     Whitespace,       // spaces, tabs, newlines
+    Numeric,          // numbers
+    String,           // quoted strings
+    Comment,          // comments
     Error             // parsing errors
 }
 ```
