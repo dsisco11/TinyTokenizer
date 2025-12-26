@@ -99,28 +99,14 @@ public sealed class Lexer
                 continue;
             }
 
-            // Numeric (digits with optional single decimal point)
+            // Digits (consecutive digit characters only - no decimal handling here)
             if (char.IsDigit(c))
             {
-                bool hasDecimal = false;
-                while (position < length)
+                while (position < length && char.IsDigit(input.Span[position]))
                 {
-                    char current = input.Span[position];
-                    if (char.IsDigit(current))
-                    {
-                        position++;
-                    }
-                    else if (current == '.' && !hasDecimal && position + 1 < length && char.IsDigit(input.Span[position + 1]))
-                    {
-                        hasDecimal = true;
-                        position++;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    position++;
                 }
-                yield return new SimpleToken(SimpleTokenType.Numeric, input.Slice(start, position - start), start);
+                yield return new SimpleToken(SimpleTokenType.Digits, input.Slice(start, position - start), start);
                 continue;
             }
 
@@ -294,7 +280,6 @@ public sealed class Lexer
         var pendingBuffer = new List<char>();
         SimpleTokenType? pendingType = null;
         long pendingStart = 0;
-        bool pendingHasDecimal = false;
 
         await foreach (var chunk in chunks.WithCancellation(cancellationToken))
         {
@@ -305,28 +290,6 @@ public sealed class Lexer
                     token.Type,
                     token.Content,
                     absolutePosition + token.Position);
-
-                // Special case: pending Numeric + Symbol('.') could be start of decimal
-                if (pendingType == SimpleTokenType.Numeric && 
-                    !pendingHasDecimal &&
-                    adjustedToken.Type == SimpleTokenType.Symbol && 
-                    adjustedToken.ContentEquals('.'))
-                {
-                    // Add the decimal to pending buffer, marking we have a decimal
-                    pendingBuffer.Add('.');
-                    pendingHasDecimal = true;
-                    continue;
-                }
-
-                // Special case: pending Numeric (with decimal) + more Numeric digits
-                if (pendingType == SimpleTokenType.Numeric && 
-                    pendingHasDecimal && 
-                    adjustedToken.Type == SimpleTokenType.Numeric)
-                {
-                    // Merge the digits after the decimal
-                    AppendToBuffer(pendingBuffer, adjustedToken.Content);
-                    continue;
-                }
 
                 // Check if we can merge with pending (same type)
                 if (pendingType.HasValue && CanMerge(pendingType.Value, adjustedToken.Type))
@@ -341,7 +304,6 @@ public sealed class Lexer
                     {
                         yield return CreateToken(pendingType.Value, pendingBuffer, pendingStart);
                         pendingBuffer.Clear();
-                        pendingHasDecimal = false;
                     }
 
                     // Check if this token might need merging with next chunk
@@ -391,6 +353,7 @@ public sealed class Lexer
             '\\' => SimpleTokenType.Backslash,
             '/' => SimpleTokenType.Slash,
             '*' => SimpleTokenType.Asterisk,
+            '.' => SimpleTokenType.Dot,
             _ => null
         };
     }
@@ -411,7 +374,7 @@ public sealed class Lexer
             return SimpleTokenType.Whitespace;
 
         if (char.IsDigit(c))
-            return SimpleTokenType.Numeric;
+            return SimpleTokenType.Digits;
 
         if (_symbols.Contains(c))
             return SimpleTokenType.Symbol;
@@ -437,6 +400,7 @@ public sealed class Lexer
             SimpleTokenType.Backslash => true,
             SimpleTokenType.Slash => true,
             SimpleTokenType.Asterisk => true,
+            SimpleTokenType.Dot => true,
             SimpleTokenType.Symbol => true,
             _ => false
         };
@@ -454,7 +418,7 @@ public sealed class Lexer
         {
             SimpleTokenType.Text => true,
             SimpleTokenType.Whitespace => true,
-            SimpleTokenType.Numeric => true,
+            SimpleTokenType.Digits => true,
             _ => false
         };
     }
@@ -468,7 +432,7 @@ public sealed class Lexer
         {
             SimpleTokenType.Text => true,
             SimpleTokenType.Whitespace => true,
-            SimpleTokenType.Numeric => true,
+            SimpleTokenType.Digits => true,
             _ => false
         };
     }

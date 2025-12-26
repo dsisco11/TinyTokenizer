@@ -17,14 +17,21 @@ public enum SimpleTokenType
     Whitespace,
 
     /// <summary>
-    /// A sequence of digits, optionally containing a single decimal point.
+    /// A sequence of consecutive digit characters (0-9).
+    /// Level 2 (TokenParser) combines Digits + Dot + Digits into NumericToken.
     /// </summary>
-    Numeric,
+    Digits,
 
     /// <summary>
     /// A single symbol character from the configured symbol set.
     /// </summary>
     Symbol,
+
+    /// <summary>
+    /// Dot/period character: .
+    /// Level 2 (TokenParser) uses this to detect decimal numbers.
+    /// </summary>
+    Dot,
 
     /// <summary>
     /// A newline character or sequence (\n or \r\n).
@@ -89,4 +96,11 @@ public enum SimpleTokenType
     /// Used for comment detection (/* and */) in Level 2.
     /// </summary>
     Asterisk,
+
+    /// <summary>
+    /// [Obsolete] Use <see cref="Digits"/> instead.
+    /// Kept for backwards compatibility.
+    /// </summary>
+    [Obsolete("Use Digits instead. Numeric is now handled by TokenParser combining Digits + Dot + Digits.")]
+    Numeric = Digits,
 }

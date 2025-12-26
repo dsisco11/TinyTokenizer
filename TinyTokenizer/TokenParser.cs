@@ -129,6 +129,31 @@ public sealed class TokenParser
             yield break;
         }
 
+        // Digits - check for potential decimal number (Digits + Dot + Digits)
+        if (token.Type == SimpleTokenType.Digits)
+        {
+            var numericToken = ParseNumericFromDigits(reader);
+            yield return numericToken;
+            yield break;
+        }
+
+        // Dot - could be start of decimal number (.123) or standalone symbol
+        if (token.Type == SimpleTokenType.Dot)
+        {
+            // Check if followed by digits (e.g., .123)
+            if (reader.TryPeek(1, out var next) && next.Type == SimpleTokenType.Digits)
+            {
+                var numericToken = ParseNumericFromDot(reader);
+                yield return numericToken;
+                yield break;
+            }
+
+            // Standalone dot - emit as symbol
+            reader.Advance();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
         // Comment start detection (// or /*)
         if (token.Type == SimpleTokenType.Slash)
         {
@@ -171,7 +196,6 @@ public sealed class TokenParser
             SimpleTokenType.Text => new TextToken(token.Content, token.Position),
             SimpleTokenType.Whitespace => new WhitespaceToken(token.Content, token.Position),
             SimpleTokenType.Newline => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Numeric => ParseNumericToken(token),
             SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
             _ => new TextToken(token.Content, token.Position)
         };
@@ -395,11 +419,66 @@ public sealed class TokenParser
             startPosition);
     }
 
-    private static NumericToken ParseNumericToken(SimpleToken token)
+    /// <summary>
+    /// Parses a numeric token starting from a Digits token.
+    /// Handles patterns: 123, 123.456
+    /// </summary>
+    private NumericToken ParseNumericFromDigits(TokenReader reader)
     {
-        var hasDecimal = ContainsChar(token.Content, '.');
+        reader.TryPeek(out var digitsToken);
+        var startPosition = digitsToken.Position;
+        var contentBuilder = new List<char>();
+        
+        // Add the initial digits
+        AppendToBuffer(contentBuilder, digitsToken.Content);
+        reader.Advance();
+
+        bool hasDecimal = false;
+
+        // Check for decimal point followed by more digits
+        if (reader.TryPeek(out var dotToken) && dotToken.Type == SimpleTokenType.Dot)
+        {
+            if (reader.TryPeek(1, out var afterDot) && afterDot.Type == SimpleTokenType.Digits)
+            {
+                // It's a decimal number: add dot and digits
+                contentBuilder.Add('.');
+                reader.Advance(); // consume dot
+
+                AppendToBuffer(contentBuilder, afterDot.Content);
+                reader.Advance(); // consume digits after dot
+
+                hasDecimal = true;
+            }
+        }
+
+        var content = contentBuilder.ToArray().AsMemory();
         var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
-        return new NumericToken(token.Content, numericType, token.Position);
+        return new NumericToken(content, numericType, startPosition);
+    }
+
+    /// <summary>
+    /// Parses a numeric token starting from a Dot token.
+    /// Handles pattern: .456
+    /// </summary>
+    private NumericToken ParseNumericFromDot(TokenReader reader)
+    {
+        reader.TryPeek(out var dotToken);
+        var startPosition = dotToken.Position;
+        var contentBuilder = new List<char>();
+
+        // Add the leading dot
+        contentBuilder.Add('.');
+        reader.Advance();
+
+        // Add the digits after the dot
+        if (reader.TryPeek(out var digitsToken) && digitsToken.Type == SimpleTokenType.Digits)
+        {
+            AppendToBuffer(contentBuilder, digitsToken.Content);
+            reader.Advance();
+        }
+
+        var content = contentBuilder.ToArray().AsMemory();
+        return new NumericToken(content, NumericType.FloatingPoint, startPosition);
     }
 
     #endregion
@@ -446,6 +525,35 @@ public sealed class TokenParser
             yield break;
         }
 
+        // Digits - check for potential decimal number (Digits + Dot + Digits)
+        if (token.Type == SimpleTokenType.Digits)
+        {
+            var numericToken = await ParseNumericFromDigitsAsync(reader);
+            yield return numericToken;
+            yield break;
+        }
+
+        // Dot - could be start of decimal number (.123) or standalone symbol
+        if (token.Type == SimpleTokenType.Dot)
+        {
+            // Check if followed by digits (e.g., .123)
+            if (await reader.TryPeekAsync(1))
+            {
+                var next = reader.PeekAhead(1);
+                if (next.HasValue && next.Value.Type == SimpleTokenType.Digits)
+                {
+                    var numericToken = await ParseNumericFromDotAsync(reader);
+                    yield return numericToken;
+                    yield break;
+                }
+            }
+
+            // Standalone dot - emit as symbol
+            await reader.AdvanceAsync();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
         // Comment start detection
         if (token.Type == SimpleTokenType.Slash)
         {
@@ -482,7 +590,6 @@ public sealed class TokenParser
             SimpleTokenType.Text => new TextToken(token.Content, token.Position),
             SimpleTokenType.Whitespace => new WhitespaceToken(token.Content, token.Position),
             SimpleTokenType.Newline => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Numeric => ParseNumericToken(token),
             SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
             _ => new TextToken(token.Content, token.Position)
         };
@@ -665,6 +772,80 @@ public sealed class TokenParser
             contentBuilder.ToArray().AsMemory(),
             "Unterminated multi-line comment",
             startPosition);
+    }
+
+    /// <summary>
+    /// Parses a numeric token starting from a Digits token asynchronously.
+    /// Handles patterns: 123, 123.456
+    /// </summary>
+    private async Task<NumericToken> ParseNumericFromDigitsAsync(AsyncTokenReader reader)
+    {
+        var digitsToken = reader.Current;
+        var startPosition = digitsToken.Position;
+        var contentBuilder = new List<char>();
+
+        // Add the initial digits
+        AppendToBuffer(contentBuilder, digitsToken.Content);
+        await reader.AdvanceAsync();
+
+        bool hasDecimal = false;
+
+        // Check for decimal point followed by more digits
+        if (await reader.TryPeekAsync())
+        {
+            var dotToken = reader.Current;
+            if (dotToken.Type == SimpleTokenType.Dot)
+            {
+                if (await reader.TryPeekAsync(1))
+                {
+                    var afterDot = reader.PeekAhead(1);
+                    if (afterDot.HasValue && afterDot.Value.Type == SimpleTokenType.Digits)
+                    {
+                        // It's a decimal number: add dot and digits
+                        contentBuilder.Add('.');
+                        await reader.AdvanceAsync(); // consume dot
+
+                        AppendToBuffer(contentBuilder, afterDot.Value.Content);
+                        await reader.AdvanceAsync(); // consume digits after dot
+
+                        hasDecimal = true;
+                    }
+                }
+            }
+        }
+
+        var content = contentBuilder.ToArray().AsMemory();
+        var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
+        return new NumericToken(content, numericType, startPosition);
+    }
+
+    /// <summary>
+    /// Parses a numeric token starting from a Dot token asynchronously.
+    /// Handles pattern: .456
+    /// </summary>
+    private async Task<NumericToken> ParseNumericFromDotAsync(AsyncTokenReader reader)
+    {
+        var dotToken = reader.Current;
+        var startPosition = dotToken.Position;
+        var contentBuilder = new List<char>();
+
+        // Add the leading dot
+        contentBuilder.Add('.');
+        await reader.AdvanceAsync();
+
+        // Add the digits after the dot
+        if (await reader.TryPeekAsync())
+        {
+            var digitsToken = reader.Current;
+            if (digitsToken.Type == SimpleTokenType.Digits)
+            {
+                AppendToBuffer(contentBuilder, digitsToken.Content);
+                await reader.AdvanceAsync();
+            }
+        }
+
+        var content = contentBuilder.ToArray().AsMemory();
+        return new NumericToken(content, NumericType.FloatingPoint, startPosition);
     }
 
     #endregion
