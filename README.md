@@ -213,11 +213,11 @@ var blockComment = new CommentStyle("(*", "*)");    // Multi-line Pascal-style
 
 ```csharp
 // Built-in operator sets
-CommonOperators.Universal   // ==, !=, &&, ||, <=, >=, +=, -=, *=, /=
-CommonOperators.CFamily     // ==, !=, <=, >=, &&, ||, ++, --, <<, >>, ->, etc.
-CommonOperators.Comparison  // ==, !=, <, >, <=, >=
-CommonOperators.Logical     // &&, ||, !
-CommonOperators.Assignment  // =, +=, -=, *=, /=, etc.
+CommonOperators.Universal   // +, -, *, /, %, ==, !=, <, >, <=, >=, &&, ||, !, =, +=, -=, *=, /=
+CommonOperators.CFamily     // Universal + ++, --, &, |, ^, ~, <<, >>, ->, ::, etc.
+CommonOperators.JavaScript  // CFamily + ===, !==, =>, ?., ??, ??=, **
+CommonOperators.Python      // Universal + //, **, ->, :=, @, &, |, ^, ~
+CommonOperators.Sql         // Universal + <>, ::
 
 // Configure operators (uses greedy matching - longest operator first)
 var options = TokenizerOptions.Default

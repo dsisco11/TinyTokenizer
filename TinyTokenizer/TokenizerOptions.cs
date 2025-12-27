@@ -47,26 +47,38 @@ public static class CommonOperators
 {
     /// <summary>
     /// Universal operators common to most programming languages.
-    /// Includes: ==, !=, &amp;&amp;, ||, &lt;=, &gt;=, +=, -=, *=, /=
+    /// Includes arithmetic: +, -, *, /, %
+    /// Includes comparison: ==, !=, &lt;, &gt;, &lt;=, &gt;=
+    /// Includes logical: &amp;&amp;, ||, !
+    /// Includes assignment: =, +=, -=, *=, /=
     /// </summary>
     public static ImmutableHashSet<string> Universal { get; } = ImmutableHashSet.Create(
-        "==", "!=", "&&", "||",
-        "<=", ">=",
-        "+=", "-=", "*=", "/="
+        // Arithmetic
+        "+", "-", "*", "/", "%",
+        // Comparison
+        "==", "!=", "<", ">", "<=", ">=",
+        // Logical
+        "&&", "||", "!",
+        // Assignment
+        "=", "+=", "-=", "*=", "/="
     );
 
     /// <summary>
     /// C-family operators (C, C++, C#, Java, JavaScript, etc.)
-    /// Includes: ==, !=, &amp;&amp;, ||, &lt;=, &gt;=, ++, --, +=, -=, *=, /=, %=, &amp;=, |=, ^=, &lt;&lt;, &gt;&gt;, -&gt;, ::
+    /// Extends Universal with: ++, --, %=, &amp;=, |=, ^=, &lt;&lt;, &gt;&gt;, &amp;, |, ^, ~, -&gt;, ::
     /// </summary>
-    public static ImmutableHashSet<string> CFamily { get; } = ImmutableHashSet.Create(
-        "==", "!=", "&&", "||",
-        "<=", ">=", "++", "--",
-        "+=", "-=", "*=", "/=", "%=",
-        "&=", "|=", "^=",
+    public static ImmutableHashSet<string> CFamily { get; } = Universal.Union(ImmutableHashSet.Create(
+        // Increment/decrement
+        "++", "--",
+        // Additional compound assignment
+        "%=", "&=", "|=", "^=", "<<=", ">>=",
+        // Bitwise
+        "&", "|", "^", "~",
+        // Shift
         "<<", ">>",
+        // Pointer/scope
         "->", "::"
-    );
+    ));
 
     /// <summary>
     /// JavaScript/TypeScript operators.
@@ -78,22 +90,22 @@ public static class CommonOperators
 
     /// <summary>
     /// Python operators.
-    /// Includes: ==, !=, &amp;&amp;, ||, &lt;=, &gt;=, //, **, -&gt;, :=, @
+    /// Extends Universal with: //, **, -&gt;, :=, @, &amp;, |, ^, ~
     /// </summary>
-    public static ImmutableHashSet<string> Python { get; } = ImmutableHashSet.Create(
-        "==", "!=", "&&", "||",
-        "<=", ">=",
+    public static ImmutableHashSet<string> Python { get; } = Universal.Union(ImmutableHashSet.Create(
         "//", "**",
-        "->", ":="
-    );
+        "->", ":=",
+        "@",
+        "&", "|", "^", "~"
+    ));
 
     /// <summary>
     /// SQL operators.
-    /// Includes: ==, !=, &lt;&gt;, &lt;=, &gt;=, ||, ::
+    /// Extends Universal with: &lt;&gt;, ||, ::
     /// </summary>
-    public static ImmutableHashSet<string> Sql { get; } = ImmutableHashSet.Create(
-        "==", "!=", "<>", "<=", ">=", "||", "::"
-    );
+    public static ImmutableHashSet<string> Sql { get; } = Universal.Union(ImmutableHashSet.Create(
+        "<>", "::"
+    ));
 }
 
 /// <summary>

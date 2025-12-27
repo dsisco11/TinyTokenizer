@@ -70,11 +70,11 @@ public class TokenizerTests
     [Fact]
     public void Tokenize_Symbol_ReturnsSingleSymbolToken()
     {
-        var tokens = Tokenize("/");
+        var tokens = Tokenize(":");
 
         Assert.Single(tokens);
         var token = Assert.IsType<SymbolToken>(tokens[0]);
-        Assert.Equal('/', token.Symbol);
+        Assert.Equal(':', token.Symbol);
     }
 
     [Fact]
@@ -282,19 +282,15 @@ public class TokenizerTests
     #region Symbol Tests
 
     [Theory]
-    [InlineData('/')]
     [InlineData(':')]
     [InlineData(',')]
     [InlineData(';')]
-    [InlineData('=')]
-    [InlineData('+')]
-    [InlineData('-')]
-    [InlineData('*')]
-    [InlineData('<')]
-    [InlineData('>')]
     [InlineData('.')]
     [InlineData('@')]
     [InlineData('#')]
+    [InlineData('?')]
+    [InlineData('^')]
+    [InlineData('~')]
     public void Tokenize_DefaultSymbols_AreRecognized(char symbol)
     {
         var tokens = Tokenize(symbol.ToString());
@@ -304,6 +300,25 @@ public class TokenizerTests
         Assert.Equal(symbol, symbolToken.Symbol);
     }
 
+    [Theory]
+    [InlineData("+")]
+    [InlineData("-")]
+    [InlineData("*")]
+    [InlineData("/")]
+    [InlineData("%")]
+    [InlineData("<")]
+    [InlineData(">")]
+    [InlineData("=")]
+    [InlineData("!")]
+    public void Tokenize_DefaultOperators_AreRecognized(string op)
+    {
+        var tokens = Tokenize(op);
+
+        Assert.Single(tokens);
+        var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal(op, opToken.Operator);
+    }
+
     [Fact]
     public void Tokenize_PathLikeContent_TokenizesCorrectly()
     {
@@ -311,9 +326,9 @@ public class TokenizerTests
 
         Assert.Equal(5, tokens.Length);
         Assert.IsType<IdentToken>(tokens[0]);
-        Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.IsType<OperatorToken>(tokens[1]);  // / is now an operator
         Assert.IsType<IdentToken>(tokens[2]);
-        Assert.IsType<SymbolToken>(tokens[3]);
+        Assert.IsType<OperatorToken>(tokens[3]);
         Assert.IsType<IdentToken>(tokens[4]);
     }
 
@@ -514,7 +529,7 @@ public class TokenizerTests
 
         Assert.Equal(3, tokens.Length);
         Assert.IsType<IdentToken>(tokens[0]);
-        Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.IsType<OperatorToken>(tokens[1]);  // = is now an operator
         var str = Assert.IsType<StringToken>(tokens[2]);
         Assert.Equal("value", str.Value.ToString());
     }
@@ -870,12 +885,13 @@ public class TokenizerTests
     [Fact]
     public void Tokenize_WithoutOperators_RemovesOperator()
     {
-        var options = TokenizerOptions.Default.WithoutOperators("==");
-        var tokens = Tokenize("==", options);
+        // Remove += from operators, should become two separate operators (+ and =)
+        var options = TokenizerOptions.Default.WithoutOperators("+=");
+        var tokens = Tokenize("+=", options);
 
-        // == should now be two separate symbols
+        // += should now be two separate operators (+ and =)
         Assert.Equal(2, tokens.Length);
-        Assert.All(tokens, t => Assert.IsType<SymbolToken>(t));
+        Assert.All(tokens, t => Assert.IsType<OperatorToken>(t));
     }
 
     [Fact]

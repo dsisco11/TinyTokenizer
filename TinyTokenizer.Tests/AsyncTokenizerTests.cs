@@ -70,11 +70,11 @@ public class AsyncTokenizerTests
     [Fact]
     public async Task TokenizeAsync_Symbol_ReturnsSingleSymbolToken()
     {
-        var tokens = await TokenizeStringAsync("/");
+        var tokens = await TokenizeStringAsync(":");
 
         Assert.Single(tokens);
         var symbol = Assert.IsType<SymbolToken>(tokens[0]);
-        Assert.Equal('/', symbol.Symbol);
+        Assert.Equal(':', symbol.Symbol);
     }
 
     [Fact]
