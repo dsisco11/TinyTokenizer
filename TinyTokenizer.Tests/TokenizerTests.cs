@@ -17,6 +17,24 @@ public class TokenizerTests
         return tokenizer.Tokenize();
     }
 
+    /// <summary>
+    /// Tokenizes using the two-level architecture (Lexer + TokenParser).
+    /// Required for features like directives that need multi-token pattern recognition.
+    /// </summary>
+    private static ImmutableArray<Token> TokenizeTwoLevel(string source, TokenizerOptions? options = null)
+    {
+        if (string.IsNullOrEmpty(source))
+        {
+            return ImmutableArray<Token>.Empty;
+        }
+
+        options ??= TokenizerOptions.Default;
+        var lexer = new Lexer(options);
+        var parser = new TokenParser(options);
+        var simpleTokens = lexer.Lex(source);
+        return parser.ParseToArray(simpleTokens);
+    }
+
     #endregion
 
     #region Basic Tokenization Tests
@@ -887,25 +905,39 @@ public class TokenizerTests
 
     #endregion
 
-    #region Directive Token Tests
+    #region Tagged Identifier Token Tests (Two-Level Architecture Only)
 
     [Fact]
-    public void Tokenize_Directive_WithDirectivesEnabled_ReturnsDirectiveToken()
+    public void Tokenize_TaggedIdent_WithHashPrefix_ReturnsTaggedIdentToken()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#include", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#include", options);
 
         Assert.Single(tokens);
-        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
-        Assert.Equal("#include", directive.ContentSpan.ToString());
-        Assert.Equal("include", directive.NameSpan.ToString());
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal("#include", tagged.ContentSpan.ToString());
+        Assert.Equal('#', tagged.Tag);
+        Assert.Equal("include", tagged.NameSpan.ToString());
     }
 
     [Fact]
-    public void Tokenize_Directive_WithDirectivesDisabled_ReturnsSymbolAndIdent()
+    public void Tokenize_TaggedIdent_WithAtPrefix_ReturnsTaggedIdentToken()
     {
-        // Directives disabled by default
-        var tokens = Tokenize("#include");
+        var options = TokenizerOptions.Default.WithTagPrefixes('@');
+        var tokens = TokenizeTwoLevel("@Override", options);
+
+        Assert.Single(tokens);
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal("@Override", tagged.ContentSpan.ToString());
+        Assert.Equal('@', tagged.Tag);
+        Assert.Equal("Override", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_Disabled_ReturnsSymbolAndIdent()
+    {
+        // Tag prefixes disabled by default
+        var tokens = TokenizeTwoLevel("#include");
 
         Assert.Equal(2, tokens.Length);
         Assert.IsType<SymbolToken>(tokens[0]);
@@ -915,128 +947,319 @@ public class TokenizerTests
     }
 
     [Fact]
-    public void Tokenize_Directive_WithArguments()
+    public void Tokenize_TaggedIdent_DoesNotConsumeFollowingTokens()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#define MAX 100", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#define MAX 100", options);
 
-        Assert.Single(tokens);
-        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
-        Assert.Equal("define", directive.NameSpan.ToString());
-        Assert.Equal(4, directive.Arguments.Length); // space, MAX, space, 100
-    }
-
-    [Fact]
-    public void Tokenize_Directive_WithStringArgument()
-    {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#include \"header.h\"", options);
-
-        Assert.Single(tokens);
-        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
-        Assert.Equal("include", directive.NameSpan.ToString());
-        
-        var stringArg = directive.Arguments.OfType<StringToken>().SingleOrDefault();
-        Assert.NotNull(stringArg);
-        Assert.Equal("header.h", stringArg.Value.ToString());
-    }
-
-    [Fact]
-    public void Tokenize_Directive_EndsAtNewline()
-    {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#define X\nint main", options);
-
+        // Tagged ident only captures "#define", rest are separate tokens
         Assert.Equal(5, tokens.Length);
-        Assert.IsType<DirectiveToken>(tokens[0]);
-        Assert.IsType<WhitespaceToken>(tokens[1]); // newline
-        Assert.IsType<IdentToken>(tokens[2]); // int
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal("define", tagged.NameSpan.ToString());
+        Assert.IsType<WhitespaceToken>(tokens[1]); // space
+        Assert.IsType<IdentToken>(tokens[2]); // MAX
         Assert.IsType<WhitespaceToken>(tokens[3]); // space
-        Assert.IsType<IdentToken>(tokens[4]); // main
+        Assert.IsType<NumericToken>(tokens[4]); // 100
     }
 
     [Fact]
-    public void Tokenize_Directive_MultipleDirectives()
+    public void Tokenize_TaggedIdent_Multiple()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#include\n#define", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#include\n#define", options);
 
-        var directives = tokens.OfType<DirectiveToken>().ToList();
-        Assert.Equal(2, directives.Count);
-        Assert.Equal("include", directives[0].NameSpan.ToString());
-        Assert.Equal("define", directives[1].NameSpan.ToString());
+        var tagged = tokens.OfType<TaggedIdentToken>().ToList();
+        Assert.Equal(2, tagged.Count);
+        Assert.Equal("include", tagged[0].NameSpan.ToString());
+        Assert.Equal("define", tagged[1].NameSpan.ToString());
     }
 
     [Fact]
-    public void Tokenize_Directive_WithWhitespaceBetweenHashAndName()
+    public void Tokenize_TaggedIdent_HashNotFollowedByIdent_ReturnsSymbol()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("#  include", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("# 123", options);
 
-        Assert.Single(tokens);
-        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
-        Assert.Equal("include", directive.NameSpan.ToString());
-    }
-
-    [Fact]
-    public void Tokenize_HashNotFollowedByIdent_ReturnsSymbol()
-    {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("# 123", options);
-
-        // # not followed by identifier, should be symbol
+        // # not followed by identifier (there's space), should be symbol
         Assert.IsType<SymbolToken>(tokens[0]);
         Assert.Equal('#', ((SymbolToken)tokens[0]).Symbol);
     }
 
     [Fact]
-    public void Tokenize_DirectivePosition_IsCorrect()
+    public void Tokenize_TaggedIdent_MidLine_IsRecognized()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        var tokens = Tokenize("abc #define xyz", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        // Tagged idents work anywhere (no line-start requirement)
+        var tokens = TokenizeTwoLevel("x #define", options);
 
-        var directive = tokens.OfType<DirectiveToken>().Single();
-        Assert.Equal(4, directive.Position); // 0-indexed position after "abc "
+        Assert.Equal(3, tokens.Length);
+        Assert.IsType<IdentToken>(tokens[0]); // x
+        Assert.IsType<WhitespaceToken>(tokens[1]); // space
+        Assert.IsType<TaggedIdentToken>(tokens[2]); // #define
+        Assert.Equal("define", ((TaggedIdentToken)tokens[2]).NameSpan.ToString());
     }
 
     [Fact]
-    public void Tokenize_DirectiveInBlock_Works()
+    public void Tokenize_TaggedIdent_Position_IsCorrect()
     {
-        var options = TokenizerOptions.Default.WithDirectives();
-        // Directive needs a newline to terminate, otherwise it consumes the closing brace
-        var tokens = Tokenize("{#define\n}", options);
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("abc #define", options);
+
+        var tagged = tokens.OfType<TaggedIdentToken>().Single();
+        Assert.Equal(4, tagged.Position); // 0-indexed position after "abc "
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_InBlock_Works()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("{#define}", options);
 
         Assert.Single(tokens);
         var block = Assert.IsType<BlockToken>(tokens[0]);
-        var directive = block.Children.OfType<DirectiveToken>().SingleOrDefault();
-        Assert.NotNull(directive);
-        Assert.Equal("define", directive.NameSpan.ToString());
+        var tagged = block.Children.OfType<TaggedIdentToken>().SingleOrDefault();
+        Assert.NotNull(tagged);
+        Assert.Equal("define", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_MultiplePrefixes()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
+        var tokens = TokenizeTwoLevel("#include @Override", options);
+
+        Assert.Equal(3, tokens.Length);
+        var hash = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal('#', hash.Tag);
+        Assert.Equal("include", hash.NameSpan.ToString());
+        
+        Assert.IsType<WhitespaceToken>(tokens[1]);
+        
+        var at = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal('@', at.Tag);
+        Assert.Equal("Override", at.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_AtEndOfInput()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("x #define", options);
+
+        Assert.Equal(3, tokens.Length);
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal("define", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_TagAtEndOfInput_NoIdent()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("x #", options);
+
+        // # at end with no following identifier should be symbol
+        Assert.Equal(3, tokens.Length);
+        Assert.IsType<IdentToken>(tokens[0]);
+        Assert.IsType<WhitespaceToken>(tokens[1]);
+        Assert.IsType<SymbolToken>(tokens[2]);
+        Assert.Equal('#', ((SymbolToken)tokens[2]).Symbol);
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_TagFollowedByNumber()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#123", options);
+
+        // # followed by number (not identifier) should be symbol + number
+        Assert.Equal(2, tokens.Length);
+        Assert.IsType<SymbolToken>(tokens[0]);
+        Assert.Equal('#', ((SymbolToken)tokens[0]).Symbol);
+        Assert.IsType<NumericToken>(tokens[1]);
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_TagFollowedByAnotherTag()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
+        var tokens = TokenizeTwoLevel("#@test", options);
+
+        // # followed by @ (not identifier) should be symbol + @test
+        Assert.Equal(2, tokens.Length);
+        Assert.IsType<SymbolToken>(tokens[0]);
+        Assert.Equal('#', ((SymbolToken)tokens[0]).Symbol);
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[1]);
+        Assert.Equal('@', tagged.Tag);
+        Assert.Equal("test", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_ConsecutiveTags()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#a#b#c", options);
+
+        // Should be three tagged idents back to back
+        Assert.Equal(3, tokens.Length);
+        Assert.All(tokens, t => Assert.IsType<TaggedIdentToken>(t));
+        Assert.Equal("a", ((TaggedIdentToken)tokens[0]).NameSpan.ToString());
+        Assert.Equal("b", ((TaggedIdentToken)tokens[1]).NameSpan.ToString());
+        Assert.Equal("c", ((TaggedIdentToken)tokens[2]).NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_UnderscoreIdentifier()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#_private #__dunder", options);
+
+        Assert.Equal(3, tokens.Length);
+        var first = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal("_private", first.NameSpan.ToString());
+        var second = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal("__dunder", second.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_IdentifierWithNumbers()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#var123 #test_456", options);
+
+        Assert.Equal(3, tokens.Length);
+        var first = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal("var123", first.NameSpan.ToString());
+        var second = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal("test_456", second.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_InsideString_NotRecognized()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("\"#include\"", options);
+
+        // # inside string should not be tagged ident
+        Assert.Single(tokens);
+        var str = Assert.IsType<StringToken>(tokens[0]);
+        Assert.Equal("#include", str.Value.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_AfterOpeningDelimiter()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("(#test)", options);
+
+        Assert.Single(tokens);
+        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var tagged = block.Children.OfType<TaggedIdentToken>().Single();
+        Assert.Equal("test", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_BeforeClosingDelimiter()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("[x #end]", options);
+
+        Assert.Single(tokens);
+        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var tagged = block.Children.OfType<TaggedIdentToken>().Single();
+        Assert.Equal("end", tagged.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_DollarPrefix()
+    {
+        // $ works as tag prefix - Lexer automatically treats tag prefixes as symbols
+        var options = TokenizerOptions.Default.WithTagPrefixes('$');
+        var tokens = TokenizeTwoLevel("$variable $count", options);
+
+        Assert.Equal(3, tokens.Length);
+        var first = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal('$', first.Tag);
+        Assert.Equal("variable", first.NameSpan.ToString());
+        var second = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal("count", second.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_AnyCharacterAsPrefix()
+    {
+        // Any character can be a tag prefix - even unusual ones
+        var options = TokenizerOptions.Default.WithTagPrefixes('~');
+        var tokens = TokenizeTwoLevel("~magic ~spell", options);
+
+        Assert.Equal(3, tokens.Length);
+        var first = Assert.IsType<TaggedIdentToken>(tokens[0]);
+        Assert.Equal('~', first.Tag);
+        Assert.Equal("magic", first.NameSpan.ToString());
+        var second = Assert.IsType<TaggedIdentToken>(tokens[2]);
+        Assert.Equal("spell", second.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_WithAdditionalPrefixes()
+    {
+        var options = TokenizerOptions.Default
+            .WithTagPrefixes('#')
+            .WithAdditionalTagPrefixes('@');
+        var tokens = TokenizeTwoLevel("#a @b", options);
+
+        var tagged = tokens.OfType<TaggedIdentToken>().ToList();
+        Assert.Equal(2, tagged.Count);
+        Assert.Equal('#', tagged[0].Tag);
+        Assert.Equal('@', tagged[1].Tag);
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_WithoutPrefixes()
+    {
+        var options = TokenizerOptions.Default
+            .WithTagPrefixes('#', '@')
+            .WithoutTagPrefixes('#');
+        var tokens = TokenizeTwoLevel("#a @b", options);
+
+        // # should not be recognized, @ should be
+        Assert.Equal(4, tokens.Length);
+        Assert.IsType<SymbolToken>(tokens[0]); // #
+        Assert.IsType<IdentToken>(tokens[1]); // a
+        Assert.IsType<WhitespaceToken>(tokens[2]);
+        var tagged = Assert.IsType<TaggedIdentToken>(tokens[3]);
+        Assert.Equal('@', tagged.Tag);
+    }
+
+    [Fact]
+    public void Tokenize_TaggedIdent_EmptyPrefixes()
+    {
+        var options = TokenizerOptions.Default.WithNoTagPrefixes();
+        var tokens = TokenizeTwoLevel("#include @test", options);
+
+        // Nothing should be tagged
+        var tagged = tokens.OfType<TaggedIdentToken>().ToList();
+        Assert.Empty(tagged);
     }
 
     #endregion
 
-    #region Combined Operator and Directive Tests
+    #region Combined Operator and Tagged Ident Tests (Two-Level Architecture)
 
     [Fact]
-    public void Tokenize_OperatorsAndDirectives_Combined()
+    public void Tokenize_OperatorsAndTaggedIdents_Combined()
     {
         var options = TokenizerOptions.Default
-            .WithDirectives()
+            .WithTagPrefixes('#')
             .WithOperators(CommonOperators.CFamily);
-        var tokens = Tokenize("#define EQ ==\na == b", options);
+        var tokens = TokenizeTwoLevel("#define EQ == a == b", options);
 
-        var directive = tokens.OfType<DirectiveToken>().Single();
-        Assert.Equal("define", directive.NameSpan.ToString());
+        var tagged = tokens.OfType<TaggedIdentToken>().Single();
+        Assert.Equal("define", tagged.NameSpan.ToString());
 
-        // One operator in directive args (nested), one in the expression (top-level)
-        var topLevelOperators = tokens.OfType<OperatorToken>().ToList();
-        Assert.Single(topLevelOperators);
-        Assert.Equal("==", topLevelOperators[0].Operator);
-
-        // Check directive has operator in its arguments
-        var directiveOperators = directive.Arguments.OfType<OperatorToken>().ToList();
-        Assert.Single(directiveOperators);
-        Assert.Equal("==", directiveOperators[0].Operator);
+        // Two == operators at top level (tagged ident doesn't consume rest of line)
+        var operators = tokens.OfType<OperatorToken>().ToList();
+        Assert.Equal(2, operators.Count);
+        Assert.All(operators, op => Assert.Equal("==", op.Operator));
     }
 
     #endregion

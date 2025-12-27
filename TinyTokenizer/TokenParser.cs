@@ -5,7 +5,7 @@ namespace TinyTokenizer;
 /// <summary>
 /// Parses simple tokens into semantic tokens.
 /// Level 2 of the two-level tokenizer architecture.
-/// Handles blocks, strings, comments, operators, directives and emits error tokens for failures.
+/// Handles blocks, strings, comments, operators, tagged identifiers, and emits error tokens for failures.
 /// </summary>
 public sealed class TokenParser
 {
@@ -129,25 +129,51 @@ public sealed class TokenParser
             yield break;
         }
 
-        // Hash - could be directive start or symbol/operator
+        // Hash - could be tagged identifier or symbol/operator
         if (token.Type == SimpleTokenType.Hash)
         {
-            // Check for directive: # followed by identifier (with optional whitespace between)
-            if (_options.EnableDirectives)
+            // Check for tagged identifier: # followed by identifier
+            if (_options.TagPrefixes.Contains('#'))
             {
-                var directive = TryParseDirective(reader);
-                if (directive != null)
+                var taggedIdent = TryParseTaggedIdent(reader, '#');
+                if (taggedIdent != null)
                 {
-                    yield return directive;
+                    yield return taggedIdent;
                     yield break;
                 }
             }
 
-            // Not a directive - try operator matching, else emit as symbol
+            // Not a tagged identifier - try operator matching, else emit as symbol
             var hashOpResult = TryParseOperator(reader);
             if (hashOpResult != null)
             {
                 yield return hashOpResult;
+                yield break;
+            }
+            reader.Advance();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
+        // At - could be tagged identifier or symbol/operator
+        if (token.Type == SimpleTokenType.At)
+        {
+            // Check for tagged identifier: @ followed by identifier
+            if (_options.TagPrefixes.Contains('@'))
+            {
+                var taggedIdent = TryParseTaggedIdent(reader, '@');
+                if (taggedIdent != null)
+                {
+                    yield return taggedIdent;
+                    yield break;
+                }
+            }
+
+            // Not a tagged identifier - try operator matching, else emit as symbol
+            var atOpResult = TryParseOperator(reader);
+            if (atOpResult != null)
+            {
+                yield return atOpResult;
                 yield break;
             }
             reader.Advance();
@@ -202,9 +228,25 @@ public sealed class TokenParser
             yield break;
         }
 
-        // Check if this is an operator-capable token type
+        // Check if this is an operator-capable token type (includes Symbol)
         if (IsOperatorCapableToken(token.Type))
         {
+            // First check if it could be a tagged identifier
+            // Get the character for this token type
+            char? tokenChar = token.Type == SimpleTokenType.Symbol && token.Content.Length == 1
+                ? token.Content.Span[0]
+                : GetTokenChar(token.Type);
+            
+            if (tokenChar.HasValue && _options.TagPrefixes.Contains(tokenChar.Value))
+            {
+                var taggedIdent = TryParseTaggedIdent(reader, tokenChar.Value);
+                if (taggedIdent != null)
+                {
+                    yield return taggedIdent;
+                    yield break;
+                }
+            }
+
             var opResult = TryParseOperator(reader);
             if (opResult != null)
             {
@@ -349,64 +391,32 @@ public sealed class TokenParser
     }
 
     /// <summary>
-    /// Tries to parse a directive starting with #.
+    /// Tries to parse a tagged identifier (tag + identifier, e.g., #define, @attribute).
     /// </summary>
-    private DirectiveToken? TryParseDirective(TokenReader reader)
+    private TaggedIdentToken? TryParseTaggedIdent(TokenReader reader, char tagChar)
     {
-        if (!reader.TryPeek(out var hashToken) || hashToken.Type != SimpleTokenType.Hash)
+        if (!reader.TryPeek(out var tagToken))
             return null;
 
-        // Look for identifier after # (with optional whitespace)
-        int offset = 1;
-        
-        // Skip whitespace (but not newlines)
-        while (reader.TryPeek(offset, out var wsToken) && wsToken.Type == SimpleTokenType.Whitespace)
-        {
-            offset++;
-        }
-
-        // Check for identifier
-        if (!reader.TryPeek(offset, out var identToken) || identToken.Type != SimpleTokenType.Ident)
+        // Check for identifier immediately following the tag
+        if (!reader.TryPeek(1, out var identToken) || identToken.Type != SimpleTokenType.Ident)
             return null;
 
-        // This is a directive! Parse it
-        var startPosition = hashToken.Position;
+        // This is a tagged identifier!
+        var startPosition = tagToken.Position;
         var contentBuilder = new List<char>();
-        var arguments = ImmutableArray.CreateBuilder<Token>();
 
-        // Consume #
-        AppendToBuffer(contentBuilder, hashToken.Content);
+        // Consume tag character
+        AppendToBuffer(contentBuilder, tagToken.Content);
         reader.Advance();
 
-        // Consume whitespace between # and identifier
-        while (reader.TryPeek(out var wsToken) && wsToken.Type == SimpleTokenType.Whitespace)
-        {
-            AppendToBuffer(contentBuilder, wsToken.Content);
-            reader.Advance();
-        }
-
-        // Consume directive name
-        reader.TryPeek(out var nameToken);
-        var directiveName = nameToken.Content;
-        AppendToBuffer(contentBuilder, nameToken.Content);
+        // Consume identifier
+        var identName = identToken.Content;
+        AppendToBuffer(contentBuilder, identToken.Content);
         reader.Advance();
-
-        // Parse rest of line as argument tokens
-        while (reader.TryPeek(out var argToken))
-        {
-            if (argToken.Type == SimpleTokenType.Newline)
-                break;
-
-            // Parse the token (could be string, number, identifier, etc.)
-            foreach (var parsed in ParseToken(reader, expectedCloser: null))
-            {
-                AppendToBuffer(contentBuilder, parsed.Content);
-                arguments.Add(parsed);
-            }
-        }
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new DirectiveToken(content, directiveName, arguments.ToImmutable(), startPosition);
+        return new TaggedIdentToken(content, tagChar, identName, startPosition);
     }
 
     private Token ParseBlock(TokenReader reader)

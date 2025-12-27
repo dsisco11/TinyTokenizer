@@ -140,10 +140,12 @@ public sealed record TokenizerOptions
     public ImmutableHashSet<string> Operators { get; init; }
 
     /// <summary>
-    /// Gets whether directive parsing is enabled.
-    /// When true, sequences like #identifier are parsed as <see cref="DirectiveToken"/>s.
+    /// Gets the set of tag prefix characters for tagged identifiers.
+    /// When the tokenizer encounters one of these characters followed by an identifier,
+    /// it emits a <see cref="TaggedIdentToken"/> instead of separate tokens.
+    /// Examples: '#' for #define, '@' for @attribute, '$' for $variable.
     /// </summary>
-    public bool EnableDirectives { get; init; }
+    public ImmutableHashSet<char> TagPrefixes { get; init; }
 
     #endregion
 
@@ -157,7 +159,7 @@ public sealed record TokenizerOptions
         Symbols = DefaultSymbols;
         CommentStyles = ImmutableArray<CommentStyle>.Empty;
         Operators = DefaultOperators;
-        EnableDirectives = false;
+        TagPrefixes = ImmutableHashSet<char>.Empty;
     }
 
     /// <summary>
@@ -169,7 +171,7 @@ public sealed record TokenizerOptions
         Symbols = symbols;
         CommentStyles = ImmutableArray<CommentStyle>.Empty;
         Operators = DefaultOperators;
-        EnableDirectives = false;
+        TagPrefixes = ImmutableHashSet<char>.Empty;
     }
 
     #endregion
@@ -294,24 +296,55 @@ public sealed record TokenizerOptions
 
     #endregion
 
-    #region Builder Methods - Directives
+    #region Builder Methods - Tag Prefixes
 
     /// <summary>
-    /// Creates a new options instance with directive parsing enabled.
+    /// Creates a new options instance with the specified tag prefixes.
     /// </summary>
-    /// <returns>A new <see cref="TokenizerOptions"/> with directive parsing enabled.</returns>
-    public TokenizerOptions WithDirectives()
+    /// <param name="prefixes">The tag prefix characters to recognize.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified tag prefixes.</returns>
+    public TokenizerOptions WithTagPrefixes(params char[] prefixes)
     {
-        return this with { EnableDirectives = true };
+        return this with { TagPrefixes = prefixes.ToImmutableHashSet() };
     }
 
     /// <summary>
-    /// Creates a new options instance with directive parsing disabled.
+    /// Creates a new options instance with the specified tag prefixes.
     /// </summary>
-    /// <returns>A new <see cref="TokenizerOptions"/> with directive parsing disabled.</returns>
-    public TokenizerOptions WithoutDirectives()
+    /// <param name="prefixes">The tag prefix characters to recognize.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified tag prefixes.</returns>
+    public TokenizerOptions WithTagPrefixes(ImmutableHashSet<char> prefixes)
     {
-        return this with { EnableDirectives = false };
+        return this with { TagPrefixes = prefixes };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with additional tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefixes to add.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the additional tag prefixes.</returns>
+    public TokenizerOptions WithAdditionalTagPrefixes(params char[] prefixes)
+    {
+        return this with { TagPrefixes = TagPrefixes.Union(prefixes) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance without the specified tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefixes to remove.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> without the specified tag prefixes.</returns>
+    public TokenizerOptions WithoutTagPrefixes(params char[] prefixes)
+    {
+        return this with { TagPrefixes = TagPrefixes.Except(prefixes) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with no tag prefixes.
+    /// </summary>
+    /// <returns>A new <see cref="TokenizerOptions"/> with no tag prefixes.</returns>
+    public TokenizerOptions WithNoTagPrefixes()
+    {
+        return this with { TagPrefixes = ImmutableHashSet<char>.Empty };
     }
 
     #endregion

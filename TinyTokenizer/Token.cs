@@ -70,22 +70,22 @@ public sealed record OperatorToken(ReadOnlyMemory<char> Content, long Position =
 }
 
 /// <summary>
-/// Represents a preprocessor directive starting with # (e.g., #include, #define).
-/// Contains the directive name and the content tokens following it until end of line.
+/// Represents a tagged identifier - a prefix character followed by an identifier.
+/// Examples: #define, @attribute, $variable
 /// </summary>
-/// <param name="Content">The full directive content including # and all following tokens.</param>
-/// <param name="Name">The directive name (e.g., "include", "define").</param>
-/// <param name="Arguments">The tokens following the directive name until end of line.</param>
+/// <param name="Content">The full tagged identifier content including the tag character.</param>
+/// <param name="Tag">The prefix tag character (e.g., '#', '@', '$').</param>
+/// <param name="Name">The identifier name (e.g., "define", "attribute", "variable").</param>
 /// <param name="Position">The absolute position in the source where this token starts.</param>
-public sealed record DirectiveToken(
+public sealed record TaggedIdentToken(
     ReadOnlyMemory<char> Content, 
+    char Tag,
     ReadOnlyMemory<char> Name,
-    ImmutableArray<Token> Arguments,
     long Position = 0) 
-    : Token(Content, TokenType.Directive, Position)
+    : Token(Content, TokenType.TaggedIdent, Position)
 {
     /// <summary>
-    /// Gets the directive name as a span.
+    /// Gets the identifier name as a span.
     /// </summary>
     public ReadOnlySpan<char> NameSpan => Name.Span;
 }

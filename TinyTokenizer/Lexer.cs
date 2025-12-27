@@ -76,9 +76,10 @@ public sealed class Lexer
 
     /// <summary>
     /// Initializes a new instance of <see cref="Lexer"/> with options.
+    /// Tag prefix characters are automatically treated as symbols so they can be recognized.
     /// </summary>
     /// <param name="options">The tokenizer options.</param>
-    public Lexer(TokenizerOptions options) : this(options.Symbols)
+    public Lexer(TokenizerOptions options) : this(options.Symbols.Union(options.TagPrefixes))
     {
     }
 

@@ -78,7 +78,9 @@ public enum TokenType
     Operator,
 
     /// <summary>
-    /// A preprocessor directive starting with # (e.g., #include, #define).
+    /// A tagged identifier - a prefix character followed by an identifier.
+    /// Examples: #define, @attribute, $variable.
+    /// Configured via <see cref="TokenizerOptions.TagPrefixes"/>.
     /// </summary>
-    Directive
+    TaggedIdent
 }
