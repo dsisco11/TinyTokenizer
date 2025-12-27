@@ -41,6 +41,74 @@ public sealed record CommentStyle(string Start, string? End = null)
 }
 
 /// <summary>
+/// Provides predefined sets of operators for common programming language families.
+/// </summary>
+public static class CommonOperators
+{
+    /// <summary>
+    /// Universal operators common to most programming languages.
+    /// Includes arithmetic: +, -, *, /, %
+    /// Includes comparison: ==, !=, &lt;, &gt;, &lt;=, &gt;=
+    /// Includes logical: &amp;&amp;, ||, !
+    /// Includes assignment: =, +=, -=, *=, /=
+    /// </summary>
+    public static ImmutableHashSet<string> Universal { get; } = ImmutableHashSet.Create(
+        // Arithmetic
+        "+", "-", "*", "/", "%",
+        // Comparison
+        "==", "!=", "<", ">", "<=", ">=",
+        // Logical
+        "&&", "||", "!",
+        // Assignment
+        "=", "+=", "-=", "*=", "/="
+    );
+
+    /// <summary>
+    /// C-family operators (C, C++, C#, Java, JavaScript, etc.)
+    /// Extends Universal with: ++, --, %=, &amp;=, |=, ^=, &lt;&lt;, &gt;&gt;, &amp;, |, ^, ~, -&gt;, ::
+    /// </summary>
+    public static ImmutableHashSet<string> CFamily { get; } = Universal.Union(ImmutableHashSet.Create(
+        // Increment/decrement
+        "++", "--",
+        // Additional compound assignment
+        "%=", "&=", "|=", "^=", "<<=", ">>=",
+        // Bitwise
+        "&", "|", "^", "~",
+        // Shift
+        "<<", ">>",
+        // Pointer/scope
+        "->", "::"
+    ));
+
+    /// <summary>
+    /// JavaScript/TypeScript operators.
+    /// Includes C-family operators plus: ===, !==, =&gt;, ?., ??, ??=, **
+    /// </summary>
+    public static ImmutableHashSet<string> JavaScript { get; } = CFamily.Union(ImmutableHashSet.Create(
+        "===", "!==", "=>", "?.", "??", "??=", "**"
+    ));
+
+    /// <summary>
+    /// Python operators.
+    /// Extends Universal with: //, **, -&gt;, :=, @, &amp;, |, ^, ~
+    /// </summary>
+    public static ImmutableHashSet<string> Python { get; } = Universal.Union(ImmutableHashSet.Create(
+        "//", "**",
+        "->", ":=",
+        "@",
+        "&", "|", "^", "~"
+    ));
+
+    /// <summary>
+    /// SQL operators.
+    /// Extends Universal with: &lt;&gt;, ||, ::
+    /// </summary>
+    public static ImmutableHashSet<string> Sql { get; } = Universal.Union(ImmutableHashSet.Create(
+        "<>", "::"
+    ));
+}
+
+/// <summary>
 /// Configuration options for the tokenizer.
 /// </summary>
 public sealed record TokenizerOptions
@@ -57,6 +125,12 @@ public sealed record TokenizerOptions
         '/', ':', ',', ';', '=', '+', '-', '*', '<', '>', '!', '&', '|', '.', '@', '#', '?', '%', '^', '~', '\\'
     );
 
+    /// <summary>
+    /// The default set of operators (multi-character sequences).
+    /// Defaults to universal operators: ==, !=, &amp;&amp;, ||
+    /// </summary>
+    private static readonly ImmutableHashSet<string> DefaultOperators = CommonOperators.Universal;
+
     #endregion
 
     #region Properties
@@ -71,6 +145,23 @@ public sealed record TokenizerOptions
     /// </summary>
     public ImmutableArray<CommentStyle> CommentStyles { get; init; }
 
+    /// <summary>
+    /// Gets the set of operator strings to recognize.
+    /// When the tokenizer encounters a sequence of symbol characters that matches
+    /// one of these operators, it emits an <see cref="OperatorToken"/> instead of
+    /// individual <see cref="SymbolToken"/>s.
+    /// Longer operators are matched first (greedy matching).
+    /// </summary>
+    public ImmutableHashSet<string> Operators { get; init; }
+
+    /// <summary>
+    /// Gets the set of tag prefix characters for tagged identifiers.
+    /// When the tokenizer encounters one of these characters followed by an identifier,
+    /// it emits a <see cref="TaggedIdentToken"/> instead of separate tokens.
+    /// Examples: '#' for #define, '@' for @attribute, '$' for $variable.
+    /// </summary>
+    public ImmutableHashSet<char> TagPrefixes { get; init; }
+
     #endregion
 
     #region Constructors
@@ -82,6 +173,8 @@ public sealed record TokenizerOptions
     {
         Symbols = DefaultSymbols;
         CommentStyles = ImmutableArray<CommentStyle>.Empty;
+        Operators = DefaultOperators;
+        TagPrefixes = ImmutableHashSet<char>.Empty;
     }
 
     /// <summary>
@@ -92,6 +185,8 @@ public sealed record TokenizerOptions
     {
         Symbols = symbols;
         CommentStyles = ImmutableArray<CommentStyle>.Empty;
+        Operators = DefaultOperators;
+        TagPrefixes = ImmutableHashSet<char>.Empty;
     }
 
     #endregion
@@ -105,7 +200,7 @@ public sealed record TokenizerOptions
 
     #endregion
 
-    #region Builder Methods
+    #region Builder Methods - Symbols
 
     /// <summary>
     /// Creates a new options instance with additional symbols.
@@ -137,6 +232,10 @@ public sealed record TokenizerOptions
         return this with { Symbols = ImmutableHashSet.Create(symbols) };
     }
 
+    #endregion
+
+    #region Builder Methods - Comments
+
     /// <summary>
     /// Creates a new options instance with the specified comment styles.
     /// </summary>
@@ -155,6 +254,112 @@ public sealed record TokenizerOptions
     public TokenizerOptions WithAdditionalCommentStyles(params CommentStyle[] commentStyles)
     {
         return this with { CommentStyles = CommentStyles.AddRange(commentStyles) };
+    }
+
+    #endregion
+
+    #region Builder Methods - Operators
+
+    /// <summary>
+    /// Creates a new options instance with the specified operators.
+    /// </summary>
+    /// <param name="operators">The operators to recognize.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified operators.</returns>
+    public TokenizerOptions WithOperators(params string[] operators)
+    {
+        return this with { Operators = ImmutableHashSet.Create(operators) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with the specified operator set.
+    /// </summary>
+    /// <param name="operators">The operator set to use.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified operators.</returns>
+    public TokenizerOptions WithOperators(ImmutableHashSet<string> operators)
+    {
+        return this with { Operators = operators };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with additional operators.
+    /// </summary>
+    /// <param name="operators">The operators to add.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the additional operators.</returns>
+    public TokenizerOptions WithAdditionalOperators(params string[] operators)
+    {
+        return this with { Operators = Operators.Union(operators) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance without the specified operators.
+    /// </summary>
+    /// <param name="operators">The operators to remove.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> without the specified operators.</returns>
+    public TokenizerOptions WithoutOperators(params string[] operators)
+    {
+        return this with { Operators = Operators.Except(operators) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with no operators (all symbol characters emit as individual SymbolTokens).
+    /// </summary>
+    /// <returns>A new <see cref="TokenizerOptions"/> with no operators.</returns>
+    public TokenizerOptions WithNoOperators()
+    {
+        return this with { Operators = ImmutableHashSet<string>.Empty };
+    }
+
+    #endregion
+
+    #region Builder Methods - Tag Prefixes
+
+    /// <summary>
+    /// Creates a new options instance with the specified tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefix characters to recognize.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified tag prefixes.</returns>
+    public TokenizerOptions WithTagPrefixes(params char[] prefixes)
+    {
+        return this with { TagPrefixes = prefixes.ToImmutableHashSet() };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with the specified tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefix characters to recognize.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the specified tag prefixes.</returns>
+    public TokenizerOptions WithTagPrefixes(ImmutableHashSet<char> prefixes)
+    {
+        return this with { TagPrefixes = prefixes };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with additional tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefixes to add.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> with the additional tag prefixes.</returns>
+    public TokenizerOptions WithAdditionalTagPrefixes(params char[] prefixes)
+    {
+        return this with { TagPrefixes = TagPrefixes.Union(prefixes) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance without the specified tag prefixes.
+    /// </summary>
+    /// <param name="prefixes">The tag prefixes to remove.</param>
+    /// <returns>A new <see cref="TokenizerOptions"/> without the specified tag prefixes.</returns>
+    public TokenizerOptions WithoutTagPrefixes(params char[] prefixes)
+    {
+        return this with { TagPrefixes = TagPrefixes.Except(prefixes) };
+    }
+
+    /// <summary>
+    /// Creates a new options instance with no tag prefixes.
+    /// </summary>
+    /// <returns>A new <see cref="TokenizerOptions"/> with no tag prefixes.</returns>
+    public TokenizerOptions WithNoTagPrefixes()
+    {
+        return this with { TagPrefixes = ImmutableHashSet<char>.Empty };
     }
 
     #endregion

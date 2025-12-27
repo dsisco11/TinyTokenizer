@@ -12,6 +12,8 @@ A high-performance, zero-allocation tokenizer library for .NET 8+ that parses te
 - **String literals** — Supports single and double-quoted strings with escape sequences
 - **Numeric literals** — Parses integers and floating-point numbers
 - **Comment support** — Configurable single-line and multi-line comment styles
+- **Operators** — Configurable multi-character operators with greedy matching
+- **Tagged identifiers** — Configurable prefix characters for patterns like `#define`, `@attribute`, `$variable`
 - **Configurable symbols** — Define which characters are recognized as symbol tokens
 - **Immutable tokens** — All token types are immutable record classes
 - **Error recovery** — Gracefully handles malformed input with `ErrorToken` and continues parsing
@@ -85,16 +87,18 @@ var tokens = parser.ParseToArray(simpleTokens);
 
 ## Token Types
 
-| Type              | Description                           | Example                     |
-| ----------------- | ------------------------------------- | --------------------------- |
-| `IdentToken`      | Identifier/text content               | `hello`, `func`, `_name`    |
-| `WhitespaceToken` | Spaces, tabs, newlines                | ` `, `\t`, `\n`             |
-| `SymbolToken`     | Configurable symbol characters        | `/`, `:`, `,`, `;`          |
-| `NumericToken`    | Integer or floating-point numbers     | `123`, `3.14`, `.5`         |
-| `StringToken`     | Quoted string literals                | `"hello"`, `'c'`            |
-| `CommentToken`    | Single or multi-line comments         | `// comment`, `/* block */` |
-| `BlockToken`      | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`   |
-| `ErrorToken`      | Parsing errors (unmatched delimiters) | `}` without opening `{`     |
+| Type               | Description                           | Example                        |
+| ------------------ | ------------------------------------- | ------------------------------ |
+| `IdentToken`       | Identifier/text content               | `hello`, `func`, `_name`       |
+| `WhitespaceToken`  | Spaces, tabs, newlines                | ` `, `\t`, `\n`                |
+| `SymbolToken`      | Configurable symbol characters        | `/`, `:`, `,`, `;`             |
+| `OperatorToken`    | Multi-character operators             | `==`, `!=`, `&&`, `\|\|`, `->` |
+| `TaggedIdentToken` | Tag prefix + identifier               | `#define`, `@Override`, `$var` |
+| `NumericToken`     | Integer or floating-point numbers     | `123`, `3.14`, `.5`            |
+| `StringToken`      | Quoted string literals                | `"hello"`, `'c'`               |
+| `CommentToken`     | Single or multi-line comments         | `// comment`, `/* block */`    |
+| `BlockToken`       | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`      |
+| `ErrorToken`       | Parsing errors (unmatched delimiters) | `}` without opening `{`        |
 
 ### Token Properties
 
@@ -123,6 +127,15 @@ block.InnerContent;      // "inner content" (excludes delimiters)
 block.Children;          // ImmutableArray<Token> of parsed inner tokens
 block.OpeningDelimiter;  // '{'
 block.ClosingDelimiter;  // '}'
+
+// OperatorToken
+var op = (OperatorToken)token;
+op.Operator;  // "==" or "!=" etc. (string)
+
+// TaggedIdentToken
+var tagged = (TaggedIdentToken)token;
+tagged.Tag;      // '#' or '@' or '$' etc.
+tagged.NameSpan; // "define" or "Override" (ReadOnlySpan<char>)
 ```
 
 ## Async Tokenization
@@ -195,6 +208,59 @@ options = options.WithAdditionalCommentStyles(CommentStyle.HashSingleLine);
 var customComment = new CommentStyle("REM", null);  // Single-line ending at newline
 var blockComment = new CommentStyle("(*", "*)");    // Multi-line Pascal-style
 ```
+
+### Operators
+
+```csharp
+// Built-in operator sets
+CommonOperators.Universal   // +, -, *, /, %, ==, !=, <, >, <=, >=, &&, ||, !, =, +=, -=, *=, /=
+CommonOperators.CFamily     // Universal + ++, --, &, |, ^, ~, <<, >>, ->, ::, etc.
+CommonOperators.JavaScript  // CFamily + ===, !==, =>, ?., ??, ??=, **
+CommonOperators.Python      // Universal + //, **, ->, :=, @, &, |, ^, ~
+CommonOperators.Sql         // Universal + <>, ::
+
+// Configure operators (uses greedy matching - longest operator first)
+var options = TokenizerOptions.Default
+    .WithOperators(CommonOperators.CFamily);
+
+// Add custom operators
+options = options.WithAdditionalOperators("<=>", "??", "?.");
+
+// Remove specific operators
+options = options.WithoutOperators("++", "--");
+
+// No operators (all symbols emit individually)
+options = options.WithNoOperators();
+```
+
+### Tagged Identifiers
+
+Tagged identifiers recognize patterns like `#define`, `@attribute`, or `$variable`:
+
+```csharp
+// Enable C-style preprocessor tags
+var options = TokenizerOptions.Default.WithTagPrefixes('#');
+var tokens = "#include #define".TokenizeToTokens(options);
+// tokens: TaggedIdentToken("#include"), WhitespaceToken, TaggedIdentToken("#define")
+
+// Enable Java/C# style annotations
+var options = TokenizerOptions.Default.WithTagPrefixes('@');
+var tokens = "@Override @NotNull".TokenizeToTokens(options);
+
+// Enable shell/PHP style variables
+var options = TokenizerOptions.Default.WithTagPrefixes('$');
+var tokens = "$name $count".TokenizeToTokens(options);
+
+// Multiple prefixes for multi-language support
+var options = TokenizerOptions.Default.WithTagPrefixes('#', '@', '$');
+
+// Add/remove prefixes
+options = options.WithAdditionalTagPrefixes('~');
+options = options.WithoutTagPrefixes('#');
+options = options.WithNoTagPrefixes();  // Disable all
+```
+
+**Note:** Tag prefix characters are automatically treated as symbols by the Lexer, so any character can be used as a tag prefix.
 
 ## Nested Blocks
 
@@ -346,7 +412,9 @@ public enum TokenType
     Numeric,          // numbers
     String,           // quoted strings
     Comment,          // comments
-    Error             // parsing errors
+    Error,            // parsing errors
+    Operator,         // multi-character operators
+    TaggedIdent       // tag prefix + identifier
 }
 ```
 

@@ -195,11 +195,11 @@ public class LexerParserTests
     [Fact]
     public void TokenParser_Symbol_ReturnsSingleSymbolToken()
     {
-        var tokens = Tokenize("/");
+        var tokens = Tokenize(":");
 
         Assert.Single(tokens);
         var token = Assert.IsType<SymbolToken>(tokens[0]);
-        Assert.Equal('/', token.Symbol);
+        Assert.Equal(':', token.Symbol);
     }
 
     [Fact]

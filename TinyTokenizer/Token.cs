@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace TinyTokenizer;
 
 #region Base Token
@@ -39,6 +41,7 @@ public sealed record WhitespaceToken(ReadOnlyMemory<char> Content, long Position
 
 /// <summary>
 /// Represents a symbol character such as /, :, ,, ;, etc.
+/// Symbols are single characters not matched by configured operators.
 /// </summary>
 /// <param name="Content">The symbol content.</param>
 /// <param name="Position">The absolute position in the source where this token starts.</param>
@@ -49,6 +52,42 @@ public sealed record SymbolToken(ReadOnlyMemory<char> Content, long Position = 0
     /// Gets the symbol character.
     /// </summary>
     public char Symbol => Content.Span[0];
+}
+
+/// <summary>
+/// Represents an operator (single or multi-character) such as ==, !=, &amp;&amp;, ||, etc.
+/// Which character sequences are recognized as operators is configured via <see cref="TokenizerOptions.Operators"/>.
+/// </summary>
+/// <param name="Content">The operator content.</param>
+/// <param name="Position">The absolute position in the source where this token starts.</param>
+public sealed record OperatorToken(ReadOnlyMemory<char> Content, long Position = 0) 
+    : Token(Content, TokenType.Operator, Position)
+{
+    /// <summary>
+    /// Gets the operator as a string.
+    /// </summary>
+    public string Operator => Content.Span.ToString();
+}
+
+/// <summary>
+/// Represents a tagged identifier - a prefix character followed by an identifier.
+/// Examples: #define, @attribute, $variable
+/// </summary>
+/// <param name="Content">The full tagged identifier content including the tag character.</param>
+/// <param name="Tag">The prefix tag character (e.g., '#', '@', '$').</param>
+/// <param name="Name">The identifier name (e.g., "define", "attribute", "variable").</param>
+/// <param name="Position">The absolute position in the source where this token starts.</param>
+public sealed record TaggedIdentToken(
+    ReadOnlyMemory<char> Content, 
+    char Tag,
+    ReadOnlyMemory<char> Name,
+    long Position = 0) 
+    : Token(Content, TokenType.TaggedIdent, Position)
+{
+    /// <summary>
+    /// Gets the identifier name as a span.
+    /// </summary>
+    public ReadOnlySpan<char> NameSpan => Name.Span;
 }
 
 /// <summary>

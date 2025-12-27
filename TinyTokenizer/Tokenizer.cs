@@ -13,6 +13,7 @@ public ref struct Tokenizer
     private readonly ReadOnlyMemory<char> _source;
     private readonly ReadOnlySpan<char> _span;
     private readonly TokenizerOptions _options;
+    private readonly ImmutableArray<string> _sortedOperators;
     private int _position;
 
     #endregion
@@ -30,6 +31,10 @@ public ref struct Tokenizer
         _span = source.Span;
         _options = options ?? TokenizerOptions.Default;
         _position = 0;
+        // Sort operators by length descending for greedy matching (longest first)
+        _sortedOperators = _options.Operators
+            .OrderByDescending(op => op.Length)
+            .ToImmutableArray();
     }
 
     #endregion
@@ -107,6 +112,14 @@ public ref struct Tokenizer
             if (char.IsDigit(current) || (current == '.' && _position + 1 < _span.Length && char.IsDigit(_span[_position + 1])))
             {
                 tokens.Add(ParseNumeric());
+                continue;
+            }
+
+            // Check for operator (multi-character sequence like ==, !=, &&, ||)
+            var operatorToken = TryParseOperator();
+            if (operatorToken != null)
+            {
+                tokens.Add(operatorToken);
                 continue;
             }
 
@@ -411,6 +424,32 @@ public ref struct Tokenizer
         }
 
         return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine, start);
+    }
+
+    /// <summary>
+    /// Tries to parse an operator at the current position.
+    /// Uses greedy matching (longest operator first).
+    /// </summary>
+    /// <returns>An <see cref="OperatorToken"/> if an operator is matched, null otherwise.</returns>
+    private OperatorToken? TryParseOperator()
+    {
+        if (_sortedOperators.IsEmpty)
+            return null;
+
+        var remaining = _span[_position..];
+
+        // Try to match operators, longest first (greedy)
+        foreach (var op in _sortedOperators)
+        {
+            if (remaining.Length >= op.Length && remaining[..op.Length].SequenceEqual(op.AsSpan()))
+            {
+                var start = _position;
+                _position += op.Length;
+                return new OperatorToken(_source.Slice(start, op.Length), start);
+            }
+        }
+
+        return null;
     }
 
     #endregion

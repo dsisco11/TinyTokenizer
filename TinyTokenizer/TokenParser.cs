@@ -5,11 +5,12 @@ namespace TinyTokenizer;
 /// <summary>
 /// Parses simple tokens into semantic tokens.
 /// Level 2 of the two-level tokenizer architecture.
-/// Handles blocks, strings, comments and emits error tokens for failures.
+/// Handles blocks, strings, comments, operators, tagged identifiers, and emits error tokens for failures.
 /// </summary>
 public sealed class TokenParser
 {
     private readonly TokenizerOptions _options;
+    private readonly ImmutableArray<string> _sortedOperators;
 
     /// <summary>
     /// Initializes a new instance of <see cref="TokenParser"/> with default options.
@@ -24,6 +25,10 @@ public sealed class TokenParser
     public TokenParser(TokenizerOptions options)
     {
         _options = options;
+        // Sort operators by length descending for greedy matching (longest first)
+        _sortedOperators = options.Operators
+            .OrderByDescending(op => op.Length)
+            .ToImmutableArray();
     }
 
     #region Public API
@@ -112,7 +117,65 @@ public sealed class TokenParser
                 yield break;
             }
 
-            // Standalone dot - emit as symbol
+            // Standalone dot - try operator matching, else emit as symbol
+            var dotOpResult = TryParseOperator(reader);
+            if (dotOpResult != null)
+            {
+                yield return dotOpResult;
+                yield break;
+            }
+            reader.Advance();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
+        // Hash - could be tagged identifier or symbol/operator
+        if (token.Type == SimpleTokenType.Hash)
+        {
+            // Check for tagged identifier: # followed by identifier
+            if (_options.TagPrefixes.Contains('#'))
+            {
+                var taggedIdent = TryParseTaggedIdent(reader, '#');
+                if (taggedIdent != null)
+                {
+                    yield return taggedIdent;
+                    yield break;
+                }
+            }
+
+            // Not a tagged identifier - try operator matching, else emit as symbol
+            var hashOpResult = TryParseOperator(reader);
+            if (hashOpResult != null)
+            {
+                yield return hashOpResult;
+                yield break;
+            }
+            reader.Advance();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
+        // At - could be tagged identifier or symbol/operator
+        if (token.Type == SimpleTokenType.At)
+        {
+            // Check for tagged identifier: @ followed by identifier
+            if (_options.TagPrefixes.Contains('@'))
+            {
+                var taggedIdent = TryParseTaggedIdent(reader, '@');
+                if (taggedIdent != null)
+                {
+                    yield return taggedIdent;
+                    yield break;
+                }
+            }
+
+            // Not a tagged identifier - try operator matching, else emit as symbol
+            var atOpResult = TryParseOperator(reader);
+            if (atOpResult != null)
+            {
+                yield return atOpResult;
+                yield break;
+            }
             reader.Advance();
             yield return new SymbolToken(token.Content, token.Position);
             yield break;
@@ -131,15 +194,27 @@ public sealed class TokenParser
                 }
             }
 
-            // Not a comment - emit as symbol
+            // Not a comment - try operator matching, else emit as symbol
+            var slashOpResult = TryParseOperator(reader);
+            if (slashOpResult != null)
+            {
+                yield return slashOpResult;
+                yield break;
+            }
             reader.Advance();
             yield return new SymbolToken(token.Content, token.Position);
             yield break;
         }
 
-        // Asterisk as standalone symbol
+        // Asterisk - try operator matching, else emit as symbol
         if (token.Type == SimpleTokenType.Asterisk)
         {
+            var asteriskOpResult = TryParseOperator(reader);
+            if (asteriskOpResult != null)
+            {
+                yield return asteriskOpResult;
+                yield break;
+            }
             reader.Advance();
             yield return new SymbolToken(token.Content, token.Position);
             yield break;
@@ -148,6 +223,37 @@ public sealed class TokenParser
         // Backslash outside of string - emit as symbol
         if (token.Type == SimpleTokenType.Backslash)
         {
+            reader.Advance();
+            yield return new SymbolToken(token.Content, token.Position);
+            yield break;
+        }
+
+        // Check if this is an operator-capable token type (includes Symbol)
+        if (IsOperatorCapableToken(token.Type))
+        {
+            // First check if it could be a tagged identifier
+            // Get the character for this token type
+            char? tokenChar = token.Type == SimpleTokenType.Symbol && token.Content.Length == 1
+                ? token.Content.Span[0]
+                : GetTokenChar(token.Type);
+            
+            if (tokenChar.HasValue && _options.TagPrefixes.Contains(tokenChar.Value))
+            {
+                var taggedIdent = TryParseTaggedIdent(reader, tokenChar.Value);
+                if (taggedIdent != null)
+                {
+                    yield return taggedIdent;
+                    yield break;
+                }
+            }
+
+            var opResult = TryParseOperator(reader);
+            if (opResult != null)
+            {
+                yield return opResult;
+                yield break;
+            }
+            // Not an operator - emit as symbol
             reader.Advance();
             yield return new SymbolToken(token.Content, token.Position);
             yield break;
@@ -163,6 +269,154 @@ public sealed class TokenParser
             SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
             _ => new IdentToken(token.Content, token.Position)
         };
+    }
+
+    /// <summary>
+    /// Checks if a SimpleTokenType represents a character that could be part of an operator.
+    /// </summary>
+    private static bool IsOperatorCapableToken(SimpleTokenType type)
+    {
+        return type is SimpleTokenType.Symbol
+            or SimpleTokenType.Equals
+            or SimpleTokenType.Plus
+            or SimpleTokenType.Minus
+            or SimpleTokenType.LessThan
+            or SimpleTokenType.GreaterThan
+            or SimpleTokenType.Pipe
+            or SimpleTokenType.Ampersand
+            or SimpleTokenType.Percent
+            or SimpleTokenType.Caret
+            or SimpleTokenType.Tilde
+            or SimpleTokenType.Question
+            or SimpleTokenType.Exclamation
+            or SimpleTokenType.Colon
+            or SimpleTokenType.At;
+    }
+
+    /// <summary>
+    /// Gets the character representation of a SimpleTokenType for operator matching.
+    /// </summary>
+    private static char? GetTokenChar(SimpleTokenType type)
+    {
+        return type switch
+        {
+            SimpleTokenType.Equals => '=',
+            SimpleTokenType.Plus => '+',
+            SimpleTokenType.Minus => '-',
+            SimpleTokenType.LessThan => '<',
+            SimpleTokenType.GreaterThan => '>',
+            SimpleTokenType.Pipe => '|',
+            SimpleTokenType.Ampersand => '&',
+            SimpleTokenType.Percent => '%',
+            SimpleTokenType.Caret => '^',
+            SimpleTokenType.Tilde => '~',
+            SimpleTokenType.Question => '?',
+            SimpleTokenType.Exclamation => '!',
+            SimpleTokenType.Colon => ':',
+            SimpleTokenType.Hash => '#',
+            SimpleTokenType.At => '@',
+            SimpleTokenType.Slash => '/',
+            SimpleTokenType.Asterisk => '*',
+            SimpleTokenType.Dot => '.',
+            SimpleTokenType.Comma => ',',
+            SimpleTokenType.Semicolon => ';',
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Tries to parse an operator starting from the current position.
+    /// Uses greedy matching (longest operator first).
+    /// </summary>
+    private OperatorToken? TryParseOperator(TokenReader reader)
+    {
+        if (_sortedOperators.IsEmpty)
+            return null;
+
+        // Build a string of consecutive operator-capable characters
+        var chars = new List<char>();
+        var tokens = new List<SimpleToken>();
+        int offset = 0;
+
+        while (reader.TryPeek(offset, out var peekToken))
+        {
+            var tokenChar = GetTokenChar(peekToken.Type);
+            if (tokenChar == null)
+            {
+                // For Symbol type, get the actual character
+                if (peekToken.Type == SimpleTokenType.Symbol && peekToken.Content.Length > 0)
+                {
+                    tokenChar = peekToken.Content.Span[0];
+                }
+                else
+                {
+                    break;
+                }
+            }
+            chars.Add(tokenChar.Value);
+            tokens.Add(peekToken);
+            offset++;
+
+            // Optimization: stop if we've collected more chars than the longest operator
+            if (_sortedOperators.Length > 0 && chars.Count > _sortedOperators[0].Length)
+                break;
+        }
+
+        if (chars.Count == 0)
+            return null;
+
+        var sequence = new string(chars.ToArray());
+
+        // Try to match operators, longest first (greedy)
+        foreach (var op in _sortedOperators)
+        {
+            if (sequence.StartsWith(op, StringComparison.Ordinal))
+            {
+                // Found a match! Consume the tokens and build the operator
+                var startPosition = tokens[0].Position;
+                var contentBuilder = new List<char>();
+
+                for (int i = 0; i < op.Length; i++)
+                {
+                    AppendToBuffer(contentBuilder, tokens[i].Content);
+                    reader.Advance();
+                }
+
+                var content = contentBuilder.ToArray().AsMemory();
+                return new OperatorToken(content, startPosition);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Tries to parse a tagged identifier (tag + identifier, e.g., #define, @attribute).
+    /// </summary>
+    private TaggedIdentToken? TryParseTaggedIdent(TokenReader reader, char tagChar)
+    {
+        if (!reader.TryPeek(out var tagToken))
+            return null;
+
+        // Check for identifier immediately following the tag
+        if (!reader.TryPeek(1, out var identToken) || identToken.Type != SimpleTokenType.Ident)
+            return null;
+
+        // This is a tagged identifier!
+        var startPosition = tagToken.Position;
+        var contentBuilder = new List<char>();
+
+        // Consume tag character
+        AppendToBuffer(contentBuilder, tagToken.Content);
+        reader.Advance();
+
+        // Consume identifier
+        var identName = identToken.Content;
+        AppendToBuffer(contentBuilder, identToken.Content);
+        reader.Advance();
+
+        var content = contentBuilder.ToArray().AsMemory();
+        return new TaggedIdentToken(content, tagChar, identName, startPosition);
     }
 
     private Token ParseBlock(TokenReader reader)
