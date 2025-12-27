@@ -737,13 +737,14 @@ public class TokenizerTests
     [Theory]
     [InlineData("===")]
     [InlineData("!==")]
-    [InlineData("<=")]
-    [InlineData(">=")]
     [InlineData("++")]
     [InlineData("--")]
+    [InlineData("<<")]
+    [InlineData(">>")]
     public void Tokenize_NonDefaultOperators_ReturnsSymbolTokens(string op)
     {
-        // Default options only include ==, !=, &&, ||
+        // Default options (Universal) include ==, !=, &&, ||, <=, >=, +=, -=, *=, /=
+        // These operators are NOT in the default set
         var tokens = Tokenize(op);
 
         // These should NOT be recognized as single operators with default settings
@@ -753,8 +754,6 @@ public class TokenizerTests
     [Theory]
     [InlineData("===")]
     [InlineData("!==")]
-    [InlineData("<=")]
-    [InlineData(">=")]
     [InlineData("++")]
     [InlineData("--")]
     [InlineData("=>")]

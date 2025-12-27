@@ -87,18 +87,18 @@ var tokens = parser.ParseToArray(simpleTokens);
 
 ## Token Types
 
-| Type              | Description                           | Example                       |
-| ----------------- | ------------------------------------- | ----------------------------- |
-| `IdentToken`      | Identifier/text content               | `hello`, `func`, `_name`      |
-| `WhitespaceToken` | Spaces, tabs, newlines                | ` `, `\t`, `\n`               |
-| `SymbolToken`     | Configurable symbol characters        | `/`, `:`, `,`, `;`            |
-| `OperatorToken`   | Multi-character operators             | `==`, `!=`, `&&`, `\|\|`, `->` |
-| `TaggedIdentToken`| Tag prefix + identifier               | `#define`, `@Override`, `$var`|
-| `NumericToken`    | Integer or floating-point numbers     | `123`, `3.14`, `.5`           |
-| `StringToken`     | Quoted string literals                | `"hello"`, `'c'`              |
-| `CommentToken`    | Single or multi-line comments         | `// comment`, `/* block */`   |
-| `BlockToken`      | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`     |
-| `ErrorToken`      | Parsing errors (unmatched delimiters) | `}` without opening `{`       |
+| Type               | Description                           | Example                        |
+| ------------------ | ------------------------------------- | ------------------------------ |
+| `IdentToken`       | Identifier/text content               | `hello`, `func`, `_name`       |
+| `WhitespaceToken`  | Spaces, tabs, newlines                | ` `, `\t`, `\n`                |
+| `SymbolToken`      | Configurable symbol characters        | `/`, `:`, `,`, `;`             |
+| `OperatorToken`    | Multi-character operators             | `==`, `!=`, `&&`, `\|\|`, `->` |
+| `TaggedIdentToken` | Tag prefix + identifier               | `#define`, `@Override`, `$var` |
+| `NumericToken`     | Integer or floating-point numbers     | `123`, `3.14`, `.5`            |
+| `StringToken`      | Quoted string literals                | `"hello"`, `'c'`               |
+| `CommentToken`     | Single or multi-line comments         | `// comment`, `/* block */`    |
+| `BlockToken`       | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`      |
+| `ErrorToken`       | Parsing errors (unmatched delimiters) | `}` without opening `{`        |
 
 ### Token Properties
 
@@ -213,7 +213,7 @@ var blockComment = new CommentStyle("(*", "*)");    // Multi-line Pascal-style
 
 ```csharp
 // Built-in operator sets
-CommonOperators.Universal   // ==, !=, &&, ||
+CommonOperators.Universal   // ==, !=, &&, ||, <=, >=, +=, -=, *=, /=
 CommonOperators.CFamily     // ==, !=, <=, >=, &&, ||, ++, --, <<, >>, ->, etc.
 CommonOperators.Comparison  // ==, !=, <, >, <=, >=
 CommonOperators.Logical     // &&, ||, !

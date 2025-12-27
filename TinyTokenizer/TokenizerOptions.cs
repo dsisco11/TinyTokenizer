@@ -46,10 +46,13 @@ public sealed record CommentStyle(string Start, string? End = null)
 public static class CommonOperators
 {
     /// <summary>
-    /// Universal operators common to most programming languages: ==, !=, &amp;&amp;, ||
+    /// Universal operators common to most programming languages.
+    /// Includes: ==, !=, &amp;&amp;, ||, &lt;=, &gt;=, +=, -=, *=, /=
     /// </summary>
     public static ImmutableHashSet<string> Universal { get; } = ImmutableHashSet.Create(
-        "==", "!=", "&&", "||"
+        "==", "!=", "&&", "||",
+        "<=", ">=",
+        "+=", "-=", "*=", "/="
     );
 
     /// <summary>
