@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace TinyTokenizer;
 
 #region Base Token
@@ -39,6 +41,7 @@ public sealed record WhitespaceToken(ReadOnlyMemory<char> Content, long Position
 
 /// <summary>
 /// Represents a symbol character such as /, :, ,, ;, etc.
+/// Symbols are single characters not matched by configured operators.
 /// </summary>
 /// <param name="Content">The symbol content.</param>
 /// <param name="Position">The absolute position in the source where this token starts.</param>
@@ -49,6 +52,42 @@ public sealed record SymbolToken(ReadOnlyMemory<char> Content, long Position = 0
     /// Gets the symbol character.
     /// </summary>
     public char Symbol => Content.Span[0];
+}
+
+/// <summary>
+/// Represents an operator (single or multi-character) such as ==, !=, &amp;&amp;, ||, etc.
+/// Which character sequences are recognized as operators is configured via <see cref="TokenizerOptions.Operators"/>.
+/// </summary>
+/// <param name="Content">The operator content.</param>
+/// <param name="Position">The absolute position in the source where this token starts.</param>
+public sealed record OperatorToken(ReadOnlyMemory<char> Content, long Position = 0) 
+    : Token(Content, TokenType.Operator, Position)
+{
+    /// <summary>
+    /// Gets the operator as a string.
+    /// </summary>
+    public string Operator => Content.Span.ToString();
+}
+
+/// <summary>
+/// Represents a preprocessor directive starting with # (e.g., #include, #define).
+/// Contains the directive name and the content tokens following it until end of line.
+/// </summary>
+/// <param name="Content">The full directive content including # and all following tokens.</param>
+/// <param name="Name">The directive name (e.g., "include", "define").</param>
+/// <param name="Arguments">The tokens following the directive name until end of line.</param>
+/// <param name="Position">The absolute position in the source where this token starts.</param>
+public sealed record DirectiveToken(
+    ReadOnlyMemory<char> Content, 
+    ReadOnlyMemory<char> Name,
+    ImmutableArray<Token> Arguments,
+    long Position = 0) 
+    : Token(Content, TokenType.Directive, Position)
+{
+    /// <summary>
+    /// Gets the directive name as a span.
+    /// </summary>
+    public ReadOnlySpan<char> NameSpan => Name.Span;
 }
 
 /// <summary>

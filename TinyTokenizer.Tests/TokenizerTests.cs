@@ -699,4 +699,345 @@ public class TokenizerTests
     }
 
     #endregion
+
+    #region Operator Token Tests
+
+    [Theory]
+    [InlineData("==")]
+    [InlineData("!=")]
+    [InlineData("&&")]
+    [InlineData("||")]
+    public void Tokenize_DefaultOperators_ReturnsOperatorToken(string op)
+    {
+        var tokens = Tokenize(op);
+
+        Assert.Single(tokens);
+        var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal(op, opToken.Operator);
+    }
+
+    [Theory]
+    [InlineData("===")]
+    [InlineData("!==")]
+    [InlineData("<=")]
+    [InlineData(">=")]
+    [InlineData("++")]
+    [InlineData("--")]
+    public void Tokenize_NonDefaultOperators_ReturnsSymbolTokens(string op)
+    {
+        // Default options only include ==, !=, &&, ||
+        var tokens = Tokenize(op);
+
+        // These should NOT be recognized as single operators with default settings
+        Assert.True(tokens.Length > 1 || tokens[0] is not OperatorToken);
+    }
+
+    [Theory]
+    [InlineData("===")]
+    [InlineData("!==")]
+    [InlineData("<=")]
+    [InlineData(">=")]
+    [InlineData("++")]
+    [InlineData("--")]
+    [InlineData("=>")]
+    [InlineData("?.")]
+    [InlineData("??")]
+    public void Tokenize_JavaScriptOperators_WithConfig_ReturnsOperatorToken(string op)
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.JavaScript);
+        var tokens = Tokenize(op, options);
+
+        Assert.Single(tokens);
+        var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal(op, opToken.Operator);
+    }
+
+    [Fact]
+    public void Tokenize_OperatorInExpression_TokenizesCorrectly()
+    {
+        var tokens = Tokenize("a == b");
+
+        Assert.Equal(5, tokens.Length);
+        Assert.IsType<IdentToken>(tokens[0]);      // a
+        Assert.IsType<WhitespaceToken>(tokens[1]); // space
+        Assert.IsType<OperatorToken>(tokens[2]);   // ==
+        Assert.IsType<WhitespaceToken>(tokens[3]); // space
+        Assert.IsType<IdentToken>(tokens[4]);      // b
+    }
+
+    [Fact]
+    public void Tokenize_MultipleOperators_TokenizesCorrectly()
+    {
+        var tokens = Tokenize("a && b || c");
+
+        var opTokens = tokens.Where(t => t is OperatorToken).ToList();
+        Assert.Equal(2, opTokens.Count);
+        Assert.Equal("&&", ((OperatorToken)opTokens[0]).Operator);
+        Assert.Equal("||", ((OperatorToken)opTokens[1]).Operator);
+    }
+
+    [Fact]
+    public void Tokenize_OverlappingOperators_MatchesLongestFirst_TripleEquals()
+    {
+        // === should match as === not == + = when configured
+        var options = TokenizerOptions.Default.WithOperators("===", "==", "=");
+        var tokens = Tokenize("===", options);
+
+        Assert.Single(tokens);
+        var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal("===", opToken.Operator);
+    }
+
+    [Fact]
+    public void Tokenize_OverlappingOperators_MatchesLongestFirst_StrictNotEquals()
+    {
+        // !== should match as !== not != + = when configured
+        var options = TokenizerOptions.Default.WithOperators("!==", "!=", "!");
+        var tokens = Tokenize("!==", options);
+
+        Assert.Single(tokens);
+        var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal("!==", opToken.Operator);
+    }
+
+    [Fact]
+    public void Tokenize_OverlappingOperators_DoubleEqualsVsTripleEquals()
+    {
+        // When only == is configured, === should be == + =
+        var options = TokenizerOptions.Default.WithOperators("==");
+        var tokens = Tokenize("===", options);
+
+        Assert.Equal(2, tokens.Length);
+        Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal("==", ((OperatorToken)tokens[0]).Operator);
+        Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.Equal('=', ((SymbolToken)tokens[1]).Symbol);
+    }
+
+    [Fact]
+    public void Tokenize_OverlappingOperators_NotEqualsVsStrictNotEquals()
+    {
+        // When only != is configured, !== should be != + =
+        var options = TokenizerOptions.Default.WithOperators("!=");
+        var tokens = Tokenize("!==", options);
+
+        Assert.Equal(2, tokens.Length);
+        Assert.IsType<OperatorToken>(tokens[0]);
+        Assert.Equal("!=", ((OperatorToken)tokens[0]).Operator);
+        Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.Equal('=', ((SymbolToken)tokens[1]).Symbol);
+    }
+
+    [Fact]
+    public void Tokenize_WithNoOperators_AllSymbolsAreSymbolTokens()
+    {
+        var options = TokenizerOptions.Default.WithNoOperators();
+        var tokens = Tokenize("== != && ||", options);
+
+        var symbolTokens = tokens.Where(t => t is SymbolToken).ToList();
+        Assert.Equal(8, symbolTokens.Count); // Each char is a separate symbol
+    }
+
+    [Fact]
+    public void Tokenize_WithAdditionalOperators_RecognizesNewOperator()
+    {
+        var options = TokenizerOptions.Default.WithAdditionalOperators("<=", ">=");
+        var tokens = Tokenize("a <= b >= c", options);
+
+        var opTokens = tokens.Where(t => t is OperatorToken).ToList();
+        Assert.Equal(2, opTokens.Count);
+        Assert.Equal("<=", ((OperatorToken)opTokens[0]).Operator);
+        Assert.Equal(">=", ((OperatorToken)opTokens[1]).Operator);
+    }
+
+    [Fact]
+    public void Tokenize_WithoutOperators_RemovesOperator()
+    {
+        var options = TokenizerOptions.Default.WithoutOperators("==");
+        var tokens = Tokenize("==", options);
+
+        // == should now be two separate symbols
+        Assert.Equal(2, tokens.Length);
+        Assert.All(tokens, t => Assert.IsType<SymbolToken>(t));
+    }
+
+    [Fact]
+    public void Tokenize_CFamilyOperators_WithConfig()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        
+        var testCases = new[] { "==", "!=", "<=", ">=", "++", "--", "+=", "-=", "<<", ">>" };
+        foreach (var op in testCases)
+        {
+            var tokens = Tokenize(op, options);
+            Assert.Single(tokens);
+            var opToken = Assert.IsType<OperatorToken>(tokens[0]);
+            Assert.Equal(op, opToken.Operator);
+        }
+    }
+
+    [Fact]
+    public void Tokenize_OperatorPosition_IsCorrect()
+    {
+        var tokens = Tokenize("abc==def");
+
+        var opToken = tokens.OfType<OperatorToken>().Single();
+        Assert.Equal(3, opToken.Position); // 0-indexed position after "abc"
+    }
+
+    #endregion
+
+    #region Directive Token Tests
+
+    [Fact]
+    public void Tokenize_Directive_WithDirectivesEnabled_ReturnsDirectiveToken()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#include", options);
+
+        Assert.Single(tokens);
+        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
+        Assert.Equal("#include", directive.ContentSpan.ToString());
+        Assert.Equal("include", directive.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_Directive_WithDirectivesDisabled_ReturnsSymbolAndIdent()
+    {
+        // Directives disabled by default
+        var tokens = Tokenize("#include");
+
+        Assert.Equal(2, tokens.Length);
+        Assert.IsType<SymbolToken>(tokens[0]);
+        Assert.Equal('#', ((SymbolToken)tokens[0]).Symbol);
+        Assert.IsType<IdentToken>(tokens[1]);
+        Assert.Equal("include", tokens[1].ContentSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_Directive_WithArguments()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#define MAX 100", options);
+
+        Assert.Single(tokens);
+        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
+        Assert.Equal("define", directive.NameSpan.ToString());
+        Assert.Equal(4, directive.Arguments.Length); // space, MAX, space, 100
+    }
+
+    [Fact]
+    public void Tokenize_Directive_WithStringArgument()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#include \"header.h\"", options);
+
+        Assert.Single(tokens);
+        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
+        Assert.Equal("include", directive.NameSpan.ToString());
+        
+        var stringArg = directive.Arguments.OfType<StringToken>().SingleOrDefault();
+        Assert.NotNull(stringArg);
+        Assert.Equal("header.h", stringArg.Value.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_Directive_EndsAtNewline()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#define X\nint main", options);
+
+        Assert.Equal(5, tokens.Length);
+        Assert.IsType<DirectiveToken>(tokens[0]);
+        Assert.IsType<WhitespaceToken>(tokens[1]); // newline
+        Assert.IsType<IdentToken>(tokens[2]); // int
+        Assert.IsType<WhitespaceToken>(tokens[3]); // space
+        Assert.IsType<IdentToken>(tokens[4]); // main
+    }
+
+    [Fact]
+    public void Tokenize_Directive_MultipleDirectives()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#include\n#define", options);
+
+        var directives = tokens.OfType<DirectiveToken>().ToList();
+        Assert.Equal(2, directives.Count);
+        Assert.Equal("include", directives[0].NameSpan.ToString());
+        Assert.Equal("define", directives[1].NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_Directive_WithWhitespaceBetweenHashAndName()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("#  include", options);
+
+        Assert.Single(tokens);
+        var directive = Assert.IsType<DirectiveToken>(tokens[0]);
+        Assert.Equal("include", directive.NameSpan.ToString());
+    }
+
+    [Fact]
+    public void Tokenize_HashNotFollowedByIdent_ReturnsSymbol()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("# 123", options);
+
+        // # not followed by identifier, should be symbol
+        Assert.IsType<SymbolToken>(tokens[0]);
+        Assert.Equal('#', ((SymbolToken)tokens[0]).Symbol);
+    }
+
+    [Fact]
+    public void Tokenize_DirectivePosition_IsCorrect()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        var tokens = Tokenize("abc #define xyz", options);
+
+        var directive = tokens.OfType<DirectiveToken>().Single();
+        Assert.Equal(4, directive.Position); // 0-indexed position after "abc "
+    }
+
+    [Fact]
+    public void Tokenize_DirectiveInBlock_Works()
+    {
+        var options = TokenizerOptions.Default.WithDirectives();
+        // Directive needs a newline to terminate, otherwise it consumes the closing brace
+        var tokens = Tokenize("{#define\n}", options);
+
+        Assert.Single(tokens);
+        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var directive = block.Children.OfType<DirectiveToken>().SingleOrDefault();
+        Assert.NotNull(directive);
+        Assert.Equal("define", directive.NameSpan.ToString());
+    }
+
+    #endregion
+
+    #region Combined Operator and Directive Tests
+
+    [Fact]
+    public void Tokenize_OperatorsAndDirectives_Combined()
+    {
+        var options = TokenizerOptions.Default
+            .WithDirectives()
+            .WithOperators(CommonOperators.CFamily);
+        var tokens = Tokenize("#define EQ ==\na == b", options);
+
+        var directive = tokens.OfType<DirectiveToken>().Single();
+        Assert.Equal("define", directive.NameSpan.ToString());
+
+        // One operator in directive args (nested), one in the expression (top-level)
+        var topLevelOperators = tokens.OfType<OperatorToken>().ToList();
+        Assert.Single(topLevelOperators);
+        Assert.Equal("==", topLevelOperators[0].Operator);
+
+        // Check directive has operator in its arguments
+        var directiveOperators = directive.Arguments.OfType<OperatorToken>().ToList();
+        Assert.Single(directiveOperators);
+        Assert.Equal("==", directiveOperators[0].Operator);
+    }
+
+    #endregion
 }

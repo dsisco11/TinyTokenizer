@@ -18,7 +18,7 @@ public sealed class Lexer
     /// Used for fast rejection before the switch in ClassifySingleChar.
     /// </summary>
     private static readonly SearchValues<char> SingleCharTokens =
-        SearchValues.Create("{}[]()'\"\\/.*");
+        SearchValues.Create("{}[]()'\"\\/.*#@=+-<>|&%^~?!:,;");
 
     /// <summary>
     /// All Unicode whitespace characters excluding CR and LF.
@@ -251,6 +251,23 @@ public sealed class Lexer
             '/' => SimpleTokenType.Slash,
             '*' => SimpleTokenType.Asterisk,
             '.' => SimpleTokenType.Dot,
+            '#' => SimpleTokenType.Hash,
+            '@' => SimpleTokenType.At,
+            '=' => SimpleTokenType.Equals,
+            '+' => SimpleTokenType.Plus,
+            '-' => SimpleTokenType.Minus,
+            '<' => SimpleTokenType.LessThan,
+            '>' => SimpleTokenType.GreaterThan,
+            '|' => SimpleTokenType.Pipe,
+            '&' => SimpleTokenType.Ampersand,
+            '%' => SimpleTokenType.Percent,
+            '^' => SimpleTokenType.Caret,
+            '~' => SimpleTokenType.Tilde,
+            '?' => SimpleTokenType.Question,
+            '!' => SimpleTokenType.Exclamation,
+            ':' => SimpleTokenType.Colon,
+            ',' => SimpleTokenType.Comma,
+            ';' => SimpleTokenType.Semicolon,
             _ => null
         };
     }

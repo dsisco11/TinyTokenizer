@@ -69,5 +69,16 @@ public enum TokenType
     /// <summary>
     /// An error token indicating a parsing failure.
     /// </summary>
-    Error
+    Error,
+
+    /// <summary>
+    /// An operator such as ==, !=, &amp;&amp;, ||, etc.
+    /// Configured via <see cref="TokenizerOptions.Operators"/>.
+    /// </summary>
+    Operator,
+
+    /// <summary>
+    /// A preprocessor directive starting with # (e.g., #include, #define).
+    /// </summary>
+    Directive
 }

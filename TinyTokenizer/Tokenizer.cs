@@ -13,6 +13,7 @@ public ref struct Tokenizer
     private readonly ReadOnlyMemory<char> _source;
     private readonly ReadOnlySpan<char> _span;
     private readonly TokenizerOptions _options;
+    private readonly ImmutableArray<string> _sortedOperators;
     private int _position;
 
     #endregion
@@ -30,6 +31,10 @@ public ref struct Tokenizer
         _span = source.Span;
         _options = options ?? TokenizerOptions.Default;
         _position = 0;
+        // Sort operators by length descending for greedy matching (longest first)
+        _sortedOperators = _options.Operators
+            .OrderByDescending(op => op.Length)
+            .ToImmutableArray();
     }
 
     #endregion
@@ -107,6 +112,25 @@ public ref struct Tokenizer
             if (char.IsDigit(current) || (current == '.' && _position + 1 < _span.Length && char.IsDigit(_span[_position + 1])))
             {
                 tokens.Add(ParseNumeric());
+                continue;
+            }
+
+            // Check for directive (#identifier)
+            if (current == '#' && _options.EnableDirectives)
+            {
+                var directive = TryParseDirective();
+                if (directive != null)
+                {
+                    tokens.Add(directive);
+                    continue;
+                }
+            }
+
+            // Check for operator (multi-character sequence like ==, !=, &&, ||)
+            var operatorToken = TryParseOperator();
+            if (operatorToken != null)
+            {
+                tokens.Add(operatorToken);
                 continue;
             }
 
@@ -411,6 +435,149 @@ public ref struct Tokenizer
         }
 
         return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine, start);
+    }
+
+    /// <summary>
+    /// Tries to parse an operator at the current position.
+    /// Uses greedy matching (longest operator first).
+    /// </summary>
+    /// <returns>An <see cref="OperatorToken"/> if an operator is matched, null otherwise.</returns>
+    private OperatorToken? TryParseOperator()
+    {
+        if (_sortedOperators.IsEmpty)
+            return null;
+
+        var remaining = _span[_position..];
+
+        // Try to match operators, longest first (greedy)
+        foreach (var op in _sortedOperators)
+        {
+            if (remaining.Length >= op.Length && remaining[..op.Length].SequenceEqual(op.AsSpan()))
+            {
+                var start = _position;
+                _position += op.Length;
+                return new OperatorToken(_source.Slice(start, op.Length), start);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Tries to parse a directive at the current position.
+    /// A directive starts with # followed by optional whitespace and an identifier.
+    /// </summary>
+    /// <returns>A <see cref="DirectiveToken"/> if a directive is matched, null otherwise.</returns>
+    private DirectiveToken? TryParseDirective()
+    {
+        if (_position >= _span.Length || _span[_position] != '#')
+            return null;
+
+        int startPosition = _position;
+        int scanPos = _position + 1;
+
+        // Skip whitespace (but not newlines)
+        while (scanPos < _span.Length && char.IsWhiteSpace(_span[scanPos]) && _span[scanPos] != '\n' && _span[scanPos] != '\r')
+        {
+            scanPos++;
+        }
+
+        // Check for identifier
+        if (scanPos >= _span.Length || !IsIdentifierStart(_span[scanPos]))
+            return null;
+
+        // This is a directive! Parse it
+        _position++; // consume #
+
+        // Skip whitespace between # and identifier
+        while (_position < _span.Length && char.IsWhiteSpace(_span[_position]) && _span[_position] != '\n' && _span[_position] != '\r')
+        {
+            _position++;
+        }
+
+        // Parse directive name (identifier)
+        int nameStart = _position;
+        while (_position < _span.Length && IsIdentifierChar(_span[_position]))
+        {
+            _position++;
+        }
+        var directiveName = _source.Slice(nameStart, _position - nameStart);
+
+        // Parse rest of line as argument tokens
+        var arguments = ImmutableArray.CreateBuilder<Token>();
+        while (_position < _span.Length && _span[_position] != '\n' && _span[_position] != '\r')
+        {
+            char current = _span[_position];
+
+            // Check for string literal
+            if (current == '"' || current == '\'')
+            {
+                arguments.Add(ParseString(current));
+                continue;
+            }
+
+            // Check for numeric literal
+            if (char.IsDigit(current) || (current == '.' && _position + 1 < _span.Length && char.IsDigit(_span[_position + 1])))
+            {
+                arguments.Add(ParseNumeric());
+                continue;
+            }
+
+            // Check for operator
+            var operatorToken = TryParseOperator();
+            if (operatorToken != null)
+            {
+                arguments.Add(operatorToken);
+                continue;
+            }
+
+            // Check for symbol (including delimiters as symbols in directive context)
+            if (_options.Symbols.Contains(current) || TokenizerCore.IsOpeningDelimiter(current) || TokenizerCore.IsClosingDelimiter(current))
+            {
+                arguments.Add(new SymbolToken(_source.Slice(_position, 1), _position));
+                _position++;
+                continue;
+            }
+
+            // Check for whitespace
+            if (char.IsWhiteSpace(current))
+            {
+                arguments.Add(ParseWhitespace());
+                continue;
+            }
+
+            // Otherwise, it's text (identifier)
+            var textToken = ParseText();
+            if (textToken.Content.Length > 0)
+            {
+                arguments.Add(textToken);
+            }
+            else
+            {
+                // Fallback: consume single character as symbol to prevent infinite loop
+                arguments.Add(new SymbolToken(_source.Slice(_position, 1), _position));
+                _position++;
+            }
+        }
+
+        var fullContent = _source.Slice(startPosition, _position - startPosition);
+        return new DirectiveToken(fullContent, directiveName, arguments.ToImmutable(), startPosition);
+    }
+
+    /// <summary>
+    /// Determines if a character can start an identifier.
+    /// </summary>
+    private static bool IsIdentifierStart(char c)
+    {
+        return char.IsLetter(c) || c == '_';
+    }
+
+    /// <summary>
+    /// Determines if a character can be part of an identifier.
+    /// </summary>
+    private static bool IsIdentifierChar(char c)
+    {
+        return char.IsLetterOrDigit(c) || c == '_';
     }
 
     #endregion

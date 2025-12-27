@@ -98,6 +98,92 @@ public enum SimpleTokenType
     Asterisk,
 
     /// <summary>
+    /// Hash/pound character: #
+    /// Used for directive detection in Level 2.
+    /// </summary>
+    Hash,
+
+    /// <summary>
+    /// At sign: @
+    /// </summary>
+    At,
+
+    /// <summary>
+    /// Equals sign: =
+    /// </summary>
+    Equals,
+
+    /// <summary>
+    /// Plus sign: +
+    /// </summary>
+    Plus,
+
+    /// <summary>
+    /// Minus/hyphen: -
+    /// </summary>
+    Minus,
+
+    /// <summary>
+    /// Less than: &lt;
+    /// </summary>
+    LessThan,
+
+    /// <summary>
+    /// Greater than: &gt;
+    /// </summary>
+    GreaterThan,
+
+    /// <summary>
+    /// Pipe/vertical bar: |
+    /// </summary>
+    Pipe,
+
+    /// <summary>
+    /// Ampersand: &amp;
+    /// </summary>
+    Ampersand,
+
+    /// <summary>
+    /// Percent sign: %
+    /// </summary>
+    Percent,
+
+    /// <summary>
+    /// Caret: ^
+    /// </summary>
+    Caret,
+
+    /// <summary>
+    /// Tilde: ~
+    /// </summary>
+    Tilde,
+
+    /// <summary>
+    /// Question mark: ?
+    /// </summary>
+    Question,
+
+    /// <summary>
+    /// Exclamation mark: !
+    /// </summary>
+    Exclamation,
+
+    /// <summary>
+    /// Colon: :
+    /// </summary>
+    Colon,
+
+    /// <summary>
+    /// Comma: ,
+    /// </summary>
+    Comma,
+
+    /// <summary>
+    /// Semicolon: ;
+    /// </summary>
+    Semicolon,
+
+    /// <summary>
     /// [Obsolete] Use <see cref="Digits"/> instead.
     /// Kept for backwards compatibility.
     /// </summary>
