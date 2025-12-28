@@ -18,6 +18,7 @@ A high-performance, zero-allocation tokenizer library for .NET 8+ that parses te
 - **Configurable symbols** — Define which characters are recognized as symbol tokens
 - **Immutable tokens** — All token types are immutable record classes
 - **Error recovery** — Gracefully handles malformed input with `ErrorToken` and continues parsing
+- **Custom tokens (Level 3)** — Pattern-based matching to create composite tokens like function calls, property access, etc.
 
 ## Installation
 
@@ -84,6 +85,180 @@ var parser = new TokenParser(options);
 
 var simpleTokens = lexer.Lex(source);
 var tokens = parser.ParseToArray(simpleTokens);
+```
+
+## Custom Tokens (Level 3) — Pattern Matching
+
+TinyTokenizer supports a third level of tokenization that matches token sequences against patterns and creates composite tokens. This is useful for recognizing higher-level constructs like function calls, property access, type annotations, and more.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer;
+
+// Parse and apply patterns
+var tokens = "obj.method(x, y)".TokenizeToTokens();
+var result = tokens.ApplyPatterns(
+    TokenDefinitions.PropertyAccess(),
+    TokenDefinitions.FunctionCall());
+
+// result contains composite tokens:
+// - PropertyAccessToken (obj.method) 
+// - or FunctionCallToken depending on pattern priority
+```
+
+### Built-in Pattern Definitions
+
+```csharp
+// Function call: Ident + ParenBlock  →  func(args)
+TokenDefinitions.FunctionCall()
+
+// Property access: Ident + '.' + Ident  →  obj.property
+TokenDefinitions.PropertyAccess()
+
+// Type annotation: Ident + ':' + Ident  →  param: string
+TokenDefinitions.TypeAnnotation()
+
+// Assignment: Ident + '=' + Any  →  x = value
+TokenDefinitions.Assignment()
+
+// Array access: Ident + BracketBlock  →  arr[index]
+TokenDefinitions.ArrayAccess()
+```
+
+### Custom Pattern Definitions
+
+Create your own patterns using `TokenDefinition<T>` and the `Match` factory:
+
+```csharp
+// Define a custom composite token type
+public sealed record MethodCallToken : CompositeToken
+{
+    public ReadOnlySpan<char> ObjectSpan => MatchedTokens[0].ContentSpan;
+    public ReadOnlySpan<char> MethodSpan => MatchedTokens[2].ContentSpan;
+}
+
+// Create a pattern definition
+var methodCall = new TokenDefinition<MethodCallToken>
+{
+    Name = "MethodCall",
+    Patterns = [[Match.Ident(), Match.Symbol('.'), Match.Ident(), Match.Block('(')]],
+    SkipWhitespace = true,  // Skip whitespace between tokens (default: true)
+    Priority = 10           // Higher priority patterns match first (default: 0)
+};
+
+// Apply the pattern
+var result = tokens.ApplyPatterns(methodCall);
+```
+
+### Match Selectors
+
+The `Match` class provides fluent factory methods for creating token selectors:
+
+```csharp
+// Basic type matchers
+Match.Any()              // Matches any token
+Match.Ident()            // Any identifier
+Match.Ident("function")  // Specific identifier
+Match.Whitespace()       // Whitespace tokens
+Match.Numeric()          // Any number
+Match.Numeric(NumericType.Integer)  // Integer only
+Match.String()           // Any string literal
+Match.String('"')        // Double-quoted strings
+Match.Comment()          // Comments
+Match.TaggedIdent()      // Any tagged identifier (#define, @attr)
+Match.TaggedIdent('@')   // Specific tag prefix
+
+// Operators and symbols
+Match.Operator()         // Any operator
+Match.Operator("==")     // Specific operator
+Match.Symbol('.')        // Specific symbol character
+
+// Blocks
+Match.Block()            // Any block type
+Match.Block('(')         // Parenthesis block
+Match.Block('[')         // Bracket block
+Match.Block('{')         // Brace block
+
+// Combinators
+Match.AnyOf(Match.Ident(), Match.Numeric())  // OR logic
+
+// Content matchers
+Match.ContentStartsWith("_")
+Match.ContentEndsWith("Async")
+Match.ContentContains("test")
+Match.ContentMatches(content => content.Length > 5)
+```
+
+### Pattern Alternatives (OR Logic)
+
+Define multiple pattern alternatives that can match:
+
+```csharp
+var definition = new TokenDefinition<MyToken>
+{
+    Name = "FlexiblePattern",
+    Patterns =
+    [
+        // Alternative 1: identifier followed by paren block
+        [Match.Ident(), Match.Block('(')],
+        // Alternative 2: identifier followed by bracket block
+        [Match.Ident(), Match.Block('[')]
+    ]
+};
+```
+
+### Composite Token Properties
+
+Composite tokens provide access to their matched tokens:
+
+```csharp
+var funcCall = (FunctionCallToken)result[0];
+
+// Access specific parts computed from MatchedTokens
+funcCall.FunctionNameSpan;  // "myFunc"
+funcCall.PatternName;       // "FunctionCall"
+funcCall.Content;           // Full matched content
+funcCall.MatchedTokens;     // All tokens that were matched
+funcCall.Children;          // Alias for MatchedTokens
+```
+
+### Diagnostics
+
+Get detailed information about pattern matching:
+
+```csharp
+var report = tokens.ApplyPatternsWithDiagnostics(
+    TokenDefinitions.FunctionCall(),
+    TokenDefinitions.PropertyAccess());
+
+// Access results
+report.OutputTokens;   // The processed tokens
+report.InputTokens;    // Original input
+
+// Inspect match attempts
+foreach (var attempt in report.Attempts)
+{
+    Console.WriteLine($"{attempt.PatternName} at {attempt.TokenIndex}: {attempt.Result}");
+    
+    foreach (var selector in attempt.SelectorResults)
+    {
+        Console.WriteLine($"  {selector.SelectorDescription}: {selector.Result}");
+    }
+}
+```
+
+### Recursive Pattern Application
+
+Patterns are automatically applied recursively to block contents:
+
+```csharp
+var tokens = "outer(inner())".TokenizeToTokens();
+var result = tokens.ApplyPatterns(TokenDefinitions.FunctionCall());
+
+// The outer FunctionCallToken's children also have patterns applied
+var outerCall = (FunctionCallToken)result[0];
+// Inner function call is also recognized within the block
 ```
 
 ## TinyAst — Syntax Tree API
@@ -304,6 +479,7 @@ tree.ClearHistory();
 | `CommentToken`     | Single or multi-line comments         | `// comment`, `/* block */`    |
 | `BlockToken`       | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`      |
 | `ErrorToken`       | Parsing errors (unmatched delimiters) | `}` without opening `{`        |
+| `CompositeToken`   | Pattern-matched token sequences       | `FunctionCallToken`, `PropertyAccessToken` |
 
 ### Token Properties
 
@@ -341,6 +517,21 @@ op.Operator;  // "==" or "!=" etc. (string)
 var tagged = (TaggedIdentToken)token;
 tagged.Tag;      // '#' or '@' or '$' etc.
 tagged.NameSpan; // "define" or "Override" (ReadOnlySpan<char>)
+
+// CompositeToken (base for pattern-matched tokens)
+var composite = (CompositeToken)token;
+composite.PatternName;    // "FunctionCall" etc.
+composite.MatchedTokens;  // ImmutableArray<Token> of matched tokens
+composite.Children;       // Alias for MatchedTokens
+
+// FunctionCallToken
+var funcCall = (FunctionCallToken)token;
+funcCall.FunctionNameSpan; // The function name
+
+// PropertyAccessToken
+var propAccess = (PropertyAccessToken)token;
+propAccess.TargetSpan;    // "obj" in obj.property
+propAccess.MemberSpan;    // "property" in obj.property
 ```
 
 ## Async Tokenization
@@ -554,6 +745,11 @@ IAsyncEnumerable<Token> TokenizeStreamingAsync(this Stream, TokenizerOptions?, E
 // PipeReader extensions
 Task<ImmutableArray<Token>> TokenizeAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
 IAsyncEnumerable<Token> TokenizeStreamingAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
+
+// Pattern matching extensions on ImmutableArray<Token>
+ImmutableArray<Token> ApplyPatterns(this ImmutableArray<Token> tokens, params ITokenDefinition[] definitions)
+ImmutableArray<Token> ApplyPatterns(this ImmutableArray<Token> tokens, IEnumerable<ITokenDefinition> definitions)
+PatternMatchReport ApplyPatternsWithDiagnostics(this ImmutableArray<Token> tokens, params ITokenDefinition[] definitions)
 ```
 
 ### Tokenizer (ref struct)
@@ -594,6 +790,59 @@ public sealed class TokenParser
 }
 ```
 
+### PatternMatcher
+
+```csharp
+public sealed class PatternMatcher
+{
+    public PatternMatcher(IEnumerable<ITokenDefinition> definitions, bool enableDiagnostics = false);
+
+    public ImmutableArray<Token> Apply(ImmutableArray<Token> tokens);
+    public PatternMatchReport ApplyWithDiagnostics(ImmutableArray<Token> tokens);
+}
+```
+
+### TokenDefinition
+
+```csharp
+public sealed record TokenDefinition<T> : ITokenDefinition where T : CompositeToken, new()
+{
+    public required string Name { get; init; }
+    public required ImmutableArray<ImmutableArray<TokenSelector>> Patterns { get; init; }
+    public bool SkipWhitespace { get; init; } = true;
+    public int Priority { get; init; } = 0;
+}
+```
+
+### Match (selector factory)
+
+```csharp
+public static class Match
+{
+    public static TokenSelector Any();
+    public static TokenSelector Ident();
+    public static TokenSelector Ident(string content);
+    public static TokenSelector Whitespace();
+    public static TokenSelector Symbol(char symbol);
+    public static TokenSelector Operator();
+    public static TokenSelector Operator(string op);
+    public static TokenSelector Numeric();
+    public static TokenSelector Numeric(NumericType numericType);
+    public static TokenSelector String();
+    public static TokenSelector String(char quote);
+    public static TokenSelector Comment();
+    public static TokenSelector TaggedIdent();
+    public static TokenSelector TaggedIdent(char prefix);
+    public static TokenSelector Block();
+    public static TokenSelector Block(char opener);
+    public static TokenSelector AnyOf(params TokenSelector[] selectors);
+    public static TokenSelector ContentStartsWith(string prefix);
+    public static TokenSelector ContentEndsWith(string suffix);
+    public static TokenSelector ContentContains(string substring);
+    public static TokenSelector ContentMatches(Func<ReadOnlyMemory<char>, bool> predicate);
+}
+```
+
 ### Token (abstract record)
 
 ```csharp
@@ -619,7 +868,8 @@ public enum TokenType
     Comment,          // comments
     Error,            // parsing errors
     Operator,         // multi-character operators
-    TaggedIdent       // tag prefix + identifier
+    TaggedIdent,      // tag prefix + identifier
+    Composite         // pattern-matched token sequences
 }
 ```
 
