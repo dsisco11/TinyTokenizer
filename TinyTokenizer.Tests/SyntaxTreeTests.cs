@@ -305,4 +305,120 @@ public class SyntaxTreeTests
     }
     
     #endregion
+    
+    #region GreenLexer Direct Path
+    
+    [Fact]
+    public void GreenLexer_Parse_ProducesSameResult()
+    {
+        var source = "foo + bar";
+        
+        var lexer = new GreenLexer();
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseWithBlocks_HandlesNesting()
+    {
+        var source = "{ a + b }";
+        
+        var lexer = new GreenLexer();
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseWithComments_AttachesTrivia()
+    {
+        var source = "x // comment\ny";
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        
+        var lexer = new GreenLexer(options);
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseString_PreservesContent()
+    {
+        var source = "\"hello world\"";
+        
+        var lexer = new GreenLexer();
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+        
+        var stringLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.String);
+        Assert.NotNull(stringLeaf);
+        Assert.Equal(source, stringLeaf.Text);
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseNumeric_HandlesDecimals()
+    {
+        var source = "123.456";
+        
+        var lexer = new GreenLexer();
+        var tree = lexer.Parse(source);
+        
+        var numLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.Numeric);
+        Assert.NotNull(numLeaf);
+        Assert.Equal("123.456", numLeaf.Text);
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseOperators_RecognizesMultiChar()
+    {
+        var source = "a == b";
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        
+        var lexer = new GreenLexer(options);
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+        
+        var opLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.Operator);
+        Assert.NotNull(opLeaf);
+        Assert.Equal("==", opLeaf.Text);
+    }
+    
+    [Fact]
+    public void GreenLexer_ParseTaggedIdent_RecognizesTags()
+    {
+        var source = "#define FOO";
+        var options = TokenizerOptions.Default.WithTagPrefixes('#');
+        
+        var lexer = new GreenLexer(options);
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+        
+        var tagLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.TaggedIdent);
+        Assert.NotNull(tagLeaf);
+        Assert.Equal("#define", tagLeaf.Text);
+    }
+    
+    [Fact]
+    public void GreenLexer_RoundTrip_PreservesAllContent()
+    {
+        var source = @"function test() {
+    // comment
+    var x = 123.45;
+    return x + 1;
+}";
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithOperators(CommonOperators.CFamily);
+        
+        var lexer = new GreenLexer(options);
+        var tree = lexer.Parse(source);
+        
+        Assert.Equal(source, tree.ToFullString());
+    }
+    
+    #endregion
 }

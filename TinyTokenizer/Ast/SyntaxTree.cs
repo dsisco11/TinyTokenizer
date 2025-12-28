@@ -118,37 +118,25 @@ public class SyntaxTree
     #region Factory Methods
     
     /// <summary>
-    /// Creates a syntax tree from existing TinyTokenizer Level 2 tokens.
-    /// </summary>
-    public static SyntaxTree FromTokens(ImmutableArray<Token> tokens)
-    {
-        var greenNodes = TokenBridge.ToGreenNodes(tokens);
-        var root = new GreenList(greenNodes);
-        return new SyntaxTree(root);
-    }
-    
-    /// <summary>
     /// Creates a syntax tree by parsing source text.
+    /// Uses the optimized GreenLexer path (direct to GreenNode, no intermediate Token allocation).
     /// </summary>
     public static SyntaxTree Parse(string source, TokenizerOptions? options = null)
     {
         var opts = options ?? TokenizerOptions.Default;
-        var lexer = new Lexer(opts);
-        var parser = new TokenParser(opts);
-        var tokens = parser.ParseToArray(lexer.Lex(source));
-        return FromTokens(tokens);
+        var lexer = new GreenLexer(opts);
+        return lexer.Parse(source);
     }
     
     /// <summary>
-    /// Creates a syntax tree by parsing source text with a custom lexer.
+    /// Creates a syntax tree by parsing source text.
+    /// Uses the optimized GreenLexer path (direct to GreenNode, no intermediate Token allocation).
     /// </summary>
     public static SyntaxTree Parse(ReadOnlyMemory<char> source, TokenizerOptions? options = null)
     {
         var opts = options ?? TokenizerOptions.Default;
-        var lexer = new Lexer(opts);
-        var parser = new TokenParser(opts);
-        var tokens = parser.ParseToArray(lexer.Lex(source));
-        return FromTokens(tokens);
+        var lexer = new GreenLexer(opts);
+        return lexer.Parse(source);
     }
     
     /// <summary>
