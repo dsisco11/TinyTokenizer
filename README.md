@@ -7,6 +7,7 @@ A high-performance, zero-allocation tokenizer library for .NET 8+ that parses te
 - **Zero-allocation parsing** — Uses `ReadOnlySpan<char>` internally for fast, allocation-free text traversal
 - **SIMD-optimized** — Uses .NET 8's `SearchValues<char>` for vectorized character matching
 - **Two-level architecture** — Lexer (character classification) + TokenParser (semantic parsing)
+- **TinyAst** — Red-green tree with structural sharing, fluent queries, and undo/redo support
 - **Async streaming** — Tokenize `Stream` and `PipeReader` sources with `IAsyncEnumerable<Token>`
 - **Recursive declaration blocks** — Automatically parses nested `{}`, `[]`, and `()` blocks with child tokens
 - **String literals** — Supports single and double-quoted strings with escape sequences
@@ -83,6 +84,210 @@ var parser = new TokenParser(options);
 
 var simpleTokens = lexer.Lex(source);
 var tokens = parser.ParseToArray(simpleTokens);
+```
+
+## TinyAst — Syntax Tree API
+
+TinyTokenizer includes a syntax tree for efficient AST manipulation with fluent queries and undo/redo support.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer.Ast;
+
+// Parse source into a syntax tree
+var tree = SyntaxTree.Parse("function foo() { return 1; }");
+
+// Query nodes
+var idents = tree.Leaves.Where(l => l.Kind == NodeKind.Ident);
+
+// Fluent mutations with undo support
+tree.CreateEditor()
+    .Replace(Query.Ident.WithText("foo"), "bar")
+    .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
+    .Commit();
+
+// Undo/redo
+tree.Undo();
+tree.Redo();
+```
+
+### NodeKind Enum
+
+```csharp
+public enum NodeKind
+{
+    Ident,        // Identifiers
+    Whitespace,   // Spaces, tabs, newlines
+    Symbol,       // Single characters like , ; :
+    Operator,     // Multi-char operators like == !=
+    Numeric,      // Numbers (integer and floating-point)
+    String,       // Quoted strings
+    TaggedIdent,  // #define, @attribute, $var
+    BraceBlock,   // { }
+    BracketBlock, // [ ]
+    ParenBlock,   // ( )
+    Error,        // Parsing errors
+}
+```
+
+### Querying with NodeQuery
+
+The `Query` static class provides a fluent CSS-like selector API:
+
+```csharp
+using TinyTokenizer.Ast;
+
+// By kind
+Query.Ident                    // All identifiers
+Query.Numeric                  // All numbers
+Query.String                   // All strings
+Query.Operator                 // All operators
+
+// Blocks
+Query.BraceBlock               // All { } blocks
+Query.BracketBlock             // All [ ] blocks
+Query.ParenBlock               // All ( ) blocks
+Query.AnyBlock                 // Any block type
+
+// Filters
+Query.Ident.WithText("foo")              // Exact match
+Query.Ident.WithTextContaining("test")   // Contains
+Query.Ident.WithTextStartingWith("_")    // Prefix
+Query.Ident.Where(n => n.Width > 5)      // Custom predicate
+
+// Pseudo-selectors
+Query.Ident.First()            // First match only
+Query.Ident.Last()             // Last match only
+Query.Ident.Nth(2)             // Third match (0-indexed)
+
+// Composition
+Query.Ident | Query.Numeric    // Union (OR)
+Query.Ident & Query.Leaf       // Intersection (AND)
+```
+
+### Insertion Positions
+
+Queries resolve to insertion points with position modifiers:
+
+```csharp
+// Relative to matched node
+Query.Ident.First().Before()   // Insert before first ident
+Query.Ident.First().After()    // Insert after first ident
+
+// Inside blocks
+Query.BraceBlock.First().InnerStart()  // After opening {
+Query.BraceBlock.First().InnerEnd()    // Before closing }
+```
+
+### SyntaxEditor
+
+The `SyntaxEditor` provides batched mutations with atomic commit:
+
+```csharp
+var tree = SyntaxTree.Parse("a + b");
+
+var editor = tree.CreateEditor();
+
+// Queue multiple edits
+editor
+    .Replace(Query.Ident.WithText("a"), "x")
+    .Replace(Query.Ident.WithText("b"), "y")
+    .Insert(Query.Operator.First().Before(), "(")
+    .Insert(Query.Operator.First().After(), ")");
+
+// Apply atomically (supports undo)
+editor.Commit();
+
+// Or discard
+editor.Rollback();
+```
+
+### SyntaxEditor Methods
+
+```csharp
+public sealed class SyntaxEditor
+{
+    // Insert text at resolved positions
+    SyntaxEditor Insert(InsertionQuery query, string text);
+
+    // Remove all matched nodes
+    SyntaxEditor Remove(NodeQuery query);
+
+    // Replace matched nodes with text
+    SyntaxEditor Replace(NodeQuery query, string text);
+    SyntaxEditor Replace(NodeQuery query, Func<RedNode, string> replacer);
+
+    // Apply or discard
+    void Commit();
+    void Rollback();
+}
+```
+
+### Navigation
+
+```csharp
+var tree = SyntaxTree.Parse("{ a + b }");
+
+// Positional lookup
+var node = tree.FindNodeAt(3);      // Deepest node at position
+var leaf = tree.FindLeafAt(3);      // Leaf at position
+
+// Traversal
+foreach (var leaf in tree.Leaves)
+{
+    Console.WriteLine($"{leaf.Kind}: {leaf.Text}");
+}
+
+// From any node
+foreach (var child in node.Children) { }
+foreach (var desc in node.DescendantsAndSelf()) { }
+var parent = node.Parent;
+```
+
+### Node Properties
+
+```csharp
+// All nodes
+int position = node.Position;       // Start position in source
+int endPosition = node.EndPosition; // End position
+int width = node.Width;             // Character count
+NodeKind kind = node.Kind;
+
+// Leaf nodes
+string text = leaf.Text;            // The token text
+
+// Block nodes
+char opener = block.Opener;         // '{', '[', or '('
+char closer = block.Closer;         // '}', ']', or ')'
+int childCount = block.ChildCount;
+```
+
+### Undo/Redo
+
+The `SyntaxTree` maintains history automatically:
+
+```csharp
+var tree = SyntaxTree.Parse("original");
+
+tree.CreateEditor()
+    .Replace(Query.Ident.First(), "modified")
+    .Commit();
+
+// tree.ToFullString() == "modified"
+
+tree.Undo();
+// tree.ToFullString() == "original"
+
+tree.Redo();
+// tree.ToFullString() == "modified"
+
+// Check availability
+if (tree.CanUndo) { }
+if (tree.CanRedo) { }
+
+// Clear history
+tree.ClearHistory();
 ```
 
 ## Token Types
