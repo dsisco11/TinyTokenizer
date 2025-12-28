@@ -97,6 +97,32 @@ public static class TokenizerCore
         return OpenToTokenType.TryGetValue(opener, out tokenType);
     }
 
+    /// <summary>
+    /// Gets the SimpleTokenType for an opening delimiter character.
+    /// </summary>
+    /// <param name="opener">The opening delimiter character.</param>
+    /// <returns>The corresponding SimpleTokenType.</returns>
+    public static SimpleTokenType GetOpeningDelimiterType(char opener) => opener switch
+    {
+        '{' => SimpleTokenType.OpenBrace,
+        '[' => SimpleTokenType.OpenBracket,
+        '(' => SimpleTokenType.OpenParen,
+        _ => throw new ArgumentException($"Invalid opening delimiter: '{opener}'", nameof(opener))
+    };
+
+    /// <summary>
+    /// Gets the SimpleTokenType for a closing delimiter character.
+    /// </summary>
+    /// <param name="closer">The closing delimiter character.</param>
+    /// <returns>The corresponding SimpleTokenType.</returns>
+    public static SimpleTokenType GetClosingDelimiterType(char closer) => closer switch
+    {
+        '}' => SimpleTokenType.CloseBrace,
+        ']' => SimpleTokenType.CloseBracket,
+        ')' => SimpleTokenType.CloseParen,
+        _ => throw new ArgumentException($"Invalid closing delimiter: '{closer}'", nameof(closer))
+    };
+
     #endregion
 
     #region Pattern Matching Helpers

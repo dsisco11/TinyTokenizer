@@ -218,14 +218,14 @@ public class LexerParserTests
     #region Block Tokenization Tests
 
     [Fact]
-    public void TokenParser_SimpleBraceBlock_ReturnsBlockToken()
+    public void TokenParser_SimpleBraceBlock_ReturnsSimpleBlock()
     {
         var tokens = Tokenize("{content}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
-        Assert.Equal("{content}", block.FullContentSpan.ToString());
+        Assert.Equal("{content}", block.ContentSpan.ToString());
         Assert.Equal("content", block.InnerContentSpan.ToString());
         Assert.Equal(0, block.Position);
     }
@@ -236,11 +236,11 @@ public class LexerParserTests
         var tokens = Tokenize("{[()]}");
 
         Assert.Single(tokens);
-        var braceBlock = Assert.IsType<BlockToken>(tokens[0]);
+        var braceBlock = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, braceBlock.Type);
         Assert.Single(braceBlock.Children);
 
-        var bracketBlock = Assert.IsType<BlockToken>(braceBlock.Children[0]);
+        var bracketBlock = Assert.IsType<SimpleBlock>(braceBlock.Children[0]);
         Assert.Equal(TokenType.BracketBlock, bracketBlock.Type);
     }
 
@@ -250,7 +250,7 @@ public class LexerParserTests
         var tokens = Tokenize("{hello world}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(3, block.Children.Length);
     }
 

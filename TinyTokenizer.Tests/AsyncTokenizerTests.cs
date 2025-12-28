@@ -93,14 +93,14 @@ public class AsyncTokenizerTests
     #region Block Tokenization Tests
 
     [Fact]
-    public async Task TokenizeAsync_SimpleBraceBlock_ReturnsBlockToken()
+    public async Task TokenizeAsync_SimpleBraceBlock_ReturnsSimpleBlock()
     {
         var tokens = await TokenizeStringAsync("{content}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
-        Assert.Equal("{content}", block.FullContentSpan.ToString());
+        Assert.Equal("{content}", block.ContentSpan.ToString());
     }
 
     [Fact]
@@ -109,13 +109,13 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync("{[()]}");
 
         Assert.Single(tokens);
-        var braceBlock = Assert.IsType<BlockToken>(tokens[0]);
+        var braceBlock = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Single(braceBlock.Children);
 
-        var bracketBlock = Assert.IsType<BlockToken>(braceBlock.Children[0]);
+        var bracketBlock = Assert.IsType<SimpleBlock>(braceBlock.Children[0]);
         Assert.Single(bracketBlock.Children);
 
-        var parenBlock = Assert.IsType<BlockToken>(bracketBlock.Children[0]);
+        var parenBlock = Assert.IsType<SimpleBlock>(bracketBlock.Children[0]);
         Assert.Empty(parenBlock.Children);
     }
 
@@ -125,7 +125,7 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync("{hello world}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(3, block.Children.Length);
     }
 
@@ -238,8 +238,8 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeChunkedAsync("{content}", chunkSize: 4);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
-        Assert.Equal("{content}", block.FullContentSpan.ToString());
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
+        Assert.Equal("{content}", block.ContentSpan.ToString());
         Assert.Equal("content", block.InnerContentSpan.ToString());
     }
 
@@ -261,11 +261,11 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeChunkedAsync("{[()]}", chunkSize: 2);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
         Assert.Single(block.Children);
         
-        var innerBlock = Assert.IsType<BlockToken>(block.Children[0]);
+        var innerBlock = Assert.IsType<SimpleBlock>(block.Children[0]);
         Assert.Equal(TokenType.BracketBlock, innerBlock.Type);
     }
 
@@ -314,10 +314,10 @@ public class AsyncTokenizerTests
         Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "func");
         
         // Find the blocks
-        var parenBlock = tokens.OfType<BlockToken>().Single(b => b.Type == TokenType.ParenthesisBlock);
+        var parenBlock = tokens.OfType<SimpleBlock>().Single(b => b.Type == TokenType.ParenthesisBlock);
         Assert.Equal("(a, b)", parenBlock.ContentSpan.ToString());
         
-        var braceBlock = tokens.OfType<BlockToken>().Single(b => b.Type == TokenType.BraceBlock);
+        var braceBlock = tokens.OfType<SimpleBlock>().Single(b => b.Type == TokenType.BraceBlock);
         Assert.Equal("{ x = 1; }", braceBlock.ContentSpan.ToString());
     }
 
@@ -498,8 +498,8 @@ public class AsyncTokenizerTests
 
         Assert.True(tokens.Count > 5, $"Expected more than 5 tokens, got {tokens.Count}");
         Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "function");
-        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.ParenthesisBlock });
-        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.BraceBlock });
+        Assert.Contains(tokens, t => t is SimpleBlock { Type: TokenType.ParenthesisBlock });
+        Assert.Contains(tokens, t => t is SimpleBlock { Type: TokenType.BraceBlock });
     }
 
     [Fact]
@@ -511,8 +511,8 @@ public class AsyncTokenizerTests
 
         Assert.True(tokens.Count > 5, $"Expected more than 5 tokens, got {tokens.Count}");
         Assert.Contains(tokens, t => t is IdentToken txt && txt.ContentSpan.ToString() == "function");
-        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.ParenthesisBlock });
-        Assert.Contains(tokens, t => t is BlockToken { Type: TokenType.BraceBlock });
+        Assert.Contains(tokens, t => t is SimpleBlock { Type: TokenType.ParenthesisBlock });
+        Assert.Contains(tokens, t => t is SimpleBlock { Type: TokenType.BraceBlock });
     }
 
     [Fact]
@@ -523,7 +523,7 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeStringAsync(json);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
 
         // Should have strings for keys and values
@@ -538,7 +538,7 @@ public class AsyncTokenizerTests
         var tokens = await TokenizeChunkedAsync(json, chunkSize: 4);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
 
         // Should have strings for keys and values

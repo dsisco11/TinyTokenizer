@@ -75,10 +75,12 @@ public sealed class TokenParser
         if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
-            yield return new ErrorToken(
-                token.Content,
-                $"Unexpected closing delimiter '{token.FirstChar}'",
-                token.Position);
+            yield return new ErrorToken
+            {
+                Content = token.Content,
+                ErrorMessage = $"Unexpected closing delimiter '{token.FirstChar}'",
+                Position = token.Position
+            };
             yield break;
         }
 
@@ -125,7 +127,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -151,7 +153,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -177,7 +179,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -202,7 +204,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -216,7 +218,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -224,7 +226,7 @@ public sealed class TokenParser
         if (token.Type == SimpleTokenType.Backslash)
         {
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -255,7 +257,7 @@ public sealed class TokenParser
             }
             // Not an operator - emit as symbol
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -263,11 +265,11 @@ public sealed class TokenParser
         reader.Advance();
         yield return token.Type switch
         {
-            SimpleTokenType.Ident => new IdentToken(token.Content, token.Position),
-            SimpleTokenType.Whitespace => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Newline => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
-            _ => new IdentToken(token.Content, token.Position)
+            SimpleTokenType.Ident => new IdentToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Whitespace => new WhitespaceToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Newline => new WhitespaceToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Symbol => new SymbolToken { Content = token.Content, Position = token.Position },
+            _ => new IdentToken { Content = token.Content, Position = token.Position }
         };
     }
 
@@ -383,7 +385,7 @@ public sealed class TokenParser
                 }
 
                 var content = contentBuilder.ToArray().AsMemory();
-                return new OperatorToken(content, startPosition);
+                return new OperatorToken { Content = content, Position = startPosition };
             }
         }
 
@@ -416,7 +418,7 @@ public sealed class TokenParser
         reader.Advance();
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new TaggedIdentToken(content, tagChar, identName, startPosition);
+        return new TaggedIdentToken { Content = content, Tag = tagChar, Name = identName, Position = startPosition };
     }
 
     private Token ParseBlock(TokenReader reader)
@@ -424,7 +426,6 @@ public sealed class TokenParser
         reader.TryPeek(out var openToken);
         reader.Advance();
 
-        var opener = openToken.FirstChar;
         var closerType = GetMatchingCloser(openToken.Type);
         var blockType = GetBlockTokenType(openToken.Type);
         var startPosition = openToken.Position;
@@ -452,16 +453,17 @@ public sealed class TokenParser
 
                 var fullContent = contentBuilder.ToArray().AsMemory();
                 var innerMemory = innerContent.AsMemory();
-                var closer = token.FirstChar;
 
-                return new BlockToken(
-                    fullContent,
-                    innerMemory,
-                    children.ToImmutable(),
-                    blockType,
-                    opener,
-                    closer,
-                    startPosition);
+                return new SimpleBlock
+                {
+                    Content = fullContent,
+                    InnerContent = innerMemory,
+                    Children = children.ToImmutable(),
+                    BlockType = blockType,
+                    OpeningDelimiter = openToken,
+                    ClosingDelimiter = token,
+                    Position = startPosition
+                };
             }
 
             // Parse child token
@@ -473,10 +475,12 @@ public sealed class TokenParser
         }
 
         // Unclosed block
-        return new ErrorToken(
-            openToken.Content,
-            $"Unclosed block starting with '{opener}'",
-            startPosition);
+        return new ErrorToken
+        {
+            Content = openToken.Content,
+            ErrorMessage = $"Unclosed block starting with '{openToken.FirstChar}'",
+            Position = startPosition
+        };
     }
 
     private Token ParseString(TokenReader reader)
@@ -520,7 +524,7 @@ public sealed class TokenParser
                 reader.Advance();
 
                 var content = contentBuilder.ToArray().AsMemory();
-                return new StringToken(content, quote, startPosition);
+                return new StringToken { Content = content, Quote = quote, Position = startPosition };
             }
 
             // Regular content
@@ -529,7 +533,7 @@ public sealed class TokenParser
         }
 
         // Unterminated string - emit opening quote as symbol
-        return new SymbolToken(quoteToken.Content, startPosition);
+        return new SymbolToken { Content = quoteToken.Content, Position = startPosition };
     }
 
     private Token? TryParseComment(TokenReader reader, SimpleToken slashToken, SimpleToken nextToken)
@@ -584,7 +588,7 @@ public sealed class TokenParser
         }
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new CommentToken(content, IsMultiLine: false, startPosition);
+        return new CommentToken { Content = content, IsMultiLine = false, Position = startPosition };
     }
 
     private Token ParseMultiLineComment(TokenReader reader)
@@ -621,7 +625,7 @@ public sealed class TokenParser
                     reader.Advance(); // /
 
                     var content = contentBuilder.ToArray().AsMemory();
-                    return new CommentToken(content, IsMultiLine: true, startPosition);
+                    return new CommentToken { Content = content, IsMultiLine = true, Position = startPosition };
                 }
             }
 
@@ -631,10 +635,12 @@ public sealed class TokenParser
 
         // Unterminated comment
         var errorContent = contentBuilder.ToArray().AsMemory();
-        return new ErrorToken(
-            errorContent,
-            "Unterminated multi-line comment",
-            startPosition);
+        return new ErrorToken
+        {
+            Content = errorContent,
+            ErrorMessage = "Unterminated multi-line comment",
+            Position = startPosition
+        };
     }
 
     /// <summary>
@@ -671,7 +677,7 @@ public sealed class TokenParser
 
         var content = contentBuilder.ToArray().AsMemory();
         var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
-        return new NumericToken(content, numericType, startPosition);
+        return new NumericToken { Content = content, NumericType = numericType, Position = startPosition };
     }
 
     /// <summary>
@@ -696,7 +702,7 @@ public sealed class TokenParser
         }
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new NumericToken(content, NumericType.FloatingPoint, startPosition);
+        return new NumericToken { Content = content, NumericType = NumericType.FloatingPoint, Position = startPosition };
     }
 
     #endregion

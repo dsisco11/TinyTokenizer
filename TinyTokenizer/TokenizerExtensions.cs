@@ -23,7 +23,7 @@ public static class TokenizerExtensions
                 return true;
             }
 
-            if (token is BlockToken block && block.Children.HasErrors())
+            if (token is SimpleBlock block && block.Children.HasErrors())
             {
                 return true;
             }
@@ -46,7 +46,7 @@ public static class TokenizerExtensions
                 yield return error;
             }
 
-            if (token is BlockToken block)
+            if (token is SimpleBlock block)
             {
                 foreach (var nestedError in block.Children.GetErrors())
                 {
@@ -71,7 +71,7 @@ public static class TokenizerExtensions
                 yield return typed;
             }
 
-            if (token is BlockToken block)
+            if (token is SimpleBlock block)
             {
                 foreach (var nested in block.Children.OfTokenType<T>())
                 {
@@ -79,6 +79,71 @@ public static class TokenizerExtensions
                 }
             }
         }
+    }
+
+    #endregion
+
+    #region Pattern Matching Extensions
+
+    /// <summary>
+    /// Applies pattern matching to the token array, returning a new array with matched sequences
+    /// replaced by composite tokens.
+    /// </summary>
+    /// <param name="tokens">The input tokens to process.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>A new token array with patterns applied.</returns>
+    public static ImmutableArray<Token> ApplyPatterns(
+        this ImmutableArray<Token> tokens, 
+        params ITokenDefinition[] definitions)
+    {
+        if (definitions.Length == 0)
+            return tokens;
+
+        var matcher = new PatternMatcher(definitions);
+        return matcher.Apply(tokens);
+    }
+
+    /// <summary>
+    /// Applies pattern matching to the token array, returning a new array with matched sequences
+    /// replaced by composite tokens.
+    /// </summary>
+    /// <param name="tokens">The input tokens to process.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>A new token array with patterns applied.</returns>
+    public static ImmutableArray<Token> ApplyPatterns(
+        this ImmutableArray<Token> tokens, 
+        IEnumerable<ITokenDefinition> definitions)
+    {
+        var matcher = new PatternMatcher(definitions);
+        return matcher.Apply(tokens);
+    }
+
+    /// <summary>
+    /// Applies pattern matching to the token array and returns a diagnostic report.
+    /// </summary>
+    /// <param name="tokens">The input tokens to process.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>A report containing the output tokens and diagnostic information.</returns>
+    public static PatternMatchReport ApplyPatternsWithDiagnostics(
+        this ImmutableArray<Token> tokens, 
+        params ITokenDefinition[] definitions)
+    {
+        var matcher = new PatternMatcher(definitions, enableDiagnostics: true);
+        return matcher.ApplyWithDiagnostics(tokens);
+    }
+
+    /// <summary>
+    /// Applies pattern matching to the token array and returns a diagnostic report.
+    /// </summary>
+    /// <param name="tokens">The input tokens to process.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>A report containing the output tokens and diagnostic information.</returns>
+    public static PatternMatchReport ApplyPatternsWithDiagnostics(
+        this ImmutableArray<Token> tokens, 
+        IEnumerable<ITokenDefinition> definitions)
+    {
+        var matcher = new PatternMatcher(definitions, enableDiagnostics: true);
+        return matcher.ApplyWithDiagnostics(tokens);
     }
 
     #endregion
