@@ -1520,4 +1520,205 @@ public class SyntaxTreeTests
     }
     
     #endregion
+    
+    #region Additional NodeQuery Coverage
+    
+    [Fact]
+    public void KindNodeQuery_Matches_ReturnsCorrectly()
+    {
+        var tree = SyntaxTree.Parse("foo 123");
+        var identQuery = Q.Kind(NodeKind.Ident);
+        var numQuery = Q.Kind(NodeKind.Numeric);
+        
+        var identNode = identQuery.Select(tree).First();
+        var numNode = numQuery.Select(tree).First();
+        
+        Assert.True(identQuery.Matches(identNode));
+        Assert.False(identQuery.Matches(numNode));
+        Assert.True(numQuery.Matches(numNode));
+    }
+    
+    [Fact]
+    public void BlockNodeQuery_Matches_ReturnsCorrectly()
+    {
+        var tree = SyntaxTree.Parse("{a} [b]");
+        var braceQuery = Q.BraceBlock;
+        var bracketQuery = Q.BracketBlock;
+        
+        var braceBlock = braceQuery.Select(tree).First();
+        var bracketBlock = bracketQuery.Select(tree).First();
+        
+        Assert.True(braceQuery.Matches(braceBlock));
+        Assert.False(braceQuery.Matches(bracketBlock));
+    }
+    
+    [Fact]
+    public void AnyNodeQuery_Matches_AlwaysTrue()
+    {
+        var tree = SyntaxTree.Parse("foo {bar}");
+        var anyQuery = Q.Any;
+        
+        foreach (var node in tree.Root.DescendantsAndSelf())
+        {
+            Assert.True(anyQuery.Matches(node));
+        }
+    }
+    
+    [Fact]
+    public void LeafNodeQuery_Matches_OnlyLeaves()
+    {
+        var tree = SyntaxTree.Parse("{foo}");
+        var leafQuery = Q.Leaf;
+        
+        var block = Q.BraceBlock.First().Select(tree).First();
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        Assert.False(leafQuery.Matches(block));
+        Assert.True(leafQuery.Matches(ident));
+    }
+    
+    [Fact]
+    public void FirstNodeQuery_Matches_DelegatesToInner()
+    {
+        var tree = SyntaxTree.Parse("a 123");
+        var firstQuery = Q.Ident.First();
+        
+        var identNode = Q.Ident.Select(tree).First();
+        var numNode = Q.Numeric.Select(tree).First();
+        
+        Assert.True(firstQuery.Matches(identNode));
+        Assert.False(firstQuery.Matches(numNode));
+    }
+    
+    [Fact]
+    public void LastNodeQuery_Matches_DelegatesToInner()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var lastQuery = Q.Ident.Last();
+        
+        var identNode = Q.Ident.Select(tree).First();
+        Assert.True(lastQuery.Matches(identNode));
+    }
+    
+    [Fact]
+    public void NthNodeQuery_Matches_DelegatesToInner()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var nthQuery = Q.Ident.Nth(1);
+        
+        var identNode = Q.Ident.Select(tree).First();
+        Assert.True(nthQuery.Matches(identNode));
+    }
+    
+    [Fact]
+    public void PredicateNodeQuery_Matches_CombinesInnerAndPredicate()
+    {
+        var tree = SyntaxTree.Parse("a bb ccc");
+        var query = Q.Ident.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2);
+        
+        var shortIdent = Q.Ident.Select(tree).First();
+        var longIdent = Q.Ident.Select(tree).Skip(1).First();
+        
+        Assert.False(query.Matches(shortIdent)); // "a" is too short
+        Assert.True(query.Matches(longIdent));   // "bb" is long enough
+    }
+    
+    [Fact]
+    public void UnionNodeQuery_Matches_MatchesEither()
+    {
+        var tree = SyntaxTree.Parse("foo 123 {}");
+        var unionQuery = Q.Ident | Q.Numeric;
+        
+        var identNode = Q.Ident.Select(tree).First();
+        var numNode = Q.Numeric.Select(tree).First();
+        var blockNode = Q.BraceBlock.Select(tree).First();
+        
+        Assert.True(unionQuery.Matches(identNode));
+        Assert.True(unionQuery.Matches(numNode));
+        Assert.False(unionQuery.Matches(blockNode));
+    }
+    
+    [Fact]
+    public void IntersectionNodeQuery_Matches_MatchesBoth()
+    {
+        var tree = SyntaxTree.Parse("foo bar");
+        var intersectionQuery = Q.Ident & Q.Ident.WithText("foo");
+        
+        var fooNode = Q.Ident.WithText("foo").Select(tree).First();
+        var barNode = Q.Ident.WithText("bar").Select(tree).First();
+        
+        Assert.True(intersectionQuery.Matches(fooNode));
+        Assert.False(intersectionQuery.Matches(barNode));
+    }
+    
+    [Fact]
+    public void Query_Select_FromRedNode_WorksCorrectly()
+    {
+        var tree = SyntaxTree.Parse("{a b c}");
+        var block = Q.BraceBlock.First().Select(tree).First();
+        
+        // Select idents from the block (not the whole tree)
+        var identsInBlock = Q.Ident.Select(block).ToList();
+        
+        Assert.Equal(3, identsInBlock.Count);
+    }
+    
+    [Fact]
+    public void Query_Last_NoMatches_ReturnsEmpty()
+    {
+        var tree = SyntaxTree.Parse("123");
+        
+        var result = Q.Ident.Last().Select(tree).ToList();
+        
+        Assert.Empty(result);
+    }
+    
+    [Fact]
+    public void Query_Nth_OutOfRange_ReturnsEmpty()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        var result = Q.Ident.Nth(100).Select(tree).ToList();
+        
+        Assert.Empty(result);
+    }
+    
+    [Fact]
+    public void BlockQuery_First_PreservesBlockMethods()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        
+        // First() on BlockNodeQuery should return BlockNodeQuery with InnerStart/InnerEnd
+        var firstBlockQuery = Q.BraceBlock.First();
+        var insertQuery = firstBlockQuery.InnerStart();
+        
+        var positions = insertQuery.ResolvePositions(tree).ToList();
+        Assert.Single(positions);
+    }
+    
+    [Fact]
+    public void BlockQuery_Last_PreservesBlockMethods()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        
+        var lastBlockQuery = Q.BraceBlock.Last();
+        var insertQuery = lastBlockQuery.InnerEnd();
+        
+        var positions = insertQuery.ResolvePositions(tree).ToList();
+        Assert.Single(positions);
+    }
+    
+    [Fact]
+    public void BlockQuery_Nth_PreservesBlockMethods()
+    {
+        var tree = SyntaxTree.Parse("{a} {b} {c}");
+        
+        var nthBlockQuery = Q.BraceBlock.Nth(1);
+        var insertQuery = nthBlockQuery.InnerStart();
+        
+        var positions = insertQuery.ResolvePositions(tree).ToList();
+        Assert.Single(positions);
+    }
+    
+    #endregion
 }
