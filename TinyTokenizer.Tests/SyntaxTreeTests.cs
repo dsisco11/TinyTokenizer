@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using TinyTokenizer.Ast;
 using Xunit;
+using Q = TinyTokenizer.Ast.Query;
 
 namespace TinyTokenizer.Tests;
 
@@ -418,6 +419,178 @@ public class SyntaxTreeTests
         var tree = lexer.Parse(source);
         
         Assert.Equal(source, tree.ToFullString());
+    }
+    
+    #endregion
+    
+    #region SyntaxEditor and Query
+    
+    [Fact]
+    public void Query_Ident_SelectsIdentifiers()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        var idents = Q.Ident.Select(tree).ToList();
+        
+        Assert.Equal(3, idents.Count);
+    }
+    
+    [Fact]
+    public void Query_WithText_FiltersExactMatch()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo");
+        
+        var foos = Q.Ident.WithText("foo").Select(tree).ToList();
+        
+        Assert.Equal(2, foos.Count);
+    }
+    
+    [Fact]
+    public void Query_First_SelectsOnlyFirst()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        
+        var first = Q.Ident.First().Select(tree).ToList();
+        
+        Assert.Single(first);
+        Assert.Equal("a", ((RedLeaf)first[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_Last_SelectsOnlyLast()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        
+        var last = Q.Ident.Last().Select(tree).ToList();
+        
+        Assert.Single(last);
+        Assert.Equal("c", ((RedLeaf)last[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_BraceBlock_SelectsBlocks()
+    {
+        var tree = SyntaxTree.Parse("{ a } [ b ]");
+        
+        var braceBlocks = Q.BraceBlock.Select(tree).ToList();
+        var bracketBlocks = Q.BracketBlock.Select(tree).ToList();
+        
+        Assert.Single(braceBlocks);
+        Assert.Single(bracketBlocks);
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Replace_ChangesNode()
+    {
+        var tree = SyntaxTree.Parse("foo");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), "bar")
+            .Commit();
+        
+        Assert.Equal("bar", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Replace_WithTransformer()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), n => ((RedLeaf)n).Text.ToUpper())
+            .Commit();
+        
+        Assert.Equal("HELLO", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Remove_DeletesNode()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var originalWidth = tree.Width;
+        
+        tree.CreateEditor()
+            .Remove(Q.Ident.WithText("b"))
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.DoesNotContain("b", text);
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Insert_Before()
+    {
+        var tree = SyntaxTree.Parse("world");
+        
+        tree.CreateEditor()
+            .Insert(Q.Ident.First().Before(), "hello ")
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Insert_After()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        
+        tree.CreateEditor()
+            .Insert(Q.Ident.First().After(), " world")
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Insert_IntoBlockStart()
+    {
+        var tree = SyntaxTree.Parse("{b}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerStart(), "a ")
+            .Commit();
+        
+        Assert.Equal("{a b}", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Insert_IntoBlockEnd()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerEnd(), " b")
+            .Commit();
+        
+        Assert.Equal("{a b}", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Rollback_DiscardsChanges()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        var editor = tree.CreateEditor();
+        editor.Replace(Q.Ident.First(), "changed");
+        editor.Rollback();
+        
+        Assert.Equal("original", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Commit_SupportsUndo()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), "changed")
+            .Commit();
+        
+        Assert.Equal("changed", tree.ToFullString());
+        Assert.True(tree.CanUndo);
+        
+        tree.Undo();
+        Assert.Equal("original", tree.ToFullString());
     }
     
     #endregion

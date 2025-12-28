@@ -146,6 +146,18 @@ public class SyntaxTree
     
     #endregion
     
+    #region Editor
+    
+    /// <summary>
+    /// Creates a new SyntaxEditor for making batched mutations to this tree.
+    /// </summary>
+    public SyntaxEditor CreateEditor(TokenizerOptions? options = null)
+    {
+        return new SyntaxEditor(this, options);
+    }
+    
+    #endregion
+    
     #region Query
     
     /// <summary>
