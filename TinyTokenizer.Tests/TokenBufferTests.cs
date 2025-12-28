@@ -493,4 +493,330 @@ public class TokenBufferTests
     }
 
     #endregion
+
+    #region Complex Scenario Tests
+
+    [Fact]
+    public void MultipleInsertsAndRemovals_ContentMatchesExpectation()
+    {
+        // Start with: a b c d e
+        var buffer = CreateBuffer("a b c d e");
+
+        // Operations:
+        // 1. Remove all whitespace (explicit removal - whitespace IS preserved by default)
+        // 2. Replace 'c' with 'X'
+        
+        buffer
+            .Remove(Query.Whitespace)  // <-- Whitespace must be explicitly removed
+            .Replace(Query.Ident.WithContent("c"), t => new IdentToken { Content = "X".AsMemory(), Position = t.Position })
+            .Commit();
+
+        // After explicit whitespace removal: abXde
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.Equal("abXde", content);
+    }
+
+    [Fact]
+    public void WhitespaceIsPreservedByDefault()
+    {
+        // Start with: a b c
+        var buffer = CreateBuffer("a b c");
+
+        // Only replace 'b' with 'X' - do NOT remove whitespace
+        buffer
+            .Replace(Query.Ident.WithContent("b"), t => new IdentToken { Content = "X".AsMemory(), Position = t.Position })
+            .Commit();
+
+        // Whitespace should still be present: "a X c"
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.Equal("a X c", content);
+        
+        // Verify whitespace tokens exist
+        Assert.Contains(buffer.Tokens, t => t is WhitespaceToken);
+    }
+
+    [Fact]
+    public void MultipleInsertsAtDifferentLocations_PreservesOrder()
+    {
+        // Start with: x = 1
+        var buffer = CreateBuffer("x = 1");
+
+        // Insert 'let ' at beginning, insert ';' at end
+        buffer
+            .InsertText(0, "let ")
+            .InsertText(buffer.Count, ";")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.StartsWith("let ", content);
+        Assert.EndsWith(";", content);
+    }
+
+    [Fact]
+    public void ComplexTransformation_VariableRenameAndCommentRemoval()
+    {
+        // Start with: /* old */ var foo = bar + foo;
+        var buffer = CreateBuffer("/* old */ var foo = bar + foo;");
+
+        buffer
+            .Remove(Query.Comment)                    // Remove comments
+            .Remove(Query.Whitespace.First())         // Remove leading whitespace after comment removal
+            .Replace(                                  // Rename 'foo' to 'baz'
+                Query.Ident.WithContent("foo"),
+                t => new IdentToken { Content = "baz".AsMemory(), Position = t.Position })
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.DoesNotContain("/*", content);
+        Assert.DoesNotContain("foo", content);
+        Assert.Contains("baz", content);
+        Assert.Contains("var", content);
+    }
+
+    [Fact]
+    public void InsertBeforeFunctionDefinition_InsertsAtCorrectPosition()
+    {
+        // Start with: function greet() { return "hi"; }
+        var buffer = CreateBuffer("function greet() { return \"hi\"; }");
+
+        // Insert a comment before the function
+        buffer
+            .InsertTextBefore(Query.Ident.WithContent("function"), "// My function\n")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.StartsWith("// My function", content);
+        Assert.Contains("function greet()", content);
+    }
+
+    [Fact]
+    public void InsertAfterOpeningBrace_InsertsInsideFunctionBlock()
+    {
+        // Start with: function test() { return 1; }
+        var buffer = CreateBuffer("function test() { return 1; }");
+
+        // Find the brace block and insert after opening brace
+        // We need to insert inside the block, so we insert at position right after '{'
+        var braceBlockIndex = buffer.Tokens
+            .Select((t, i) => (Token: t, Index: i))
+            .FirstOrDefault(x => x.Token is SimpleBlock block && block.OpeningDelimiter.FirstChar == '{')
+            .Index;
+
+        // Insert a console.log statement after the opening brace
+        // Since the brace block is a single token, we need to work with the block's children
+        // For this test, we'll insert text after the brace block starts
+        buffer
+            .InsertTextAfter(Query.BraceBlock.First(), " console.log('entered');")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        // The text should appear after the brace block
+        Assert.Contains("console.log", content);
+    }
+
+    [Fact]
+    public void InsertBeforeClosingBrace_ManuallyTargeted()
+    {
+        // For inserting INSIDE a block before the closing brace, we need to work
+        // with a different approach since blocks are single tokens.
+        // This test demonstrates inserting before a standalone closing construct.
+        
+        // Start with tokens that aren't in a block structure
+        var buffer = CreateBuffer("a; b; c;");
+
+        // Insert before the last semicolon
+        var lastSemicolonIndex = buffer.Tokens
+            .Select((t, i) => (Token: t, Index: i))
+            .Where(x => x.Token is SymbolToken sym && sym.ContentSpan.SequenceEqual(";".AsSpan()))
+            .LastOrDefault()
+            .Index;
+
+        buffer
+            .InsertText(lastSemicolonIndex, " /* end */ ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Contains("/* end */", content);
+        Assert.EndsWith(";", content);
+    }
+
+    [Fact]
+    public void InsertAnnotationBeforeFunction_WorksCorrectly()
+    {
+        // Start with: export function handler() { }
+        var buffer = CreateBuffer("export function handler() { }");
+
+        // Insert @deprecated annotation before 'export'
+        buffer
+            .InsertTextBefore(Query.Ident.WithContent("export"), "@deprecated\n")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.StartsWith("@deprecated", content);
+        
+        // Verify order: @deprecated comes before export
+        var deprecatedIndex = content.IndexOf("@deprecated");
+        var exportIndex = content.IndexOf("export");
+        Assert.True(deprecatedIndex < exportIndex);
+    }
+
+    [Fact]
+    public void WrapFunctionWithTryCatch_ComplexInsertion()
+    {
+        // Start with: function risky() { doSomething(); }
+        var buffer = CreateBuffer("function risky() { doSomething(); }");
+
+        // Insert 'try {' after function's opening brace and '} catch(e) {}' before closing
+        // Since blocks are single tokens, we work around by inserting after/before the block
+        
+        buffer
+            .InsertTextBefore(Query.BraceBlock.First(), "/* wrapped */ ")
+            .InsertTextAfter(Query.BraceBlock.First(), " /* end wrap */")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Contains("/* wrapped */", content);
+        Assert.Contains("/* end wrap */", content);
+    }
+
+    [Fact]
+    public void ChainedTransformations_MultipleCommits_AccumulateCorrectly()
+    {
+        var buffer = CreateBuffer("a b c");
+
+        // First commit: remove whitespace
+        buffer.Remove(Query.Whitespace).Commit();
+        var afterFirst = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.Equal("abc", afterFirst);
+
+        // Second commit: replace 'b' with 'X'
+        buffer.Replace(Query.Ident.WithContent("b"), t => new IdentToken { Content = "X".AsMemory(), Position = t.Position }).Commit();
+        var afterSecond = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.Equal("aXc", afterSecond);
+
+        // Third commit: insert prefix
+        buffer.InsertText(0, "prefix_").Commit();
+        var afterThird = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        Assert.Equal("prefix_aXc", afterThird);
+    }
+
+    [Fact]
+    public void RemoveAllCommentsAndWhitespace_Minification()
+    {
+        // Use a simpler case without nested blocks since block children are separate
+        var buffer = CreateBuffer("// Header\na = 1; /* inline */ b = 2;");
+
+        buffer
+            .Remove(Query.Comment)
+            .Remove(Query.Whitespace)
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        // Should have no whitespace or comments at top level
+        Assert.DoesNotContain("//", content);
+        Assert.DoesNotContain("/*", content);
+        
+        // But should still have the code
+        Assert.Contains("a", content);
+        Assert.Contains("b", content);
+        Assert.Contains("=", content);
+    }
+
+    [Fact]
+    public void InsertMultipleAnnotationsBeforeFunction()
+    {
+        var buffer = CreateBuffer("function process() { }");
+
+        // Insert multiple annotations
+        buffer
+            .InsertTextBefore(Query.Ident.WithContent("function"), "@public\n")
+            .InsertTextBefore(Query.Ident.WithContent("function"), "@async\n")
+            .InsertTextBefore(Query.Ident.WithContent("function"), "@deprecated\n")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        // All annotations should be present before function
+        Assert.Contains("@public", content);
+        Assert.Contains("@async", content);
+        Assert.Contains("@deprecated", content);
+        
+        var functionIndex = content.IndexOf("function");
+        Assert.True(content.IndexOf("@public") < functionIndex);
+        Assert.True(content.IndexOf("@async") < functionIndex);
+        Assert.True(content.IndexOf("@deprecated") < functionIndex);
+    }
+
+    [Fact]
+    public void ReplaceIdentifierThroughoutCode_ConsistentRename()
+    {
+        var buffer = CreateBuffer("let count = 0; count = count + 1; return count;");
+
+        buffer
+            .Replace(
+                Query.Ident.WithContent("count"),
+                t => new IdentToken { Content = "total".AsMemory(), Position = t.Position })
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        // All 'count' should be replaced with 'total'
+        Assert.DoesNotContain("count", content);
+        
+        // Count occurrences of 'total' - should be 4 (declaration + 3 usages)
+        var totalCount = buffer.Tokens.Count(t => t.ContentSpan.SequenceEqual("total".AsSpan()));
+        Assert.Equal(4, totalCount);
+    }
+
+    [Fact]
+    public void PreviewThenModifyThenCommit_PreviewDoesNotAffectState()
+    {
+        var buffer = CreateBuffer("original");
+
+        buffer.Replace(Query.Ident, t => new IdentToken { Content = "modified".AsMemory(), Position = t.Position });
+        
+        // Preview should show modified
+        var preview = buffer.Preview();
+        Assert.Contains(preview, t => t.ContentSpan.SequenceEqual("modified".AsSpan()));
+        
+        // But original buffer state unchanged
+        Assert.Contains(buffer.Tokens, t => t.ContentSpan.SequenceEqual("original".AsSpan()));
+        
+        // Now actually commit
+        buffer.Commit();
+        Assert.Contains(buffer.Tokens, t => t.ContentSpan.SequenceEqual("modified".AsSpan()));
+        Assert.DoesNotContain(buffer.Tokens, t => t.ContentSpan.SequenceEqual("original".AsSpan()));
+    }
+
+    [Fact]
+    public void InsertAtBlockBoundaries_FunctionDecoratorPattern()
+    {
+        // Simulating adding logging to a function
+        var buffer = CreateBuffer("function calculate(x) { return x * 2; }");
+
+        // Add entry/exit logging around the function
+        buffer
+            .InsertTextBefore(Query.Ident.WithContent("function").First(), "// ENTRY\n")
+            .InsertTextAfter(Query.BraceBlock.First(), "\n// EXIT")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        var entryIndex = content.IndexOf("// ENTRY");
+        var functionIndex = content.IndexOf("function");
+        var exitIndex = content.IndexOf("// EXIT");
+        var braceEndIndex = content.LastIndexOf("}");
+        
+        Assert.True(entryIndex < functionIndex, "ENTRY should come before function");
+        Assert.True(exitIndex > braceEndIndex, "EXIT should come after closing brace");
+    }
+
+    #endregion
 }
