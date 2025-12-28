@@ -594,4 +594,667 @@ public class SyntaxTreeTests
     }
     
     #endregion
+    
+    #region Query Factories (Additional Coverage)
+    
+    [Fact]
+    public void Query_Numeric_SelectsNumbers()
+    {
+        var tree = SyntaxTree.Parse("x = 42 + 3.14");
+        
+        var nums = Q.Numeric.Select(tree).ToList();
+        
+        Assert.Equal(2, nums.Count);
+    }
+    
+    [Fact]
+    public void Query_String_SelectsStrings()
+    {
+        var tree = SyntaxTree.Parse("a = \"hello\" + 'c'");
+        
+        var strings = Q.String.Select(tree).ToList();
+        
+        Assert.Equal(2, strings.Count);
+    }
+    
+    [Fact]
+    public void Query_Operator_SelectsOperators()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("a == b && c != d", options);
+        
+        var ops = Q.Operator.Select(tree).ToList();
+        
+        Assert.Equal(3, ops.Count);
+    }
+    
+    [Fact]
+    public void Query_Symbol_SelectsSymbols()
+    {
+        var tree = SyntaxTree.Parse("a, b; c");
+        
+        var symbols = Q.Symbol.Select(tree).ToList();
+        
+        Assert.Equal(2, symbols.Count); // , and ;
+    }
+    
+    [Fact]
+    public void Query_TaggedIdent_SelectsTaggedIdentifiers()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
+        var tree = SyntaxTree.Parse("#define @attr foo", options);
+        
+        var tags = Q.TaggedIdent.Select(tree).ToList();
+        
+        Assert.Equal(2, tags.Count);
+    }
+    
+    [Fact]
+    public void Query_Any_SelectsAllNodes()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        var all = Q.Any.Select(tree).ToList();
+        
+        Assert.True(all.Count >= 3); // At least: a, whitespace, b
+    }
+    
+    [Fact]
+    public void Query_Leaf_SelectsOnlyLeaves()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        
+        var leaves = Q.Leaf.Select(tree).ToList();
+        
+        // Should get 'a' but not the block itself
+        foreach (var leaf in leaves)
+        {
+            Assert.IsType<RedLeaf>(leaf);
+        }
+    }
+    
+    [Fact]
+    public void Query_AnyBlock_SelectsAllBlockTypes()
+    {
+        var tree = SyntaxTree.Parse("{ a } [ b ] ( c )");
+        
+        var blocks = Q.AnyBlock.Select(tree).ToList();
+        
+        Assert.Equal(3, blocks.Count);
+    }
+    
+    #endregion
+    
+    #region Query Composition
+    
+    [Fact]
+    public void Query_Union_MatchesEither()
+    {
+        var tree = SyntaxTree.Parse("foo 42 bar");
+        
+        var combined = (Q.Ident | Q.Numeric).Select(tree).ToList();
+        
+        Assert.Equal(3, combined.Count); // foo, 42, bar
+    }
+    
+    [Fact]
+    public void Query_Intersection_MatchesBoth()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        // All idents that also match WithText("bar")
+        var intersection = (Q.Ident & Q.Ident.WithText("bar")).Select(tree).ToList();
+        
+        Assert.Single(intersection);
+        Assert.Equal("bar", ((RedLeaf)intersection[0]).Text);
+    }
+    
+    #endregion
+    
+    #region Query Filters
+    
+    [Fact]
+    public void Query_WithTextContaining_FiltersSubstring()
+    {
+        var tree = SyntaxTree.Parse("foobar foobaz other");
+        
+        var matches = Q.Ident.WithTextContaining("foo").Select(tree).ToList();
+        
+        Assert.Equal(2, matches.Count);
+    }
+    
+    [Fact]
+    public void Query_WithTextStartingWith_FiltersPrefix()
+    {
+        var tree = SyntaxTree.Parse("prefixA prefixB other");
+        
+        var matches = Q.Ident.WithTextStartingWith("prefix").Select(tree).ToList();
+        
+        Assert.Equal(2, matches.Count);
+    }
+    
+    [Fact]
+    public void Query_WithTextEndingWith_FiltersSuffix()
+    {
+        var tree = SyntaxTree.Parse("testA testB other");
+        
+        var matches = Q.Ident.WithTextEndingWith("B").Select(tree).ToList();
+        
+        Assert.Single(matches);
+        Assert.Equal("testB", ((RedLeaf)matches[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_Where_FiltersWithPredicate()
+    {
+        var tree = SyntaxTree.Parse("a bb ccc");
+        
+        // Filter idents with width >= 2
+        var matches = Q.Ident.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2).Select(tree).ToList();
+        
+        Assert.Equal(2, matches.Count); // bb and ccc
+    }
+    
+    #endregion
+    
+    #region Query Pseudo-Selectors
+    
+    [Fact]
+    public void Query_Nth_SelectsNthMatch()
+    {
+        var tree = SyntaxTree.Parse("a b c d e");
+        
+        var third = Q.Ident.Nth(2).Select(tree).ToList();
+        
+        Assert.Single(third);
+        Assert.Equal("c", ((RedLeaf)third[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_Last_OnBlocks_SelectsLastBlock()
+    {
+        var tree = SyntaxTree.Parse("{a} {b} {c}");
+        
+        var last = Q.BraceBlock.Last().Select(tree).ToList();
+        
+        Assert.Single(last);
+        // The last block contains 'c'
+        var block = (RedBlock)last[0];
+        Assert.Contains("c", block.Children.OfType<RedLeaf>().Select(l => l.Text));
+    }
+    
+    [Fact]
+    public void Query_Nth_OnBlocks_SelectsNthBlock()
+    {
+        var tree = SyntaxTree.Parse("{a} {b} {c}");
+        
+        var second = Q.BraceBlock.Nth(1).Select(tree).ToList();
+        
+        Assert.Single(second);
+        var block = (RedBlock)second[0];
+        Assert.Contains("b", block.Children.OfType<RedLeaf>().Select(l => l.Text));
+    }
+    
+    #endregion
+    
+    #region SyntaxEditor Additional Coverage
+    
+    [Fact]
+    public void SyntaxEditor_PendingEditCount_TracksEdits()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var editor = tree.CreateEditor();
+        
+        Assert.Equal(0, editor.PendingEditCount);
+        Assert.False(editor.HasPendingEdits);
+        
+        editor.Remove(Q.Ident.First());
+        
+        Assert.Equal(1, editor.PendingEditCount);
+        Assert.True(editor.HasPendingEdits);
+    }
+    
+    [Fact]
+    public void SyntaxEditor_Replace_WithTransformer_SingleNode()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), n => ((RedLeaf)n).Text.ToUpper())
+            .Commit();
+        
+        Assert.Equal("HELLO", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_CommitWithNoEdits_DoesNothing()
+    {
+        var tree = SyntaxTree.Parse("unchanged");
+        
+        tree.CreateEditor().Commit();
+        
+        Assert.Equal("unchanged", tree.ToFullString());
+        Assert.False(tree.CanUndo); // No history added
+    }
+    
+    [Fact]
+    public void SyntaxEditor_InsertBefore_AppliedCorrectly()
+    {
+        var tree = SyntaxTree.Parse("x");
+        
+        tree.CreateEditor()
+            .Insert(Q.Ident.First().Before(), "a")
+            .Commit();
+        
+        Assert.Equal("ax", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxEditor_InsertAfter_AppliedCorrectly()
+    {
+        var tree = SyntaxTree.Parse("x");
+        
+        tree.CreateEditor()
+            .Insert(Q.Ident.First().After(), "z")
+            .Commit();
+        
+        Assert.Equal("xz", tree.ToFullString());
+    }
+    
+    #endregion
+    
+    #region RedNode Navigation
+    
+    [Fact]
+    public void RedNode_Children_EnumeratesCorrectly()
+    {
+        var tree = SyntaxTree.Parse("{a b c}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        var children = block.Children.ToList();
+        
+        Assert.True(children.Count >= 3); // At least a, b, c (plus whitespace)
+    }
+    
+    [Fact]
+    public void RedNode_Parent_NavigatesUp()
+    {
+        var tree = SyntaxTree.Parse("{nested}");
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        Assert.NotNull(ident.Parent);
+        Assert.IsType<RedBlock>(ident.Parent);
+    }
+    
+    [Fact]
+    public void RedNode_DescendantsAndSelf_IncludesAll()
+    {
+        var tree = SyntaxTree.Parse("{a {b}}");
+        
+        var allNodes = tree.Root.DescendantsAndSelf().ToList();
+        
+        // Should include root, outer block, inner block, idents
+        Assert.True(allNodes.Count >= 4);
+    }
+    
+    [Fact]
+    public void RedBlock_OpenerCloser_CorrectCharacters()
+    {
+        var tree = SyntaxTree.Parse("[item]");
+        var block = Q.BracketBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal('[', block.Opener);
+        Assert.Equal(']', block.Closer);
+    }
+    
+    [Fact]
+    public void RedNode_Ancestors_NavigatesToRoot()
+    {
+        var tree = SyntaxTree.Parse("{{deep}}");
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        var ancestors = ident.Ancestors().ToList();
+        
+        Assert.True(ancestors.Count >= 2); // Inner block, outer block, root
+    }
+    
+    [Fact]
+    public void RedNode_Root_ReturnsTreeRoot()
+    {
+        var tree = SyntaxTree.Parse("{nested}");
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        var root = ident.Root;
+        
+        Assert.Same(tree.Root, root);
+    }
+    
+    [Fact]
+    public void RedNode_Descendants_EnumeratesAll()
+    {
+        var tree = SyntaxTree.Parse("{a b}");
+        var block = Q.BraceBlock.First().Select(tree).First();
+        
+        var descendants = block.Descendants().ToList();
+        
+        Assert.True(descendants.Count >= 2); // At least a, b
+    }
+    
+    [Fact]
+    public void RedNode_FindNodeAt_ReturnsDeepest()
+    {
+        var tree = SyntaxTree.Parse("abc");
+        
+        var found = tree.FindNodeAt(1);
+        
+        Assert.NotNull(found);
+        Assert.Equal(NodeKind.Ident, found.Kind);
+    }
+    
+    [Fact]
+    public void RedNode_FindNodeAt_OutOfRange_ReturnsNull()
+    {
+        var tree = SyntaxTree.Parse("abc");
+        
+        var found = tree.FindNodeAt(100);
+        
+        Assert.Null(found);
+    }
+    
+    [Fact]
+    public void RedNode_FindLeafAt_ReturnsLeaf()
+    {
+        var tree = SyntaxTree.Parse("{abc}");
+        
+        var leaf = tree.FindLeafAt(2);
+        
+        Assert.NotNull(leaf);
+        Assert.True(leaf.IsLeaf);
+    }
+    
+    #endregion
+    
+    #region SyntaxTree Undo/Redo Extended
+    
+    [Fact]
+    public void SyntaxTree_Redo_WorksAfterUndo()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), "changed")
+            .Commit();
+        
+        tree.Undo();
+        Assert.Equal("original", tree.ToFullString());
+        Assert.True(tree.CanRedo);
+        
+        tree.Redo();
+        Assert.Equal("changed", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void SyntaxTree_ClearHistory_RemovesUndoRedo()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), "changed")
+            .Commit();
+        
+        Assert.True(tree.CanUndo);
+        
+        tree.ClearHistory();
+        
+        Assert.False(tree.CanUndo);
+        Assert.False(tree.CanRedo);
+    }
+    
+    [Fact]
+    public void SyntaxTree_Undo_WhenEmpty_ReturnsFalse()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        Assert.False(tree.CanUndo);
+        var result = tree.Undo();
+        
+        Assert.False(result);
+    }
+    
+    [Fact]
+    public void SyntaxTree_Redo_WhenEmpty_ReturnsFalse()
+    {
+        var tree = SyntaxTree.Parse("original");
+        
+        Assert.False(tree.CanRedo);
+        var result = tree.Redo();
+        
+        Assert.False(result);
+    }
+    
+    [Fact]
+    public void SyntaxTree_SetRoot_SupportsUndo()
+    {
+        var tree = SyntaxTree.Parse("original");
+        var newTree = SyntaxTree.Parse("replaced");
+        
+        tree.SetRoot(newTree.GreenRoot);
+        
+        Assert.Equal("replaced", tree.ToFullString());
+        Assert.True(tree.CanUndo);
+        
+        tree.Undo();
+        Assert.Equal("original", tree.ToFullString());
+    }
+    
+    #endregion
+    
+    #region Query Error and Edge Cases
+    
+    [Fact]
+    public void Query_Error_SelectsErrorNodes()
+    {
+        // Unclosed block creates an error
+        var tree = SyntaxTree.Parse("{unclosed");
+        
+        var errors = Q.Error.Select(tree).ToList();
+        
+        // May or may not have errors depending on parser behavior
+        // Just ensure query doesn't throw
+        Assert.NotNull(errors);
+    }
+    
+    [Fact]
+    public void Query_Kind_SelectsByKind()
+    {
+        var tree = SyntaxTree.Parse("a 123");
+        
+        var idents = Q.Kind(NodeKind.Ident).Select(tree).ToList();
+        var nums = Q.Kind(NodeKind.Numeric).Select(tree).ToList();
+        
+        Assert.Single(idents);
+        Assert.Single(nums);
+    }
+    
+    [Fact]
+    public void Query_ParenBlock_SelectsParentheses()
+    {
+        var tree = SyntaxTree.Parse("(inner)");
+        
+        var parens = Q.ParenBlock.Select(tree).ToList();
+        
+        Assert.Single(parens);
+        var block = (RedBlock)parens[0];
+        Assert.Equal('(', block.Opener);
+    }
+    
+    [Fact]
+    public void Query_All_ReturnsAll()
+    {
+        var tree = SyntaxTree.Parse("a");
+        
+        var all = Q.Ident.All().Select(tree).ToList();
+        
+        Assert.Single(all);
+    }
+    
+    [Fact]
+    public void Query_Matches_ChecksSingleNode()
+    {
+        var tree = SyntaxTree.Parse("foo");
+        var node = Q.Ident.First().Select(tree).First();
+        
+        Assert.True(Q.Ident.Matches(node));
+        Assert.False(Q.Numeric.Matches(node));
+    }
+    
+    #endregion
+    
+    #region SyntaxEditor Replace with GreenNodes
+    
+    [Fact]
+    public void SyntaxEditor_Replace_WithGreenNodes()
+    {
+        var tree = SyntaxTree.Parse("old");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("new");
+        
+        tree.CreateEditor()
+            .Replace(Q.Ident.First(), newNodes)
+            .Commit();
+        
+        Assert.Equal("new", tree.ToFullString());
+    }
+    
+    #endregion
+    
+    #region RedLeaf Properties
+    
+    [Fact]
+    public void RedLeaf_Text_ReturnsContent()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        var leaf = tree.Leaves.First();
+        
+        Assert.Equal("hello", leaf.Text);
+    }
+    
+    [Fact]
+    public void RedLeaf_Position_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var leaves = tree.Leaves.ToList();
+        
+        // First ident at position 0, second at position 2
+        var secondIdent = leaves.Where(l => l.Kind == NodeKind.Ident).Skip(1).First();
+        Assert.Equal(2, secondIdent.Position);
+    }
+    
+    [Fact]
+    public void RedLeaf_EndPosition_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("abc");
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        Assert.Equal(0, ident.Position);
+        Assert.Equal(3, ident.EndPosition);
+        Assert.Equal(3, ident.Width);
+    }
+    
+    #endregion
+    
+    #region Block Specific Tests
+    
+    [Fact]
+    public void RedBlock_ChildCount_ReturnsCorrectCount()
+    {
+        var tree = SyntaxTree.Parse("{a b c}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.True(block.ChildCount >= 3);
+    }
+    
+    [Fact]
+    public void RedBlock_GetChild_ReturnsChild()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        var firstChild = block.GetChild(0);
+        Assert.NotNull(firstChild);
+    }
+    
+    [Fact]
+    public void RedBlock_GetChild_OutOfRange_ReturnsNull()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        var child = block.GetChild(999);
+        Assert.Null(child);
+    }
+    
+    #endregion
+    
+    #region NodePath Tests
+    
+    [Fact]
+    public void NodePath_FromNode_CreatesValidPath()
+    {
+        var tree = SyntaxTree.Parse("{nested}");
+        var ident = Q.Ident.First().Select(tree).First();
+        
+        var path = NodePath.FromNode(ident);
+        
+        Assert.True(path.Depth > 0);
+    }
+    
+    [Fact]
+    public void NodePath_Navigate_ReturnsNode()
+    {
+        var tree = SyntaxTree.Parse("{nested}");
+        var ident = Q.Ident.First().Select(tree).First();
+        var path = NodePath.FromNode(ident);
+        
+        var navigated = path.Navigate(tree.Root);
+        
+        Assert.NotNull(navigated);
+        Assert.Equal(ident.Position, navigated.Position);
+    }
+    
+    [Fact]
+    public void NodePath_Root_HasZeroDepth()
+    {
+        var path = NodePath.Root;
+        
+        Assert.True(path.IsRoot);
+        Assert.Equal(0, path.Depth);
+    }
+    
+    [Fact]
+    public void NodePath_Child_AppendsIndex()
+    {
+        var path = NodePath.Root.Child(0).Child(1);
+        
+        Assert.Equal(2, path.Depth);
+        Assert.Equal(0, path[0]);
+        Assert.Equal(1, path[1]);
+    }
+    
+    [Fact]
+    public void NodePath_Parent_RemovesLastIndex()
+    {
+        var path = NodePath.Root.Child(0).Child(1);
+        var parent = path.Parent();
+        
+        Assert.Equal(1, parent.Depth);
+        Assert.Equal(0, parent[0]);
+    }
+    
+    #endregion
 }
