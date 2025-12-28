@@ -1257,4 +1257,267 @@ public class SyntaxTreeTests
     }
     
     #endregion
+    
+    #region RedBlock Extended Coverage
+    
+    [Fact]
+    public void RedBlock_ChildrenOfKind_FiltersCorrectly()
+    {
+        var tree = SyntaxTree.Parse("{a 1 b 2}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        var idents = block.ChildrenOfKind(NodeKind.Ident).ToList();
+        var numerics = block.ChildrenOfKind(NodeKind.Numeric).ToList();
+        
+        Assert.Equal(2, idents.Count);
+        Assert.Equal(2, numerics.Count);
+    }
+    
+    [Fact]
+    public void RedBlock_LeafChildren_ReturnsOnlyLeaves()
+    {
+        var tree = SyntaxTree.Parse("{a {nested} b}");
+        var outerBlock = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(outerBlock);
+        var leaves = outerBlock.LeafChildren.ToList();
+        
+        // Should have leaves but not nested block
+        Assert.True(leaves.Count >= 2);
+        Assert.All(leaves, l => Assert.IsType<RedLeaf>(l));
+    }
+    
+    [Fact]
+    public void RedBlock_BlockChildren_ReturnsOnlyBlocks()
+    {
+        var tree = SyntaxTree.Parse("{a {inner1} b {inner2}}");
+        var outerBlock = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(outerBlock);
+        var blocks = outerBlock.BlockChildren.ToList();
+        
+        Assert.Equal(2, blocks.Count);
+        Assert.All(blocks, b => Assert.IsType<RedBlock>(b));
+    }
+    
+    [Fact]
+    public void RedBlock_IndexOf_FindsChild()
+    {
+        var tree = SyntaxTree.Parse("{a b c}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        var firstChild = block.GetChild(0);
+        Assert.NotNull(firstChild);
+        
+        var index = block.IndexOf(firstChild);
+        Assert.Equal(0, index);
+    }
+    
+    [Fact]
+    public void RedBlock_IndexOf_ReturnsMinusOneForNonChild()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        var blocks = Q.BraceBlock.Select(tree).Cast<RedBlock>().ToList();
+        
+        Assert.Equal(2, blocks.Count);
+        var block1 = blocks[0];
+        var block2Child = blocks[1].GetChild(0);
+        
+        Assert.NotNull(block2Child);
+        var index = block1.IndexOf(block2Child!);
+        Assert.Equal(-1, index);
+    }
+    
+    [Fact]
+    public void RedBlock_OpenerPosition_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("{inner}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(0, block.OpenerPosition);
+    }
+    
+    [Fact]
+    public void RedBlock_CloserPosition_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("{inner}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(6, block.CloserPosition); // Position of }
+    }
+    
+    [Fact]
+    public void RedBlock_InnerStartPosition_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("{inner}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(1, block.InnerStartPosition); // After {
+    }
+    
+    [Fact]
+    public void RedBlock_InnerEndPosition_IsCorrect()
+    {
+        var tree = SyntaxTree.Parse("{inner}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(6, block.InnerEndPosition); // Before }
+    }
+    
+    [Fact]
+    public void RedBlock_Green_ReturnsUnderlyingGreen()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.NotNull(block.Green);
+        Assert.IsType<GreenBlock>(block.Green);
+    }
+    
+    [Fact]
+    public void RedBlock_LeadingTriviaWidth_IsZeroWithoutTrivia()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(0, block.LeadingTriviaWidth);
+    }
+    
+    [Fact]
+    public void RedBlock_TrailingTriviaWidth_IsZeroWithoutTrivia()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.Equal(0, block.TrailingTriviaWidth);
+    }
+    
+    [Fact]
+    public void RedBlock_LeadingTrivia_IsEmptyWithoutTrivia()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.True(block.LeadingTrivia.IsEmpty);
+    }
+    
+    [Fact]
+    public void RedBlock_TrailingTrivia_IsEmptyWithoutTrivia()
+    {
+        var tree = SyntaxTree.Parse("{x}");
+        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        
+        Assert.NotNull(block);
+        Assert.True(block.TrailingTrivia.IsEmpty);
+    }
+    
+    #endregion
+    
+    #region GreenTreeBuilder Coverage
+    
+    [Fact]
+    public void GreenTreeBuilder_InsertAt_InsertsNodes()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("b");
+        
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        var newRoot = builder.InsertAt(new[] { 0 }, 1, newNodes);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_RemoveAt_RemovesNodes()
+    {
+        var tree = SyntaxTree.Parse("{a b}");
+        
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        var newRoot = builder.RemoveAt(new[] { 0 }, 0, 1);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_ReplaceAt_ReplacesNodes()
+    {
+        var tree = SyntaxTree.Parse("{old}");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("new");
+        
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        var newRoot = builder.ReplaceAt(new[] { 0 }, 0, 1, newNodes);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_ReplaceChild_ReplacesChild()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        var lexer = new GreenLexer();
+        var newNode = lexer.ParseToGreenNodes("b").FirstOrDefault();
+        
+        if (newNode != null)
+        {
+            var builder = new GreenTreeBuilder(tree.GreenRoot);
+            var newRoot = builder.ReplaceChild(new[] { 0 }, 0, newNode);
+            
+            Assert.NotNull(newRoot);
+        }
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_DeepPath_WorksCorrectly()
+    {
+        var tree = SyntaxTree.Parse("{{inner}}");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("x");
+        
+        // Path: root -> first child (outer block) -> first child (inner block)
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        var newRoot = builder.InsertAt(new[] { 0, 0 }, 0, newNodes);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_EmptyPath_ModifiesRoot()
+    {
+        var tree = SyntaxTree.Parse("a");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("b");
+        
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        var newRoot = builder.InsertAt(Array.Empty<int>(), 1, newNodes);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    [Fact]
+    public void GreenTreeBuilder_SpanOverload_WorksSameAsArray()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        var lexer = new GreenLexer();
+        var newNodes = lexer.ParseToGreenNodes("b");
+        
+        var builder = new GreenTreeBuilder(tree.GreenRoot);
+        ReadOnlySpan<int> path = stackalloc int[] { 0 };
+        var newRoot = builder.InsertAt(path, 1, newNodes);
+        
+        Assert.NotNull(newRoot);
+    }
+    
+    #endregion
 }

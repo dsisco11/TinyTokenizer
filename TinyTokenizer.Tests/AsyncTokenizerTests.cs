@@ -576,7 +576,218 @@ public class AsyncTokenizerTests
     }
 
     #endregion
+    
+    #region Streaming Extensions Coverage
+    
+    [Fact]
+    public async Task TokenizeStreamingAsync_Stream_YieldsTokens()
+    {
+        var bytes = Encoding.UTF8.GetBytes("a b c");
+        using var stream = new MemoryStream(bytes);
+        
+        var tokens = new List<Token>();
+        await foreach (var token in stream.TokenizeStreamingAsync())
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.True(tokens.Count >= 3);
+    }
+    
+    [Fact]
+    public async Task TokenizeStreamingAsync_WithOptions_RespectsOptions()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var bytes = Encoding.UTF8.GetBytes("// comment\ncode");
+        using var stream = new MemoryStream(bytes);
+        
+        var tokens = new List<Token>();
+        await foreach (var token in stream.TokenizeStreamingAsync(options))
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.Contains(tokens, t => t is CommentToken);
+    }
+    
+    [Fact]
+    public async Task TokenizeStreamingAsync_WithEncoding_UsesEncoding()
+    {
+        var encoding = Encoding.Unicode;
+        var bytes = encoding.GetBytes("hello");
+        using var stream = new MemoryStream(bytes);
+        
+        var tokens = new List<Token>();
+        await foreach (var token in stream.TokenizeStreamingAsync(encoding: encoding))
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.Single(tokens);
+        Assert.IsType<IdentToken>(tokens[0]);
+    }
+    
+    [Fact]
+    public async Task TokenizeAsStreamAsync_String_YieldsTokens()
+    {
+        var tokens = new List<Token>();
+        await foreach (var token in "a b c".TokenizeAsStreamAsync())
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.True(tokens.Count >= 3);
+    }
+    
+    [Fact]
+    public async Task TokenizeAsync_ByteArray_ReturnsTokens()
+    {
+        var bytes = Encoding.UTF8.GetBytes("hello world");
+        
+        var tokens = await bytes.TokenizeAsync();
+        
+        Assert.Equal(3, tokens.Length);
+    }
+    
+    [Fact]
+    public async Task TokenizeToListAsync_ReturnsListNotArray()
+    {
+        var bytes = Encoding.UTF8.GetBytes("a b");
+        using var stream = new MemoryStream(bytes);
+        
+        var tokens = await stream.TokenizeToListAsync();
+        
+        Assert.IsType<List<Token>>(tokens);
+        Assert.True(tokens.Count >= 2);
+    }
+    
+    [Fact]
+    public void Tokenize_ReadOnlyMemory_ReturnsTokens()
+    {
+        ReadOnlyMemory<char> memory = "hello world".AsMemory();
+        
+        var tokens = memory.Tokenize();
+        
+        Assert.Equal(3, tokens.Length);
+    }
+    
+    [Fact]
+    public void TokenizeToTokens_String_ReturnsTokens()
+    {
+        var tokens = "hello world".TokenizeToTokens();
+        
+        Assert.Equal(3, tokens.Length);
+    }
+    
+    #endregion
+    
+    #region Async Pattern Matching Coverage
+    
+    [Fact]
+    public async Task ApplyPatternsAsync_WithDefinitions_AppliesPatterns()
+    {
+        var definition = new TokenDefinition<FunctionCallToken>
+        {
+            Name = "FuncCall",
+            Patterns = [[Match.Ident(), Match.Block('(')]]
+        };
+        
+        async IAsyncEnumerable<Token> GetTokens()
+        {
+            foreach (var token in "func()".TokenizeToTokens())
+            {
+                yield return token;
+            }
+            await Task.CompletedTask;
+        }
+        
+        var tokens = new List<Token>();
+        await foreach (var token in GetTokens().ApplyPatternsAsync(new ITokenDefinition[] { definition }))
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.Single(tokens);
+        Assert.IsType<FunctionCallToken>(tokens[0]);
+    }
+    
+    [Fact]
+    public async Task ApplyPatternsAsync_ParamsOverload_Works()
+    {
+        var definition = new TokenDefinition<FunctionCallToken>
+        {
+            Name = "FuncCall",
+            Patterns = [[Match.Ident(), Match.Block('(')]]
+        };
+        
+        async IAsyncEnumerable<Token> GetTokens()
+        {
+            foreach (var token in "test()".TokenizeToTokens())
+            {
+                yield return token;
+            }
+            await Task.CompletedTask;
+        }
+        
+        var tokens = new List<Token>();
+        await foreach (var token in GetTokens().ApplyPatternsAsync(definition))
+        {
+            tokens.Add(token);
+        }
+        
+        Assert.Single(tokens);
+    }
+    
+    [Fact]
+    public async Task ApplyPatternsWithDiagnosticsAsync_ReturnsReport()
+    {
+        var definition = new TokenDefinition<FunctionCallToken>
+        {
+            Name = "FuncCall",
+            Patterns = [[Match.Ident(), Match.Block('(')]]
+        };
+        
+        async IAsyncEnumerable<Token> GetTokens()
+        {
+            foreach (var token in "func()".TokenizeToTokens())
+            {
+                yield return token;
+            }
+            await Task.CompletedTask;
+        }
+        
+        var report = await GetTokens().ApplyPatternsWithDiagnosticsAsync(new ITokenDefinition[] { definition });
+        
+        Assert.NotNull(report);
+        Assert.NotNull(report.OutputTokens);
+    }
+    
+    [Fact]
+    public async Task ApplyPatternsWithDiagnosticsAsync_ParamsOverload_Works()
+    {
+        var definition = new TokenDefinition<FunctionCallToken>
+        {
+            Name = "FuncCall",
+            Patterns = [[Match.Ident(), Match.Block('(')]]
+        };
+        
+        async IAsyncEnumerable<Token> GetTokens()
+        {
+            foreach (var token in "test()".TokenizeToTokens())
+            {
+                yield return token;
+            }
+            await Task.CompletedTask;
+        }
+        
+        var report = await GetTokens().ApplyPatternsWithDiagnosticsAsync(definition);
+        
+        Assert.NotNull(report);
+    }
+    
+    #endregion
 }
+
 
 /// <summary>
 /// A memory stream that returns data in fixed-size chunks to simulate network I/O.
