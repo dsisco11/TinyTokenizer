@@ -969,4 +969,125 @@ public class TokenBufferTests
     }
 
     #endregion
+
+    #region BlockPositionQuery Tests
+
+    [Fact]
+    public void BlockPositionQuery_InnerStartIndex_ReturnsIndexAfterOpener()
+    {
+        var buffer = CreateBuffer("function test() { return 1; }");
+        
+        // Use BlockPositionQuery directly via BlockQuery.First() returns TokenQuery, so we call InnerStartIndex before First
+        buffer
+            .InsertAt(Query.BraceBlock.InnerStartIndex(), " /* inserted */ ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        // With multiple blocks, only first is used by InsertAt when returning single index
+        Assert.Equal("function test() { /* inserted */  return 1; }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_InnerEndIndex_ReturnsIndexBeforeCloser()
+    {
+        var buffer = CreateBuffer("function test() { return 1; }");
+        
+        buffer
+            .InsertAt(Query.BraceBlock.InnerEndIndex(), " /* end */ ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("function test() { return 1;  /* end */ }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_OpenIndex_ReturnsOpenerIndex()
+    {
+        var buffer = CreateBuffer("function test() { return 1; }");
+        
+        // Insert before the opening brace
+        buffer
+            .InsertAt(Query.BraceBlock.OpenIndex(), " /* before brace */ ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("function test()  /* before brace */ { return 1; }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_CloseIndex_ReturnsCloserIndex()
+    {
+        var buffer = CreateBuffer("function test() { return 1; }");
+        
+        // Insert before the closing brace (same position as InnerEnd for insertion)
+        buffer
+            .InsertAt(Query.BraceBlock.CloseIndex(), " /* before close */ ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("function test() { return 1;  /* before close */ }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_WorksWithParenBlocks()
+    {
+        var buffer = CreateBuffer("function test(a, b) { }");
+        
+        buffer
+            .InsertAt(Query.ParenBlock.InnerStartIndex(), "x, ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("function test(x, a, b) { }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_WorksWithBracketBlocks()
+    {
+        var buffer = CreateBuffer("arr[0]");
+        
+        buffer
+            .InsertAt(Query.BracketBlock.InnerEndIndex(), " + 1")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("arr[0 + 1]", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_MultipleBlocks_InsertsIntoAll()
+    {
+        var buffer = CreateBuffer("f() { } g() { }");
+        
+        buffer
+            .InsertAt(Query.BraceBlock.InnerStartIndex(), " x; ")
+            .Commit();
+
+        var content = string.Concat(buffer.Tokens.Select(t => t.ContentSpan.ToString()));
+        
+        Assert.Equal("f() { x;  } g() { x;  }", content);
+    }
+
+    [Fact]
+    public void BlockPositionQuery_SelectSimpleIndices_ReturnsCorrectIndices()
+    {
+        var buffer = CreateBuffer("{ a }");
+        var tokens = buffer.Tokens;
+        var simpleTokens = buffer.SimpleTokens;
+        
+        var query = Query.BraceBlock.InnerStartIndex();
+        var indices = query.SelectSimpleIndices(tokens, simpleTokens).ToList();
+        
+        // Should return index 1 (after the opening brace at index 0)
+        Assert.Single(indices);
+        Assert.Equal(1, indices[0]);
+    }
+
+    #endregion
 }

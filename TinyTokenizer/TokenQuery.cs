@@ -24,6 +24,58 @@ public abstract record TokenQuery
     /// <returns>True if the token matches.</returns>
     public abstract bool Matches(Token token);
 
+    /// <summary>
+    /// Resolves Level 2 token matches to Level 1 SimpleToken indices.
+    /// For simple tokens, returns the index of the token itself.
+    /// For blocks, returns the range from opening to closing delimiter.
+    /// </summary>
+    /// <param name="level2Tokens">The Level 2 tokens.</param>
+    /// <param name="simpleTokens">The Level 1 SimpleTokens.</param>
+    /// <returns>SimpleToken indices for each match.</returns>
+    public virtual IEnumerable<(int Start, int End)> SelectSimpleRanges(
+        ImmutableArray<Token> level2Tokens, 
+        ImmutableArray<SimpleToken> simpleTokens)
+    {
+        foreach (var level2Index in Select(level2Tokens))
+        {
+            var token = level2Tokens[level2Index];
+            var range = ResolveSimpleTokenRange(token, simpleTokens);
+            if (range.Start >= 0)
+                yield return range;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a Level 2 token to its SimpleToken index range.
+    /// </summary>
+    public static (int Start, int End) ResolveSimpleTokenRange(Token token, ImmutableArray<SimpleToken> simpleTokens)
+    {
+        if (token is SimpleBlock block)
+        {
+            var startIndex = FindSimpleTokenByPosition(simpleTokens, block.OpeningDelimiter.Position);
+            var endIndex = FindSimpleTokenByPosition(simpleTokens, block.ClosingDelimiter.Position);
+            return (startIndex, endIndex);
+        }
+        else
+        {
+            var index = FindSimpleTokenByPosition(simpleTokens, token.Position);
+            return (index, index);
+        }
+    }
+
+    /// <summary>
+    /// Finds a SimpleToken index by its source position.
+    /// </summary>
+    public static int FindSimpleTokenByPosition(ImmutableArray<SimpleToken> simpleTokens, long position)
+    {
+        for (int i = 0; i < simpleTokens.Length; i++)
+        {
+            if (simpleTokens[i].Position == position)
+                return i;
+        }
+        return -1;
+    }
+
     #region Pseudo-Selectors
 
     /// <summary>
@@ -236,6 +288,113 @@ public sealed record BlockQuery : TokenQuery
             return true;
 
         return block.OpeningDelimiter.FirstChar == Opener.Value;
+    }
+
+    #region Block Position Queries
+
+    /// <summary>
+    /// Returns a query that selects the opening delimiter position of matched blocks.
+    /// </summary>
+    public BlockPositionQuery OpenIndex() => new(this, BlockPosition.Open);
+
+    /// <summary>
+    /// Returns a query that selects the closing delimiter position of matched blocks.
+    /// </summary>
+    public BlockPositionQuery CloseIndex() => new(this, BlockPosition.Close);
+
+    /// <summary>
+    /// Returns a query that selects the position after the opening delimiter (inside the block start).
+    /// </summary>
+    public BlockPositionQuery InnerStartIndex() => new(this, BlockPosition.InnerStart);
+
+    /// <summary>
+    /// Returns a query that selects the position before the closing delimiter (inside the block end).
+    /// </summary>
+    public BlockPositionQuery InnerEndIndex() => new(this, BlockPosition.InnerEnd);
+
+    #endregion
+}
+
+/// <summary>
+/// Specifies a position within a block structure.
+/// </summary>
+public enum BlockPosition
+{
+    /// <summary>The opening delimiter position.</summary>
+    Open,
+    /// <summary>The closing delimiter position.</summary>
+    Close,
+    /// <summary>The position after the opening delimiter (first token inside the block).</summary>
+    InnerStart,
+    /// <summary>The position before the closing delimiter (insert point at end of block content).</summary>
+    InnerEnd
+}
+
+/// <summary>
+/// A query that resolves to specific positions within matched blocks.
+/// Returns SimpleToken indices based on the block's delimiters.
+/// </summary>
+public sealed record BlockPositionQuery
+{
+    private readonly TokenQuery _inner;
+    private readonly BlockPosition _position;
+
+    internal BlockPositionQuery(TokenQuery inner, BlockPosition position)
+    {
+        _inner = inner;
+        _position = position;
+    }
+
+    /// <summary>
+    /// Gets the underlying block query.
+    /// </summary>
+    public TokenQuery InnerQuery => _inner;
+
+    /// <summary>
+    /// Gets the block position type.
+    /// </summary>
+    public BlockPosition Position => _position;
+
+    /// <summary>
+    /// Resolves SimpleToken indices for the matched blocks.
+    /// </summary>
+    /// <param name="level2Tokens">The Level 2 tokens to search.</param>
+    /// <param name="simpleTokens">The Level 1 SimpleTokens for index resolution.</param>
+    /// <returns>SimpleToken indices corresponding to the block positions.</returns>
+    public IEnumerable<int> SelectSimpleIndices(ImmutableArray<Token> level2Tokens, ImmutableArray<SimpleToken> simpleTokens)
+    {
+        foreach (var level2Index in _inner.Select(level2Tokens))
+        {
+            var token = level2Tokens[level2Index];
+            if (token is not SimpleBlock block)
+                continue;
+
+            var simpleIndex = ResolveSimpleIndex(block, simpleTokens);
+            if (simpleIndex >= 0)
+                yield return simpleIndex;
+        }
+    }
+
+    private int ResolveSimpleIndex(SimpleBlock block, ImmutableArray<SimpleToken> simpleTokens)
+    {
+        return _position switch
+        {
+            BlockPosition.Open => FindSimpleTokenByPosition(simpleTokens, block.OpeningDelimiter.Position),
+            BlockPosition.Close => FindSimpleTokenByPosition(simpleTokens, block.ClosingDelimiter.Position),
+            BlockPosition.InnerStart => FindSimpleTokenByPosition(simpleTokens, block.OpeningDelimiter.Position) + 1,
+            BlockPosition.InnerEnd => FindSimpleTokenByPosition(simpleTokens, block.ClosingDelimiter.Position),
+            _ => -1
+        };
+    }
+
+    private static int FindSimpleTokenByPosition(ImmutableArray<SimpleToken> simpleTokens, long position)
+    {
+        for (int i = 0; i < simpleTokens.Length; i++)
+        {
+            if (simpleTokens[i].Position == position)
+                return i;
+        }
+        return -1;
     }
 }
 

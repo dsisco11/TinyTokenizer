@@ -88,28 +88,28 @@ public static class Query
     /// <summary>
     /// Selects all <see cref="SimpleBlock"/> tokens.
     /// </summary>
-    public static TokenQuery Block() => new BlockQuery();
+    public static BlockQuery Block() => new BlockQuery();
 
     /// <summary>
     /// Selects all <see cref="SimpleBlock"/> tokens with the specified opener.
     /// </summary>
     /// <param name="opener">The opening delimiter character ('(', '[', or '{').</param>
-    public static TokenQuery Block(char opener) => new BlockQuery { Opener = opener };
+    public static BlockQuery Block(char opener) => new BlockQuery { Opener = opener };
 
     /// <summary>
     /// Selects all brace blocks: { }
     /// </summary>
-    public static TokenQuery BraceBlock => new BlockQuery { Opener = '{' };
+    public static BlockQuery BraceBlock => new BlockQuery { Opener = '{' };
 
     /// <summary>
     /// Selects all bracket blocks: [ ]
     /// </summary>
-    public static TokenQuery BracketBlock => new BlockQuery { Opener = '[' };
+    public static BlockQuery BracketBlock => new BlockQuery { Opener = '[' };
 
     /// <summary>
     /// Selects all parenthesis blocks: ( )
     /// </summary>
-    public static TokenQuery ParenBlock => new BlockQuery { Opener = '(' };
+    public static BlockQuery ParenBlock => new BlockQuery { Opener = '(' };
 
     #endregion
 

@@ -152,61 +152,26 @@ public sealed class TokenBuffer
 
     /// <summary>
     /// Finds the SimpleToken index corresponding to a Level 2 token's position.
+    /// Delegates to TokenQuery's static helper for consistency.
     /// </summary>
     private int FindSimpleTokenIndex(Token token)
     {
-        var targetPosition = token.Position;
-        
-        for (int i = 0; i < _simpleTokens.Length; i++)
-        {
-            if (_simpleTokens[i].Position == targetPosition)
-                return i;
-        }
-        
-        throw new InvalidOperationException($"Could not find SimpleToken at position {targetPosition}");
-    }
-
-    /// <summary>
-    /// Finds the SimpleToken index of a block's opening delimiter.
-    /// </summary>
-    private int FindBlockOpeningIndex(SimpleBlock block)
-    {
-        return FindSimpleTokenIndex(block);
-    }
-
-    /// <summary>
-    /// Finds the SimpleToken index of a block's closing delimiter.
-    /// </summary>
-    private int FindBlockClosingIndex(SimpleBlock block)
-    {
-        var closingPosition = block.ClosingDelimiter.Position;
-        
-        for (int i = 0; i < _simpleTokens.Length; i++)
-        {
-            if (_simpleTokens[i].Position == closingPosition)
-                return i;
-        }
-        
-        throw new InvalidOperationException($"Could not find closing delimiter at position {closingPosition}");
+        var index = TokenQuery.FindSimpleTokenByPosition(_simpleTokens, token.Position);
+        if (index < 0)
+            throw new InvalidOperationException($"Could not find SimpleToken at position {token.Position}");
+        return index;
     }
 
     /// <summary>
     /// Finds the range of SimpleToken indices that comprise a Level 2 token.
-    /// For simple tokens, this is a single index. For blocks, this spans from opener to closer.
+    /// Delegates to TokenQuery's static helper for consistency.
     /// </summary>
     private (int Start, int End) FindSimpleTokenRange(Token token)
     {
-        if (token is SimpleBlock block)
-        {
-            var start = FindBlockOpeningIndex(block);
-            var end = FindBlockClosingIndex(block);
-            return (start, end);
-        }
-        else
-        {
-            var index = FindSimpleTokenIndex(token);
-            return (index, index);
-        }
+        var range = TokenQuery.ResolveSimpleTokenRange(token, _simpleTokens);
+        if (range.Start < 0)
+            throw new InvalidOperationException($"Could not find SimpleToken range for token at position {token.Position}");
+        return range;
     }
 
     #endregion
@@ -391,7 +356,7 @@ public sealed class TokenBuffer
     /// <param name="options">Optional tokenizer options.</param>
     public TokenBuffer InsertIntoBlockStart(TokenQuery query, string text, TokenizerOptions? options = null)
     {
-        var simpleTokens = LexText(text, options);
+        var lexedTokens = LexText(text, options);
         var tokens = Tokens;
         
         foreach (var index in query.Select(tokens))
@@ -402,9 +367,12 @@ public sealed class TokenBuffer
                 throw new InvalidOperationException($"InsertIntoBlockStart requires a SimpleBlock, got {token.GetType().Name}");
             }
             
-            // Insert after the opening delimiter
-            var openingIndex = FindBlockOpeningIndex(block);
-            _mutations.Add(new InsertSimpleTokensMutation { Index = openingIndex + 1, Tokens = simpleTokens });
+            // Insert after the opening delimiter using position lookup
+            var openingIndex = TokenQuery.FindSimpleTokenByPosition(_simpleTokens, block.OpeningDelimiter.Position);
+            if (openingIndex < 0)
+                throw new InvalidOperationException($"Could not find opening delimiter at position {block.OpeningDelimiter.Position}");
+            
+            _mutations.Add(new InsertSimpleTokensMutation { Index = openingIndex + 1, Tokens = lexedTokens });
         }
         
         return this;
@@ -418,7 +386,7 @@ public sealed class TokenBuffer
     /// <param name="options">Optional tokenizer options.</param>
     public TokenBuffer InsertIntoBlockEnd(TokenQuery query, string text, TokenizerOptions? options = null)
     {
-        var simpleTokens = LexText(text, options);
+        var lexedTokens = LexText(text, options);
         var tokens = Tokens;
         
         foreach (var index in query.Select(tokens))
@@ -429,9 +397,32 @@ public sealed class TokenBuffer
                 throw new InvalidOperationException($"InsertIntoBlockEnd requires a SimpleBlock, got {token.GetType().Name}");
             }
             
-            // Insert before the closing delimiter
-            var closingIndex = FindBlockClosingIndex(block);
-            _mutations.Add(new InsertSimpleTokensMutation { Index = closingIndex, Tokens = simpleTokens });
+            // Insert before the closing delimiter using position lookup
+            var closingIndex = TokenQuery.FindSimpleTokenByPosition(_simpleTokens, block.ClosingDelimiter.Position);
+            if (closingIndex < 0)
+                throw new InvalidOperationException($"Could not find closing delimiter at position {block.ClosingDelimiter.Position}");
+            
+            _mutations.Add(new InsertSimpleTokensMutation { Index = closingIndex, Tokens = lexedTokens });
+        }
+        
+        return this;
+    }
+
+    /// <summary>
+    /// Queues an insertion of SimpleTokens at the positions resolved by a BlockPositionQuery.
+    /// This is the preferred method for block-aware insertions using the query system.
+    /// </summary>
+    /// <param name="positionQuery">A BlockPositionQuery specifying where to insert.</param>
+    /// <param name="text">The text to insert.</param>
+    /// <param name="options">Optional tokenizer options.</param>
+    public TokenBuffer InsertAt(BlockPositionQuery positionQuery, string text, TokenizerOptions? options = null)
+    {
+        var lexedTokens = LexText(text, options);
+        var tokens = Tokens;
+        
+        foreach (var simpleIndex in positionQuery.SelectSimpleIndices(tokens, _simpleTokens))
+        {
+            _mutations.Add(new InsertSimpleTokensMutation { Index = simpleIndex, Tokens = lexedTokens });
         }
         
         return this;
