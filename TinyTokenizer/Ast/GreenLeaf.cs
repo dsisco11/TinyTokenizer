@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -65,6 +66,16 @@ public sealed record GreenLeaf : GreenNode
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position)
         => new RedLeaf(this, parent, position);
+    
+    /// <inheritdoc/>
+    public override void WriteTo(StringBuilder builder)
+    {
+        foreach (var trivia in LeadingTrivia)
+            builder.Append(trivia.Text);
+        builder.Append(Text);
+        foreach (var trivia in TrailingTrivia)
+            builder.Append(trivia.Text);
+    }
     
     /// <summary>
     /// Creates a new leaf with different leading trivia.

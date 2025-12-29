@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -7,7 +8,7 @@ namespace TinyTokenizer.Ast;
 /// Green nodes store width (not absolute position) and can be freely shared
 /// across different tree versions for structural sharing during mutations.
 /// </summary>
-public abstract record GreenNode
+public abstract record GreenNode : IFormattable
 {
     /// <summary>The kind of this node.</summary>
     public abstract NodeKind Kind { get; }
@@ -37,6 +38,12 @@ public abstract record GreenNode
     /// <param name="position">The absolute position in source text.</param>
     /// <returns>A new red node wrapping this green node.</returns>
     public abstract RedNode CreateRed(RedNode? parent, int position);
+    
+    /// <summary>
+    /// Writes the text content of this node to a StringBuilder.
+    /// </summary>
+    /// <param name="builder">The StringBuilder to write to.</param>
+    public abstract void WriteTo(StringBuilder builder);
     
     /// <summary>
     /// Computes the character offset of a child slot from this node's start.
@@ -71,4 +78,50 @@ public abstract record GreenNode
     /// Whether this node is a leaf (no children).
     /// </summary>
     public bool IsLeaf => !IsContainer;
+    
+    #region IFormattable
+    
+    /// <summary>
+    /// Formats this node using the specified format string.
+    /// </summary>
+    /// <param name="format">
+    /// Format string:
+    /// - null, "", or "G": Full text content (serialized form)
+    /// - "K": Kind only (e.g., "Ident")
+    /// - "W": Width only (e.g., "5")
+    /// - "D": Debug info (e.g., "Ident[5]")
+    /// - "T": Type name (e.g., "GreenLeaf")
+    /// </param>
+    /// <param name="formatProvider">Format provider (unused).</param>
+    public string ToString(string? format, IFormatProvider? formatProvider)
+    {
+        return format switch
+        {
+            null or "" or "G" => ToText(),
+            "K" => Kind.ToString(),
+            "W" => Width.ToString(),
+            "D" => SlotCount > 0 
+                ? $"{Kind}[{Width}] ({SlotCount} children)" 
+                : $"{Kind}[{Width}]",
+            "T" => GetType().Name,
+            _ => ToText()
+        };
+    }
+    
+    /// <summary>
+    /// Returns the text content of this node.
+    /// </summary>
+    public string ToText()
+    {
+        var sb = new StringBuilder(Width);
+        WriteTo(sb);
+        return sb.ToString();
+    }
+    
+    /// <summary>
+    /// Returns the text content of this node.
+    /// </summary>
+    public override string ToString() => ToText();
+    
+    #endregion
 }

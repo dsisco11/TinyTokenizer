@@ -55,9 +55,14 @@ public class GlslEditorTests
         
         /// <summary>The directive tag node (e.g., "#version").</summary>
         public RedLeaf DirectiveNode => GetTypedChild<RedLeaf>(0);
+
+        public RedLeaf ArgumentsNode => GetTypedChild<RedLeaf>(1);
         
         /// <summary>The directive name without # (e.g., "version").</summary>
-        public string DirectiveName => DirectiveNode.Text.TrimStart('#');
+        public string Name => DirectiveNode.Text.TrimStart('#');
+
+        /// <summary> The directive arguments as text. </summary>
+        public string Arguments => ArgumentsNode.Text;
     }
     
     #endregion
@@ -77,6 +82,10 @@ public class GlslEditorTests
             .DefineSyntax(Syntax.Define<GlslFunctionSyntax>("GlslFunction")
                 .Match(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock)
                 .WithPriority(10)
+                .Build())
+            // Directive: #tag ...
+            .DefineSyntax(Syntax.Define<GlslDirectiveSyntax>("GlslDirective")
+                .Match(Query.TaggedIdent, Query.Any)
                 .Build())
             .Build();
     }
@@ -136,8 +145,11 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
-        var fooFunc = FindFunction(tree, "foo");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
+
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         
         Assert.NotNull(mainFunc);
         Assert.NotNull(fooFunc);
@@ -151,10 +163,11 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var versionDirective = FindDirective(tree, "version");
+        var versionDirectiveQuery = Query.Syntax<GlslDirectiveSyntax>().Where(d => d.Name == "version");
+        var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlslDirectiveSyntax;
         
         Assert.NotNull(versionDirective);
-        Assert.Equal("#version", versionDirective!.Text);
+        Assert.Equal("#version 330", versionDirective!.ToString());
     }
     
     #endregion

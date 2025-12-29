@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -69,6 +70,13 @@ public sealed record GreenSyntaxNode : GreenNode
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index) =>
         index >= 0 && index < _children.Length ? _children[index] : null;
+    
+    /// <inheritdoc/>
+    public override void WriteTo(StringBuilder builder)
+    {
+        foreach (var child in _children)
+            child.WriteTo(builder);
+    }
     
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position) =>

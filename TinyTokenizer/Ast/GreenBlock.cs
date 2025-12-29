@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -101,6 +102,19 @@ public sealed record GreenBlock : GreenNode
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position)
         => new RedBlock(this, parent, position);
+    
+    /// <inheritdoc/>
+    public override void WriteTo(StringBuilder builder)
+    {
+        foreach (var trivia in LeadingTrivia)
+            builder.Append(trivia.Text);
+        builder.Append(Opener);
+        foreach (var child in _children)
+            child.WriteTo(builder);
+        builder.Append(Closer);
+        foreach (var trivia in TrailingTrivia)
+            builder.Append(trivia.Text);
+    }
     
     #region Structural Sharing Mutations
     
