@@ -71,18 +71,18 @@ public static class SemanticMatchExtensions
     /// <summary>
     /// Creates a query that matches semantic nodes by definition name.
     /// </summary>
-    public static SemanticNodeQuery Semantic(this Schema schema, string name)
+    public static SyntaxNodeQuery Syntax(this Schema schema, string name)
     {
         var kind = schema.GetKind(name);
-        return new SemanticNodeQuery(kind);
+        return new SyntaxNodeQuery(kind);
     }
     
     /// <summary>
     /// Creates a query that matches semantic nodes by NodeKind.
     /// </summary>
-    public static SemanticNodeQuery Semantic(NodeKind kind)
+    public static SyntaxNodeQuery Syntax(NodeKind kind)
     {
-        return new SemanticNodeQuery(kind);
+        return new SyntaxNodeQuery(kind);
     }
     
     /// <summary>
@@ -94,10 +94,10 @@ public static class SemanticMatchExtensions
     /// <returns>A NodeQuery that matches nodes of the specified semantic type.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the type is not registered in this schema.</exception>
     /// <remarks>
-    /// This generic overload is preferred over <see cref="Semantic(Schema, string)"/> as it provides
+    /// This generic overload is preferred over <see cref="Syntax(Schema, string)"/> as it provides
     /// compile-time type safety and uses the NodeKind directly for optimized scanning.
     /// </remarks>
-    public static SemanticNodeQuery Semantic<T>(this Schema schema) where T : SemanticNode
+    public static SyntaxNodeQuery Syntax<T>(this Schema schema) where T : SemanticNode
     {
         var definition = schema.GetDefinition<T>();
         if (definition == null)
@@ -105,7 +105,7 @@ public static class SemanticMatchExtensions
             throw new InvalidOperationException(
                 $"Semantic node type '{typeof(T).Name}' is not registered in this schema.");
         }
-        return new SemanticNodeQuery(definition.Kind);
+        return new SyntaxNodeQuery(definition.Kind);
     }
     
     #endregion
@@ -114,16 +114,16 @@ public static class SemanticMatchExtensions
 /// <summary>
 /// Query that matches nodes by semantic NodeKind.
 /// </summary>
-public sealed record SemanticNodeQuery : NodeQuery<SemanticNodeQuery>
+public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
 {
     private readonly NodeKind _kind;
     private readonly Func<RedNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
-    public SemanticNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0) { }
+    public SyntaxNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0) { }
     
-    private SemanticNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private SyntaxNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _kind = kind;
         _predicate = predicate;
@@ -154,14 +154,14 @@ public sealed record SemanticNodeQuery : NodeQuery<SemanticNodeQuery>
     
     public override bool MatchesGreen(GreenNode node) => node.Kind == _kind;
     
-    protected override SemanticNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override SyntaxNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
-    protected override SemanticNodeQuery CreateFirst() => new(_kind, _predicate, SelectionMode.First, 0);
-    protected override SemanticNodeQuery CreateLast() => new(_kind, _predicate, SelectionMode.Last, 0);
-    protected override SemanticNodeQuery CreateNth(int n) => new(_kind, _predicate, SelectionMode.Nth, n);
-    protected override SemanticNodeQuery CreateSkip(int count) => new(_kind, _predicate, SelectionMode.Skip, count);
-    protected override SemanticNodeQuery CreateTake(int count) => new(_kind, _predicate, SelectionMode.Take, count);
+    protected override SyntaxNodeQuery CreateFirst() => new(_kind, _predicate, SelectionMode.First, 0);
+    protected override SyntaxNodeQuery CreateLast() => new(_kind, _predicate, SelectionMode.Last, 0);
+    protected override SyntaxNodeQuery CreateNth(int n) => new(_kind, _predicate, SelectionMode.Nth, n);
+    protected override SyntaxNodeQuery CreateSkip(int count) => new(_kind, _predicate, SelectionMode.Skip, count);
+    protected override SyntaxNodeQuery CreateTake(int count) => new(_kind, _predicate, SelectionMode.Take, count);
     
     private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);

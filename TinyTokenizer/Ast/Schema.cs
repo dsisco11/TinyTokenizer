@@ -184,7 +184,7 @@ public sealed class Schema
     /// <typeparam name="T">The semantic node type to query for.</typeparam>
     /// <returns>A NodeQuery that matches nodes of the specified semantic type.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the type is not registered in this schema.</exception>
-    public SemanticNodeQuery Semantic<T>() where T : SemanticNode
+    public SyntaxNodeQuery Semantic<T>() where T : SemanticNode
     {
         var definition = GetDefinition<T>();
         if (definition == null)
@@ -193,7 +193,7 @@ public sealed class Schema
                 $"Semantic node type '{typeof(T).Name}' is not registered in this schema. " +
                 $"Register it using SchemaBuilder.Define<{typeof(T).Name}>().");
         }
-        return new SemanticNodeQuery(definition.Kind);
+        return new SyntaxNodeQuery(definition.Kind);
     }
     
     #endregion
