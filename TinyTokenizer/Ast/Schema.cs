@@ -161,7 +161,7 @@ public sealed class Schema
     /// <summary>
     /// Gets a syntax definition by RedSyntaxNode type.
     /// </summary>
-    public SyntaxNodeDefinition? GetSyntaxDefinition<T>() where T : RedSyntaxNode =>
+    public SyntaxNodeDefinition? GetSyntaxDefinition<T>() where T : SyntaxNode =>
         _syntaxDefinitionsByType.GetValueOrDefault(typeof(T));
     
     /// <summary>
@@ -354,7 +354,7 @@ public sealed class SchemaBuilder
     private readonly List<SyntaxNodeDefinition> _syntaxDefinitions = [];
     
     /// <summary>Registers a syntax node definition for tree binding.</summary>
-    public SchemaBuilder DefineSyntax<T>(SyntaxNodeDefinition definition) where T : RedSyntaxNode
+    public SchemaBuilder DefineSyntax<T>(SyntaxNodeDefinition definition) where T : SyntaxNode
     {
         if (definition.RedType != typeof(T))
             throw new ArgumentException($"Definition RedType must be {typeof(T).Name}", nameof(definition));
@@ -371,7 +371,7 @@ public sealed class SchemaBuilder
     
     /// <summary>Registers a syntax node definition using a builder action.</summary>
     public SchemaBuilder DefineSyntax<T>(string name, Action<SyntaxNodeDefinitionBuilder<T>> configure) 
-        where T : RedSyntaxNode
+        where T : SyntaxNode
     {
         var builder = new SyntaxNodeDefinitionBuilder<T>(name);
         configure(builder);

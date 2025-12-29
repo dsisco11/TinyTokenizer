@@ -81,19 +81,19 @@ public sealed record GreenSyntaxNode : GreenNode
 /// </summary>
 internal static class SyntaxRedFactory
 {
-    private static readonly Dictionary<Type, Func<GreenSyntaxNode, RedNode?, int, RedSyntaxNode>> _factories = new();
+    private static readonly Dictionary<Type, Func<GreenSyntaxNode, RedNode?, int, SyntaxNode>> _factories = new();
     private static readonly object _lock = new();
     
     /// <summary>
     /// Creates a red syntax node of the appropriate type for the green node.
     /// </summary>
-    public static RedSyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position)
+    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position)
     {
         var factory = GetOrCreateFactory(green.RedType);
         return factory(green, parent, position);
     }
     
-    private static Func<GreenSyntaxNode, RedNode?, int, RedSyntaxNode> GetOrCreateFactory(Type redType)
+    private static Func<GreenSyntaxNode, RedNode?, int, SyntaxNode> GetOrCreateFactory(Type redType)
     {
         lock (_lock)
         {
@@ -110,8 +110,8 @@ internal static class SyntaxRedFactory
             }
             
             // Create factory delegate
-            Func<GreenSyntaxNode, RedNode?, int, RedSyntaxNode> factory = 
-                (g, p, pos) => (RedSyntaxNode)ctor.Invoke(new object?[] { g, p, pos });
+            Func<GreenSyntaxNode, RedNode?, int, SyntaxNode> factory = 
+                (g, p, pos) => (SyntaxNode)ctor.Invoke(new object?[] { g, p, pos });
             
             _factories[redType] = factory;
             return factory;
@@ -123,7 +123,7 @@ internal static class SyntaxRedFactory
     /// Useful for avoiding reflection overhead in hot paths.
     /// </summary>
     public static void RegisterFactory<T>(Func<GreenSyntaxNode, RedNode?, int, T> factory) 
-        where T : RedSyntaxNode
+        where T : SyntaxNode
     {
         lock (_lock)
         {

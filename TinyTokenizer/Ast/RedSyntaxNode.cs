@@ -14,9 +14,9 @@ namespace TinyTokenizer.Ast;
 /// </remarks>
 /// <example>
 /// <code>
-/// public sealed class RedFunctionCall : RedSyntaxNode
+/// public sealed class FunctionCallSyntax : RedSyntaxNode
 /// {
-///     public RedFunctionCall(GreenSyntaxNode green, RedNode? parent, int position)
+///     public FunctionCallSyntax(GreenSyntaxNode green, RedNode? parent, int position)
 ///         : base(green, parent, position) { }
 ///     
 ///     public RedLeaf NameNode => GetTypedChild&lt;RedLeaf&gt;(0);
@@ -25,7 +25,7 @@ namespace TinyTokenizer.Ast;
 /// }
 /// </code>
 /// </example>
-public abstract class RedSyntaxNode : RedNode
+public abstract class SyntaxNode : RedNode
 {
     private readonly RedNode?[] _children;
     
@@ -35,7 +35,7 @@ public abstract class RedSyntaxNode : RedNode
     /// <param name="green">The underlying green syntax node.</param>
     /// <param name="parent">The parent red node, or null for root.</param>
     /// <param name="position">The absolute position in source text.</param>
-    protected RedSyntaxNode(GreenSyntaxNode green, RedNode? parent, int position)
+    protected SyntaxNode(GreenSyntaxNode green, RedNode? parent, int position)
         : base(green, parent, position)
     {
         _children = new RedNode?[green.SlotCount];
@@ -111,12 +111,12 @@ public abstract class RedSyntaxNode : RedNode
 /// Pattern: Ident + ParenBlock
 /// Example: foo(a, b, c)
 /// </summary>
-public sealed class RedFunctionCall : RedSyntaxNode
+public sealed class FunctionCallSyntax : SyntaxNode
 {
     /// <summary>
     /// Creates a function call red syntax node.
     /// </summary>
-    public RedFunctionCall(GreenSyntaxNode green, RedNode? parent, int position)
+    public FunctionCallSyntax(GreenSyntaxNode green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }
@@ -142,12 +142,12 @@ public sealed class RedFunctionCall : RedSyntaxNode
 /// Pattern: Ident + BracketBlock
 /// Example: arr[0], dict["key"]
 /// </summary>
-public sealed class RedArrayAccess : RedSyntaxNode
+public sealed class ArrayAccessSyntax : SyntaxNode
 {
     /// <summary>
     /// Creates an array access red syntax node.
     /// </summary>
-    public RedArrayAccess(GreenSyntaxNode green, RedNode? parent, int position)
+    public ArrayAccessSyntax(GreenSyntaxNode green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }
@@ -173,12 +173,12 @@ public sealed class RedArrayAccess : RedSyntaxNode
 /// Pattern: Ident + Symbol(".") + Ident
 /// Example: obj.property, namespace.Class
 /// </summary>
-public sealed class RedPropertyAccess : RedSyntaxNode
+public sealed class PropertyAccessSyntax : SyntaxNode
 {
     /// <summary>
     /// Creates a property access red syntax node.
     /// </summary>
-    public RedPropertyAccess(GreenSyntaxNode green, RedNode? parent, int position)
+    public PropertyAccessSyntax(GreenSyntaxNode green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }

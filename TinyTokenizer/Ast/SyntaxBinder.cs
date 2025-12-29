@@ -258,7 +258,7 @@ public sealed record SyntaxNodeDefinition
 /// <summary>
 /// Builder for SyntaxNodeDefinition using fluent API.
 /// </summary>
-public sealed class SyntaxNodeDefinitionBuilder<T> where T : RedSyntaxNode
+public sealed class SyntaxNodeDefinitionBuilder<T> where T : SyntaxNode
 {
     private readonly string _name;
     private readonly List<NodePattern> _patterns = [];
@@ -326,6 +326,6 @@ public static class Syntax
     /// </summary>
     /// <typeparam name="T">The RedSyntaxNode subclass.</typeparam>
     /// <param name="name">Unique name for the definition.</param>
-    public static SyntaxNodeDefinitionBuilder<T> Define<T>(string name) where T : RedSyntaxNode
+    public static SyntaxNodeDefinitionBuilder<T> Define<T>(string name) where T : SyntaxNode
         => new(name);
 }

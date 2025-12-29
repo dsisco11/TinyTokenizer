@@ -21,7 +21,7 @@ public class SyntaxNodeTests
         // Act
         var syntaxNode = new GreenSyntaxNode(
             NodeKind.Semantic, 
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
         // Assert
@@ -37,7 +37,7 @@ public class SyntaxNodeTests
         
         var syntaxNode = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
         Assert.Same(nameLeaf, syntaxNode.GetSlot(0));
@@ -50,9 +50,9 @@ public class SyntaxNodeTests
     public void GreenSyntaxNode_StoresRedType()
     {
         var leaf = new GreenLeaf(NodeKind.Ident, "x");
-        var syntaxNode = new GreenSyntaxNode(NodeKind.Semantic, typeof(RedFunctionCall), leaf);
+        var syntaxNode = new GreenSyntaxNode(NodeKind.Semantic, typeof(FunctionCallSyntax), leaf);
         
-        Assert.Equal(typeof(RedFunctionCall), syntaxNode.RedType);
+        Assert.Equal(typeof(FunctionCallSyntax), syntaxNode.RedType);
     }
     
     [Fact]
@@ -63,13 +63,13 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
         var redNode = greenSyntax.CreateRed(null, 0);
         
-        Assert.IsType<RedFunctionCall>(redNode);
-        var funcCall = (RedFunctionCall)redNode;
+        Assert.IsType<FunctionCallSyntax>(redNode);
+        var funcCall = (FunctionCallSyntax)redNode;
         Assert.Equal("myFunc", funcCall.Name);
     }
     
@@ -78,17 +78,17 @@ public class SyntaxNodeTests
     #region RedSyntaxNode Tests
     
     [Fact]
-    public void RedFunctionCall_ProvidesTypedAccessToChildren()
+    public void FunctionCallSyntax_ProvidesTypedAccessToChildren()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "doSomething");
         var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
-        var funcCall = (RedFunctionCall)greenSyntax.CreateRed(null, 0);
+        var funcCall = (FunctionCallSyntax)greenSyntax.CreateRed(null, 0);
         
         // Test typed accessors
         Assert.NotNull(funcCall.NameNode);
@@ -98,7 +98,7 @@ public class SyntaxNodeTests
     }
     
     [Fact]
-    public void RedArrayAccess_ProvidesTypedAccessToChildren()
+    public void ArrayAccessSyntax_ProvidesTypedAccessToChildren()
     {
         var targetLeaf = new GreenLeaf(NodeKind.Ident, "arr");
         var indexContent = new GreenLeaf(NodeKind.Numeric, "0");
@@ -106,10 +106,10 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedArrayAccess),
+            typeof(ArrayAccessSyntax),
             targetLeaf, indexBlock);
         
-        var arrayAccess = (RedArrayAccess)greenSyntax.CreateRed(null, 0);
+        var arrayAccess = (ArrayAccessSyntax)greenSyntax.CreateRed(null, 0);
         
         Assert.Equal("arr", arrayAccess.Target);
         Assert.NotNull(arrayAccess.IndexBlock);
@@ -117,7 +117,7 @@ public class SyntaxNodeTests
     }
     
     [Fact]
-    public void RedPropertyAccess_ProvidesTypedAccessToChildren()
+    public void PropertyAccessSyntax_ProvidesTypedAccessToChildren()
     {
         var objLeaf = new GreenLeaf(NodeKind.Ident, "obj");
         var dotLeaf = new GreenLeaf(NodeKind.Symbol, ".");
@@ -125,10 +125,10 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedPropertyAccess),
+            typeof(PropertyAccessSyntax),
             objLeaf, dotLeaf, propLeaf);
         
-        var propAccess = (RedPropertyAccess)greenSyntax.CreateRed(null, 0);
+        var propAccess = (PropertyAccessSyntax)greenSyntax.CreateRed(null, 0);
         
         Assert.Equal("obj", propAccess.Object);
         Assert.Equal(".", propAccess.DotNode.Text);
@@ -145,10 +145,10 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedPropertyAccess),
+            typeof(PropertyAccessSyntax),
             child1, child2, child3);
         
-        var redSyntax = (RedSyntaxNode)greenSyntax.CreateRed(null, 0);
+        var redSyntax = (SyntaxNode)greenSyntax.CreateRed(null, 0);
         var children = redSyntax.Children.ToList();
         
         Assert.Equal(3, children.Count);
@@ -165,10 +165,10 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
-        var funcCall = (RedFunctionCall)greenSyntax.CreateRed(null, 10);
+        var funcCall = (FunctionCallSyntax)greenSyntax.CreateRed(null, 10);
         
         Assert.Equal(10, funcCall.Position);
         Assert.Equal(6, funcCall.Width); // "func" + "()"
@@ -183,10 +183,10 @@ public class SyntaxNodeTests
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
-            typeof(RedFunctionCall),
+            typeof(FunctionCallSyntax),
             nameLeaf, argsBlock);
         
-        var funcCall = (RedFunctionCall)greenSyntax.CreateRed(null, 100);
+        var funcCall = (FunctionCallSyntax)greenSyntax.CreateRed(null, 100);
         
         Assert.Equal(100, funcCall.NameNode.Position); // First child at syntax node position
         Assert.Equal(104, funcCall.Arguments.Position); // Second child after first (100 + 4)
@@ -211,13 +211,13 @@ public class SyntaxNodeTests
     [Fact]
     public void SyntaxNodeDefinitionBuilder_CreatesDefinition()
     {
-        var definition = Syntax.Define<RedFunctionCall>("FunctionCall")
+        var definition = Syntax.Define<FunctionCallSyntax>("FunctionCall")
             .Match(Query.Ident, Query.ParenBlock)
             .WithPriority(10)
             .Build();
         
         Assert.Equal("FunctionCall", definition.Name);
-        Assert.Equal(typeof(RedFunctionCall), definition.RedType);
+        Assert.Equal(typeof(FunctionCallSyntax), definition.RedType);
         Assert.Equal(10, definition.Priority);
         Assert.Single(definition.Patterns);
     }
@@ -232,7 +232,7 @@ public class SyntaxNodeTests
         // Build a tree with a GreenSyntaxNode
         var funcName = new GreenLeaf(NodeKind.Ident, "foo");
         var args = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
-        var funcCallGreen = new GreenSyntaxNode(NodeKind.Semantic, typeof(RedFunctionCall), funcName, args);
+        var funcCallGreen = new GreenSyntaxNode(NodeKind.Semantic, typeof(FunctionCallSyntax), funcName, args);
         
         var root = new GreenList(ImmutableArray.Create<GreenNode>(funcCallGreen));
         var redRoot = (RedList)root.CreateRed(null, 0);
@@ -241,7 +241,7 @@ public class SyntaxNodeTests
         var walker = new TreeWalker(redRoot);
         var allNodes = walker.DescendantsAndSelf().ToList();
         
-        Assert.Contains(allNodes, n => n is RedFunctionCall);
+        Assert.Contains(allNodes, n => n is FunctionCallSyntax);
         Assert.Contains(allNodes, n => n is RedLeaf leaf && leaf.Text == "foo");
     }
     
@@ -252,7 +252,7 @@ public class SyntaxNodeTests
         var funcName = new GreenLeaf(NodeKind.Ident, "bar");
         var args = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
         var syntaxKind = NodeKindExtensions.SemanticKind(0);
-        var funcCallGreen = new GreenSyntaxNode(syntaxKind, typeof(RedFunctionCall), funcName, args);
+        var funcCallGreen = new GreenSyntaxNode(syntaxKind, typeof(FunctionCallSyntax), funcName, args);
         
         var root = new GreenList(ImmutableArray.Create<GreenNode>(funcCallGreen));
         
@@ -263,7 +263,7 @@ public class SyntaxNodeTests
         var results = Query.Kind(syntaxKind).Select(redRoot).ToList();
         
         Assert.Single(results);
-        Assert.IsType<RedFunctionCall>(results[0]);
+        Assert.IsType<FunctionCallSyntax>(results[0]);
     }
     
     #endregion
@@ -274,24 +274,24 @@ public class SyntaxNodeTests
     public void Schema_DefineSyntax_RegistersDefinition()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
         
         Assert.Single(schema.SyntaxDefinitions);
         Assert.Equal("FunctionCall", schema.SyntaxDefinitions[0].Name);
-        Assert.Equal(typeof(RedFunctionCall), schema.SyntaxDefinitions[0].RedType);
+        Assert.Equal(typeof(FunctionCallSyntax), schema.SyntaxDefinitions[0].RedType);
     }
     
     [Fact]
     public void Schema_DefineSyntax_AssignsNodeKind()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
-            .DefineSyntax(Syntax.Define<RedArrayAccess>("ArrayAccess")
+            .DefineSyntax(Syntax.Define<ArrayAccessSyntax>("ArrayAccess")
                 .Match(Query.Ident, Query.BracketBlock)
                 .Build())
             .Build();
@@ -309,10 +309,10 @@ public class SyntaxNodeTests
     public void Schema_GetSyntaxDefinition_ByName()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
-            .DefineSyntax(Syntax.Define<RedArrayAccess>("ArrayAccess")
+            .DefineSyntax(Syntax.Define<ArrayAccessSyntax>("ArrayAccess")
                 .Match(Query.Ident, Query.BracketBlock)
                 .Build())
             .Build();
@@ -322,20 +322,20 @@ public class SyntaxNodeTests
         
         Assert.NotNull(funcDef);
         Assert.NotNull(arrDef);
-        Assert.Equal(typeof(RedFunctionCall), funcDef!.RedType);
-        Assert.Equal(typeof(RedArrayAccess), arrDef!.RedType);
+        Assert.Equal(typeof(FunctionCallSyntax), funcDef!.RedType);
+        Assert.Equal(typeof(ArrayAccessSyntax), arrDef!.RedType);
     }
     
     [Fact]
     public void Schema_GetSyntaxDefinition_ByType()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
         
-        var definition = schema.GetSyntaxDefinition<RedFunctionCall>();
+        var definition = schema.GetSyntaxDefinition<FunctionCallSyntax>();
         
         Assert.NotNull(definition);
         Assert.Equal("FunctionCall", definition!.Name);
@@ -345,7 +345,7 @@ public class SyntaxNodeTests
     public void Schema_DefineSyntax_WithBuilderAction()
     {
         var schema = Schema.Create()
-            .DefineSyntax<RedFunctionCall>("FunctionCall", builder => builder
+            .DefineSyntax<FunctionCallSyntax>("FunctionCall", builder => builder
                 .Match(Query.Ident, Query.ParenBlock)
                 .WithPriority(10))
             .Build();
@@ -359,7 +359,7 @@ public class SyntaxNodeTests
     public void SyntaxBinder_WithSchemaDefinitions_CanBind()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
@@ -378,7 +378,7 @@ public class SyntaxNodeTests
     public void ParseAndBind_RecognizesFunctionCalls()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
@@ -387,8 +387,8 @@ public class SyntaxNodeTests
         
         // Find all function calls
         var funcCalls = tree.Root.Children
-            .Where(n => n is RedFunctionCall)
-            .Cast<RedFunctionCall>()
+            .Where(n => n is FunctionCallSyntax)
+            .Cast<FunctionCallSyntax>()
             .ToList();
         
         Assert.Equal(2, funcCalls.Count);
@@ -400,7 +400,7 @@ public class SyntaxNodeTests
     public void ParseAndBind_RecognizesNestedPatterns()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
@@ -409,7 +409,7 @@ public class SyntaxNodeTests
         
         // Find outer function call
         var outerCall = tree.Root.Children
-            .OfType<RedFunctionCall>()
+            .OfType<FunctionCallSyntax>()
             .FirstOrDefault();
         
         Assert.NotNull(outerCall);
@@ -417,7 +417,7 @@ public class SyntaxNodeTests
         
         // Find inner function call in arguments
         var innerCall = outerCall.Arguments.Children
-            .OfType<RedFunctionCall>()
+            .OfType<FunctionCallSyntax>()
             .FirstOrDefault();
         
         Assert.NotNull(innerCall);
@@ -428,14 +428,14 @@ public class SyntaxNodeTests
     public void Tree_Parse_AutoBindsWhenSchemaHasDefinitions()
     {
         var schema = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
         
         // Parse auto-binds when schema has definitions
         var tree = SyntaxTree.Parse("foo()", schema);
-        var funcCall = tree.Root.Children.OfType<RedFunctionCall>().FirstOrDefault();
+        var funcCall = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
         
         Assert.NotNull(funcCall);
         Assert.Equal("foo", funcCall!.Name);
@@ -448,8 +448,8 @@ public class SyntaxNodeTests
         
         var tree = SyntaxTree.Parse("foo()", schema);
         
-        // Should not contain RedFunctionCall since no definitions
-        Assert.DoesNotContain(tree.Root.Children, n => n is RedFunctionCall);
+        // Should not contain FunctionCallSyntax since no definitions
+        Assert.DoesNotContain(tree.Root.Children, n => n is FunctionCallSyntax);
     }
     
     [Fact]
@@ -457,18 +457,18 @@ public class SyntaxNodeTests
     {
         var schemaWithoutDefs = Schema.Create().Build();
         var schemaWithDefs = Schema.Create()
-            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
                 .Match(Query.Ident, Query.ParenBlock)
                 .Build())
             .Build();
         
         // Parse without definitions
         var tree = SyntaxTree.Parse("foo()", schemaWithoutDefs);
-        Assert.DoesNotContain(tree.Root.Children, n => n is RedFunctionCall);
+        Assert.DoesNotContain(tree.Root.Children, n => n is FunctionCallSyntax);
         
         // Bind with a different schema that has definitions
         var boundTree = tree.Bind(schemaWithDefs);
-        var funcCall = boundTree.Root.Children.OfType<RedFunctionCall>().FirstOrDefault();
+        var funcCall = boundTree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
         
         Assert.NotNull(funcCall);
         Assert.Equal("foo", funcCall!.Name);
