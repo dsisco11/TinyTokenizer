@@ -19,6 +19,12 @@ public interface INodeQuery
     /// Tests whether a single node matches this query's criteria.
     /// </summary>
     bool Matches(RedNode node);
+    
+    /// <summary>
+    /// Tests whether a green node matches this query's criteria.
+    /// Used for efficient pattern matching without creating red trees.
+    /// </summary>
+    bool MatchesGreen(GreenNode node);
 }
 
 /// <summary>
@@ -43,6 +49,12 @@ public abstract record NodeQuery<TSelf> : INodeQuery where TSelf : NodeQuery<TSe
     /// Tests whether a single node matches this query's criteria.
     /// </summary>
     public abstract bool Matches(RedNode node);
+    
+    /// <summary>
+    /// Tests whether a green node matches this query's criteria.
+    /// Default implementation checks kind; override for more specific matching.
+    /// </summary>
+    public abstract bool MatchesGreen(GreenNode node);
     
     #region CRTP Factory Methods
     

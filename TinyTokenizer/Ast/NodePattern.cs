@@ -48,6 +48,16 @@ public abstract record NodePattern
     public abstract bool TryMatch(RedNode node, out NodeMatch match);
     
     /// <summary>
+    /// Attempts to match this pattern against green nodes starting at the given index.
+    /// Used for efficient pattern matching without creating red trees.
+    /// </summary>
+    /// <param name="siblings">The sibling green nodes to match against.</param>
+    /// <param name="startIndex">Index of the first sibling to try matching.</param>
+    /// <param name="consumedCount">Number of siblings consumed if matched.</param>
+    /// <returns>True if the pattern matched.</returns>
+    public abstract bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount);
+    
+    /// <summary>
     /// Gets a description of this pattern for diagnostics.
     /// </summary>
     public abstract string Description { get; }
@@ -108,6 +118,18 @@ public sealed record QueryPattern : NodePattern
         }
         
         match = NodeMatch.Empty;
+        return false;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (startIndex < siblings.Count && _query.MatchesGreen(siblings[startIndex]))
+        {
+            consumedCount = 1;
+            return true;
+        }
+        
+        consumedCount = 0;
         return false;
     }
     
@@ -175,6 +197,33 @@ public sealed record SequencePattern : NodePattern
         return true;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int totalConsumed = 0;
+        
+        foreach (var pattern in _parts)
+        {
+            if (currentIndex >= siblings.Count)
+            {
+                consumedCount = 0;
+                return false;
+            }
+            
+            if (!pattern.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+            {
+                consumedCount = 0;
+                return false;
+            }
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+        }
+        
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
     public override string Description => 
         string.Join(" ", _parts.Select(p => p.Description));
 }
@@ -204,6 +253,18 @@ public sealed record AlternativePattern : NodePattern
         }
         
         match = NodeMatch.Empty;
+        return false;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        foreach (var alt in _alternatives)
+        {
+            if (alt.TryMatchGreen(siblings, startIndex, out consumedCount))
+                return true;
+        }
+        
+        consumedCount = 0;
         return false;
     }
     
@@ -237,6 +298,17 @@ public sealed record OptionalPattern : NodePattern
             Parts = ImmutableArray<RedNode>.Empty,
             ConsumedCount = 0
         };
+        return true;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        // Try to match inner pattern
+        if (_inner.TryMatchGreen(siblings, startIndex, out consumedCount))
+            return true;
+        
+        // Optional always succeeds with 0 consumed
+        consumedCount = 0;
         return true;
     }
     
@@ -301,6 +373,32 @@ public sealed record RepeatPattern : NodePattern
         return true;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int count = 0;
+        int totalConsumed = 0;
+        
+        while (currentIndex < siblings.Count && count < _max)
+        {
+            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+                break;
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+            count++;
+        }
+        
+        if (count < _min)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
     public override string Description => _min == 0 && _max == int.MaxValue
         ? $"{_inner.Description}*"
         : _min == 1 && _max == int.MaxValue
@@ -361,6 +459,31 @@ public sealed record LookaheadPattern : NodePattern
         
         // Return only the primary match (lookahead not consumed)
         match = primary;
+        return true;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        // First, try to match the primary pattern
+        if (!_match.TryMatchGreen(siblings, startIndex, out var primaryConsumed))
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        // Check lookahead at the position after primary match
+        int lookaheadIndex = startIndex + primaryConsumed;
+        bool lookaheadMatches = lookaheadIndex < siblings.Count && 
+            _lookahead.TryMatchGreen(siblings, lookaheadIndex, out _);
+        
+        if (lookaheadMatches != _positive)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        // Return only the primary consumed count (lookahead not consumed)
+        consumedCount = primaryConsumed;
         return true;
     }
     

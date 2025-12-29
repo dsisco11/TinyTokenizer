@@ -49,6 +49,9 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     public override bool Matches(RedNode node) => 
         node.Kind == Kind && (_predicate == null || _predicate(node));
     
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node) => node.Kind == Kind;
+    
     protected override KindNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
@@ -122,6 +125,18 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
         return _predicate == null || _predicate(node);
     }
     
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node)
+    {
+        if (node is not GreenBlock block)
+            return false;
+        
+        if (_opener != null && block.Opener != _opener.Value)
+            return false;
+        
+        return true;
+    }
+    
     protected override BlockNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_opener, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
@@ -191,6 +206,9 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => _predicate == null || _predicate(node);
     
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node) => true;
+    
     protected override AnyNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
@@ -249,6 +267,9 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => 
         node is RedLeaf && (_predicate == null || _predicate(node));
+    
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node) => node is GreenLeaf;
     
     protected override LeafNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -321,6 +342,9 @@ public sealed record UnionNodeQuery : INodeQuery
     
     /// <inheritdoc/>
     public bool Matches(RedNode node) => _left.Matches(node) || _right.Matches(node);
+    
+    /// <inheritdoc/>
+    public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) || _right.MatchesGreen(node);
 }
 
 /// <summary>
@@ -354,6 +378,9 @@ public sealed record IntersectionNodeQuery : INodeQuery
     
     /// <inheritdoc/>
     public bool Matches(RedNode node) => _left.Matches(node) && _right.Matches(node);
+    
+    /// <inheritdoc/>
+    public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) && _right.MatchesGreen(node);
 }
 
 #endregion

@@ -152,6 +152,8 @@ public sealed record SemanticNodeQuery : NodeQuery<SemanticNodeQuery>
     public override bool Matches(RedNode node) => 
         node.Kind == _kind && (_predicate == null || _predicate(node));
     
+    public override bool MatchesGreen(GreenNode node) => node.Kind == _kind;
+    
     protected override SemanticNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     

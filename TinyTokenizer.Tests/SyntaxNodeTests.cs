@@ -371,4 +371,79 @@ public class SyntaxNodeTests
     }
     
     #endregion
+    
+    #region End-to-End Integration Tests
+    
+    [Fact]
+    public void ParseAndBind_RecognizesFunctionCalls()
+    {
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+                .Match(Query.Ident, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.ParseAndBind("foo() bar(x)", schema);
+        
+        // Find all function calls
+        var funcCalls = tree.Root.Children
+            .Where(n => n is RedFunctionCall)
+            .Cast<RedFunctionCall>()
+            .ToList();
+        
+        Assert.Equal(2, funcCalls.Count);
+        Assert.Equal("foo", funcCalls[0].Name);
+        Assert.Equal("bar", funcCalls[1].Name);
+    }
+    
+    [Fact]
+    public void ParseAndBind_RecognizesNestedPatterns()
+    {
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+                .Match(Query.Ident, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.ParseAndBind("outer(inner())", schema);
+        
+        // Find outer function call
+        var outerCall = tree.Root.Children
+            .OfType<RedFunctionCall>()
+            .FirstOrDefault();
+        
+        Assert.NotNull(outerCall);
+        Assert.Equal("outer", outerCall!.Name);
+        
+        // Find inner function call in arguments
+        var innerCall = outerCall.Arguments.Children
+            .OfType<RedFunctionCall>()
+            .FirstOrDefault();
+        
+        Assert.NotNull(innerCall);
+        Assert.Equal("inner", innerCall!.Name);
+    }
+    
+    [Fact]
+    public void Tree_Bind_AppliesSyntaxBinding()
+    {
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+                .Match(Query.Ident, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        // First parse without binding
+        var tree = SyntaxTree.Parse("foo()", schema);
+        Assert.DoesNotContain(tree.Root.Children, n => n is RedFunctionCall);
+        
+        // Then bind
+        var boundTree = tree.Bind();
+        var funcCall = boundTree.Root.Children.OfType<RedFunctionCall>().FirstOrDefault();
+        
+        Assert.NotNull(funcCall);
+        Assert.Equal("foo", funcCall!.Name);
+    }
+    
+    #endregion
 }

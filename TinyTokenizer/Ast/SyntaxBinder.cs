@@ -180,26 +180,16 @@ public sealed class SyntaxBinder
     /// <summary>
     /// Attempts to match a pattern starting at the given position.
     /// Returns the number of children consumed and the matched children.
+    /// Uses green-level pattern matching for efficiency (no red tree creation).
     /// </summary>
-    private (int MatchedCount, ImmutableArray<GreenNode> Children)? 
+    private static (int MatchedCount, ImmutableArray<GreenNode> Children)? 
         TryMatchPattern(NodePattern pattern, ImmutableArray<GreenNode> children, int startIndex)
     {
-        // Create a temporary red tree view for pattern matching
-        // This is a simplification - in production we'd want a more efficient approach
-        var greenList = new GreenList(children.Skip(startIndex).ToImmutableArray());
-        var redList = (RedList)greenList.CreateRed(null, 0);
-        
-        // Get the children as red nodes for matching
-        var redChildren = redList.Children.ToList();
-        if (redChildren.Count == 0)
-            return null;
-        
-        // Try to match starting at the first child
-        if (pattern.TryMatch(redChildren[0], out var match))
+        // Use efficient green-level pattern matching
+        if (pattern.TryMatchGreen(children, startIndex, out var consumedCount) && consumedCount > 0)
         {
-            // Collect the green nodes that were matched
-            var matchedGreen = children.Skip(startIndex).Take(match.ConsumedCount).ToImmutableArray();
-            return (match.ConsumedCount, matchedGreen);
+            var matchedGreen = children.Skip(startIndex).Take(consumedCount).ToImmutableArray();
+            return (consumedCount, matchedGreen);
         }
         
         return null;
