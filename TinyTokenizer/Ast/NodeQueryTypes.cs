@@ -19,7 +19,8 @@ public sealed record KindNodeQuery : NodeQuery
     /// <inheritdoc/>
     public override IEnumerable<RedNode> Select(RedNode root)
     {
-        foreach (var node in root.DescendantsAndSelf())
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
             if (Matches(node))
                 yield return node;
@@ -53,7 +54,8 @@ public record BlockNodeQuery : NodeQuery
     /// <inheritdoc/>
     public override IEnumerable<RedNode> Select(RedNode root)
     {
-        foreach (var node in root.DescendantsAndSelf())
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
             if (Matches(node))
                 yield return node;
@@ -184,7 +186,7 @@ public sealed record AnyNodeQuery : NodeQuery
     public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root) => root.DescendantsAndSelf();
+    public override IEnumerable<RedNode> Select(RedNode root) => new TreeWalker(root).DescendantsAndSelf();
     
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => true;
@@ -205,10 +207,10 @@ public sealed record LeafNodeQuery : NodeQuery
     /// <inheritdoc/>
     public override IEnumerable<RedNode> Select(RedNode root)
     {
-        foreach (var node in root.DescendantsAndSelf())
+        var walker = new TreeWalker(root, NodeFilter.Leaves);
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            if (node is RedLeaf)
-                yield return node;
+            yield return node;
         }
     }
     

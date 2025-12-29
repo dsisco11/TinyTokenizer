@@ -17,10 +17,17 @@ public class SyntaxTree
     /// <summary>
     /// Creates a new syntax tree from a green root.
     /// </summary>
-    public SyntaxTree(GreenNode greenRoot)
+    public SyntaxTree(GreenNode greenRoot, Schema? schema = null)
     {
         _greenRoot = greenRoot;
+        Schema = schema;
     }
+    
+    /// <summary>
+    /// The schema used for tokenization and semantic analysis.
+    /// May be null if tree was created without a schema.
+    /// </summary>
+    public Schema? Schema { get; }
     
     /// <summary>
     /// The green root node.
@@ -118,8 +125,32 @@ public class SyntaxTree
     #region Factory Methods
     
     /// <summary>
-    /// Creates a syntax tree by parsing source text.
-    /// Uses the optimized GreenLexer path (direct to GreenNode, no intermediate Token allocation).
+    /// Creates a syntax tree by parsing source text with a schema.
+    /// The schema provides both tokenization settings and semantic definitions.
+    /// </summary>
+    /// <param name="source">The source text to parse.</param>
+    /// <param name="schema">The schema for tokenization and semantic matching.</param>
+    public static SyntaxTree Parse(string source, Schema schema)
+    {
+        var opts = schema.ToTokenizerOptions();
+        var lexer = new GreenLexer(opts);
+        var tree = lexer.Parse(source);
+        return new SyntaxTree(tree.GreenRoot, schema);
+    }
+    
+    /// <summary>
+    /// Creates a syntax tree by parsing source text with a schema.
+    /// </summary>
+    public static SyntaxTree Parse(ReadOnlyMemory<char> source, Schema schema)
+    {
+        var opts = schema.ToTokenizerOptions();
+        var lexer = new GreenLexer(opts);
+        var tree = lexer.Parse(source);
+        return new SyntaxTree(tree.GreenRoot, schema);
+    }
+    
+    /// <summary>
+    /// Creates a syntax tree by parsing source text with default options.
     /// </summary>
     public static SyntaxTree Parse(string source, TokenizerOptions? options = null)
     {
@@ -129,8 +160,7 @@ public class SyntaxTree
     }
     
     /// <summary>
-    /// Creates a syntax tree by parsing source text.
-    /// Uses the optimized GreenLexer path (direct to GreenNode, no intermediate Token allocation).
+    /// Creates a syntax tree by parsing source text with default options.
     /// </summary>
     public static SyntaxTree Parse(ReadOnlyMemory<char> source, TokenizerOptions? options = null)
     {
@@ -158,6 +188,93 @@ public class SyntaxTree
     
     #endregion
     
+    #region Semantic Matching
+    
+    /// <summary>
+    /// Finds all semantic nodes of the specified type in the tree.
+    /// Requires a schema to be attached (via Parse with schema).
+    /// </summary>
+    /// <typeparam name="T">The semantic node type to match.</typeparam>
+    /// <param name="context">Optional semantic context for factory.</param>
+    /// <returns>All matching semantic nodes.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no schema is attached.</exception>
+    public IEnumerable<T> Match<T>(SemanticContext? context = null) where T : SemanticNode
+    {
+        if (Schema == null)
+            throw new InvalidOperationException(
+                "No schema attached. Use SyntaxTree.Parse(source, schema) or provide schema parameter.");
+        
+        return Match<T>(Schema, context);
+    }
+    
+    /// <summary>
+    /// Finds all semantic nodes of the specified type using an explicit schema.
+    /// </summary>
+    public IEnumerable<T> Match<T>(Schema schema, SemanticContext? context = null) where T : SemanticNode
+    {
+        var definition = schema.GetDefinition<T>();
+        if (definition == null)
+            yield break;
+        
+        var walker = new TreeWalker(Root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            foreach (var pattern in definition.Patterns)
+            {
+                if (pattern.TryMatch(node, out var match))
+                {
+                    var semantic = definition.TryCreate(match, context);
+                    if (semantic != null)
+                    {
+                        yield return (T)semantic;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Finds all semantic nodes of any registered type in the tree.
+    /// Requires a schema to be attached.
+    /// </summary>
+    public IEnumerable<SemanticNode> MatchAll(SemanticContext? context = null)
+    {
+        if (Schema == null)
+            throw new InvalidOperationException(
+                "No schema attached. Use SyntaxTree.Parse(source, schema) or provide schema parameter.");
+        
+        return MatchAll(Schema, context);
+    }
+    
+    /// <summary>
+    /// Finds all semantic nodes using an explicit schema.
+    /// </summary>
+    public IEnumerable<SemanticNode> MatchAll(Schema schema, SemanticContext? context = null)
+    {
+        foreach (var definition in schema.SortedDefinitions)
+        {
+            var walker = new TreeWalker(Root);
+            foreach (var node in walker.DescendantsAndSelf())
+            {
+                foreach (var pattern in definition.Patterns)
+                {
+                    if (pattern.TryMatch(node, out var match))
+                    {
+                        var semantic = definition.TryCreate(match, context);
+                        if (semantic != null)
+                        {
+                            yield return semantic;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    #endregion
+    
     #region Query
     
     /// <summary>
@@ -177,7 +294,8 @@ public class SyntaxTree
     {
         get
         {
-            foreach (var node in Root.DescendantsAndSelf())
+            var walker = new TreeWalker(Root, NodeFilter.Leaves);
+            foreach (var node in walker.DescendantsAndSelf())
             {
                 if (node is RedLeaf leaf)
                     yield return leaf;
@@ -190,7 +308,8 @@ public class SyntaxTree
     /// </summary>
     public IEnumerable<RedNode> NodesOfKind(NodeKind kind)
     {
-        foreach (var node in Root.DescendantsAndSelf())
+        var walker = new TreeWalker(Root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
             if (node.Kind == kind)
                 yield return node;

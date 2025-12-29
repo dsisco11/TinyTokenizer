@@ -97,7 +97,8 @@ public class SyntaxTreeTests
         var root = tree.Root;
         
         // Find a leaf and check parent chain
-        var leaf = root.DescendantsAndSelf().OfType<RedLeaf>().FirstOrDefault(l => l.Text == "a");
+        var walker = new TreeWalker(root);
+        var leaf = walker.DescendantsAndSelf().OfType<RedLeaf>().FirstOrDefault(l => l.Text == "a");
         Assert.NotNull(leaf);
         Assert.NotNull(leaf.Parent);
         Assert.Same(root, leaf.Root);
@@ -888,11 +889,11 @@ public class SyntaxTreeTests
     }
     
     [Fact]
-    public void RedNode_DescendantsAndSelf_IncludesAll()
+    public void TreeWalker_DescendantsAndSelf_IncludesAll()
     {
         var tree = SyntaxTree.Parse("{a {b}}");
-        
-        var allNodes = tree.Root.DescendantsAndSelf().ToList();
+        var walker = new TreeWalker(tree.Root);
+        var allNodes = walker.DescendantsAndSelf().ToList();
         
         // Should include root, outer block, inner block, idents
         Assert.True(allNodes.Count >= 4);
@@ -910,12 +911,12 @@ public class SyntaxTreeTests
     }
     
     [Fact]
-    public void RedNode_Ancestors_NavigatesToRoot()
+    public void TreeWalker_Ancestors_NavigatesToRoot()
     {
         var tree = SyntaxTree.Parse("{{deep}}");
         var ident = Q.Ident.First().Select(tree).First();
-        
-        var ancestors = ident.Ancestors().ToList();
+        var walker = new TreeWalker(ident);
+        var ancestors = walker.Ancestors().ToList();
         
         Assert.True(ancestors.Count >= 2); // Inner block, outer block, root
     }
@@ -932,12 +933,12 @@ public class SyntaxTreeTests
     }
     
     [Fact]
-    public void RedNode_Descendants_EnumeratesAll()
+    public void TreeWalker_Descendants_EnumeratesAll()
     {
         var tree = SyntaxTree.Parse("{a b}");
         var block = Q.BraceBlock.First().Select(tree).First();
-        
-        var descendants = block.Descendants().ToList();
+        var walker = new TreeWalker(block);
+        var descendants = walker.Descendants().ToList();
         
         Assert.True(descendants.Count >= 2); // At least a, b
     }
@@ -1557,8 +1558,8 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("foo {bar}");
         var anyQuery = Q.Any;
-        
-        foreach (var node in tree.Root.DescendantsAndSelf())
+        var walker = new TreeWalker(tree.Root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
             Assert.True(anyQuery.Matches(node));
         }

@@ -90,42 +90,6 @@ public abstract class RedNode
     }
     
     /// <summary>
-    /// Enumerates all descendant nodes (depth-first).
-    /// </summary>
-    public IEnumerable<RedNode> Descendants()
-    {
-        foreach (var child in Children)
-        {
-            yield return child;
-            foreach (var descendant in child.Descendants())
-                yield return descendant;
-        }
-    }
-    
-    /// <summary>
-    /// Enumerates this node and all descendants.
-    /// </summary>
-    public IEnumerable<RedNode> DescendantsAndSelf()
-    {
-        yield return this;
-        foreach (var descendant in Descendants())
-            yield return descendant;
-    }
-    
-    /// <summary>
-    /// Enumerates ancestors from parent to root.
-    /// </summary>
-    public IEnumerable<RedNode> Ancestors()
-    {
-        var current = _parent;
-        while (current != null)
-        {
-            yield return current;
-            current = current._parent;
-        }
-    }
-    
-    /// <summary>
     /// Gets the root node.
     /// </summary>
     public RedNode Root
@@ -180,4 +144,57 @@ public abstract class RedNode
         }
         return node;
     }
+    
+    #region Sibling Navigation
+    
+    /// <summary>
+    /// Gets the index of this node within its parent's children, or -1 if root.
+    /// </summary>
+    public int SiblingIndex
+    {
+        get
+        {
+            if (_parent == null)
+                return -1;
+            
+            for (int i = 0; i < _parent.SlotCount; i++)
+            {
+                if (ReferenceEquals(_parent.GetChild(i), this))
+                    return i;
+            }
+            return -1;
+        }
+    }
+    
+    /// <summary>
+    /// Gets the next sibling node, or null if this is the last child.
+    /// </summary>
+    public RedNode? NextSibling()
+    {
+        if (_parent == null)
+            return null;
+        
+        var index = SiblingIndex;
+        if (index < 0 || index >= _parent.SlotCount - 1)
+            return null;
+        
+        return _parent.GetChild(index + 1);
+    }
+    
+    /// <summary>
+    /// Gets the previous sibling node, or null if this is the first child.
+    /// </summary>
+    public RedNode? PreviousSibling()
+    {
+        if (_parent == null)
+            return null;
+        
+        var index = SiblingIndex;
+        if (index <= 0)
+            return null;
+        
+        return _parent.GetChild(index - 1);
+    }
+    
+    #endregion
 }
