@@ -55,7 +55,7 @@ public abstract record NodePattern
     #region Combinators
     
     /// <summary>Creates a sequence pattern from multiple queries.</summary>
-    public static SequencePattern Sequence(params NodeQuery[] parts) => new(parts);
+    public static SequencePattern Sequence(params INodeQuery[] parts) => new(parts);
     
     /// <summary>Creates a sequence pattern from multiple patterns.</summary>
     public static SequencePattern Sequence(params NodePattern[] parts) => new(parts);
@@ -67,7 +67,7 @@ public abstract record NodePattern
     public static OptionalPattern Optional(NodePattern inner) => new(inner);
     
     /// <summary>Creates an optional pattern from a query.</summary>
-    public static OptionalPattern Optional(NodeQuery query) => new(new QueryPattern(query));
+    public static OptionalPattern Optional(INodeQuery query) => new(new QueryPattern(query));
     
     /// <summary>Creates a repetition pattern (matches 0 or more times).</summary>
     public static RepeatPattern ZeroOrMore(NodePattern inner) => new(inner, 0, int.MaxValue);
@@ -90,9 +90,9 @@ public abstract record NodePattern
 /// </summary>
 public sealed record QueryPattern : NodePattern
 {
-    private readonly NodeQuery _query;
+    private readonly INodeQuery _query;
     
-    public QueryPattern(NodeQuery query) => _query = query;
+    public QueryPattern(INodeQuery query) => _query = query;
     
     public override bool TryMatch(RedNode node, out NodeMatch match)
     {
@@ -126,7 +126,7 @@ public sealed record SequencePattern : NodePattern
 {
     private readonly ImmutableArray<NodePattern> _parts;
     
-    public SequencePattern(IEnumerable<NodeQuery> queries)
+    public SequencePattern(IEnumerable<INodeQuery> queries)
     {
         _parts = queries.Select(q => (NodePattern)new QueryPattern(q)).ToImmutableArray();
     }
@@ -465,7 +465,7 @@ public sealed class PatternBuilder
     }
     
     /// <summary>Adds a custom query pattern.</summary>
-    public PatternBuilder MatchQuery(NodeQuery query)
+    public PatternBuilder MatchQuery(INodeQuery query)
     {
         _parts.Add(new QueryPattern(query));
         return this;

@@ -71,7 +71,7 @@ public static class SemanticMatchExtensions
     /// <summary>
     /// Creates a query that matches semantic nodes by definition name.
     /// </summary>
-    public static NodeQuery Semantic(this Schema schema, string name)
+    public static SemanticNodeQuery Semantic(this Schema schema, string name)
     {
         var kind = schema.GetKind(name);
         return new SemanticNodeQuery(kind);
@@ -80,7 +80,7 @@ public static class SemanticMatchExtensions
     /// <summary>
     /// Creates a query that matches semantic nodes by NodeKind.
     /// </summary>
-    public static NodeQuery Semantic(NodeKind kind)
+    public static SemanticNodeQuery Semantic(NodeKind kind)
     {
         return new SemanticNodeQuery(kind);
     }
@@ -97,9 +97,15 @@ public static class SemanticMatchExtensions
     /// This generic overload is preferred over <see cref="Semantic(Schema, string)"/> as it provides
     /// compile-time type safety and uses the NodeKind directly for optimized scanning.
     /// </remarks>
-    public static NodeQuery Semantic<T>(this Schema schema) where T : SemanticNode
+    public static SemanticNodeQuery Semantic<T>(this Schema schema) where T : SemanticNode
     {
-        return schema.Semantic<T>();
+        var definition = schema.GetDefinition<T>();
+        if (definition == null)
+        {
+            throw new InvalidOperationException(
+                $"Semantic node type '{typeof(T).Name}' is not registered in this schema.");
+        }
+        return new SemanticNodeQuery(definition.Kind);
     }
     
     #endregion
@@ -108,23 +114,53 @@ public static class SemanticMatchExtensions
 /// <summary>
 /// Query that matches nodes by semantic NodeKind.
 /// </summary>
-internal sealed record SemanticNodeQuery : NodeQuery
+public sealed record SemanticNodeQuery : NodeQuery<SemanticNodeQuery>
 {
     private readonly NodeKind _kind;
+    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
     
-    public SemanticNodeQuery(NodeKind kind) => _kind = kind;
+    public SemanticNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0) { }
+    
+    private SemanticNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _kind = kind;
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
     
     public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     public override IEnumerable<RedNode> Select(RedNode root)
     {
         var walker = new TreeWalker(root);
-        foreach (var node in walker.DescendantsAndSelf())
+        var matches = walker.DescendantsAndSelf().Where(Matches);
+        
+        return _mode switch
         {
-            if (Matches(node))
-                yield return node;
-        }
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
     }
     
-    public override bool Matches(RedNode node) => node.Kind == _kind;
+    public override bool Matches(RedNode node) => 
+        node.Kind == _kind && (_predicate == null || _predicate(node));
+    
+    protected override SemanticNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+        new(_kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
+    
+    protected override SemanticNodeQuery CreateFirst() => new(_kind, _predicate, SelectionMode.First, 0);
+    protected override SemanticNodeQuery CreateLast() => new(_kind, _predicate, SelectionMode.Last, 0);
+    protected override SemanticNodeQuery CreateNth(int n) => new(_kind, _predicate, SelectionMode.Nth, n);
+    protected override SemanticNodeQuery CreateSkip(int count) => new(_kind, _predicate, SelectionMode.Skip, count);
+    protected override SemanticNodeQuery CreateTake(int count) => new(_kind, _predicate, SelectionMode.Take, count);
+    
+    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
 }

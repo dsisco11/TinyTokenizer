@@ -44,6 +44,19 @@ public sealed class Schema
     
     #endregion
     
+    #region Syntax Definitions
+    
+    /// <summary>All registered syntax node definitions for tree binding.</summary>
+    private readonly ImmutableArray<SyntaxNodeDefinition> _syntaxDefinitions;
+    
+    /// <summary>Syntax definitions indexed by name.</summary>
+    private readonly ImmutableDictionary<string, SyntaxNodeDefinition> _syntaxDefinitionsByName;
+    
+    /// <summary>Syntax definitions indexed by RedType.</summary>
+    private readonly ImmutableDictionary<Type, SyntaxNodeDefinition> _syntaxDefinitionsByType;
+    
+    #endregion
+    
     #region Constructor
     
     internal Schema(
@@ -51,14 +64,15 @@ public sealed class Schema
         ImmutableArray<CommentStyle> commentStyles,
         ImmutableHashSet<string> operators,
         ImmutableHashSet<char> tagPrefixes,
-        ImmutableArray<ISemanticNodeDefinition> definitions)
+        ImmutableArray<ISemanticNodeDefinition> definitions,
+        ImmutableArray<SyntaxNodeDefinition> syntaxDefinitions = default)
     {
         Symbols = symbols;
         CommentStyles = commentStyles;
         Operators = operators;
         TagPrefixes = tagPrefixes;
         
-        // Assign NodeKind values to definitions
+        // Assign NodeKind values to semantic definitions
         var assignedDefinitions = ImmutableArray.CreateBuilder<ISemanticNodeDefinition>();
         var byName = ImmutableDictionary.CreateBuilder<string, ISemanticNodeDefinition>();
         var byKind = ImmutableDictionary.CreateBuilder<NodeKind, ISemanticNodeDefinition>();
@@ -85,6 +99,29 @@ public sealed class Schema
         _sortedDefinitions = Definitions
             .OrderByDescending(d => d.Priority)
             .ToImmutableArray();
+        
+        // Process syntax definitions (assign NodeKind values)
+        var syntaxDefs = syntaxDefinitions.IsDefault 
+            ? ImmutableArray<SyntaxNodeDefinition>.Empty 
+            : syntaxDefinitions;
+        
+        var assignedSyntaxDefs = ImmutableArray.CreateBuilder<SyntaxNodeDefinition>();
+        var syntaxByName = ImmutableDictionary.CreateBuilder<string, SyntaxNodeDefinition>();
+        var syntaxByType = ImmutableDictionary.CreateBuilder<Type, SyntaxNodeDefinition>();
+        
+        foreach (var def in syntaxDefs)
+        {
+            var kind = NodeKindExtensions.SemanticKind(kindOffset++);
+            var assigned = def.WithKind(kind);
+            
+            assignedSyntaxDefs.Add(assigned);
+            syntaxByName[assigned.Name] = assigned;
+            syntaxByType[assigned.RedType] = assigned;
+        }
+        
+        _syntaxDefinitions = assignedSyntaxDefs.ToImmutable();
+        _syntaxDefinitionsByName = syntaxByName.ToImmutable();
+        _syntaxDefinitionsByType = syntaxByType.ToImmutable();
     }
     
     #endregion
@@ -111,6 +148,28 @@ public sealed class Schema
     internal ImmutableArray<ISemanticNodeDefinition> SortedDefinitions => _sortedDefinitions;
     
     /// <summary>
+    /// Gets syntax node definitions for tree binding, sorted by priority descending.
+    /// </summary>
+    public ImmutableArray<SyntaxNodeDefinition> SyntaxDefinitions => _syntaxDefinitions;
+    
+    /// <summary>
+    /// Gets a syntax definition by name.
+    /// </summary>
+    public SyntaxNodeDefinition? GetSyntaxDefinition(string name) =>
+        _syntaxDefinitionsByName.GetValueOrDefault(name);
+    
+    /// <summary>
+    /// Gets a syntax definition by RedSyntaxNode type.
+    /// </summary>
+    public SyntaxNodeDefinition? GetSyntaxDefinition<T>() where T : RedSyntaxNode =>
+        _syntaxDefinitionsByType.GetValueOrDefault(typeof(T));
+    
+    /// <summary>
+    /// Gets syntax node definitions for tree binding (internal for SyntaxBinder).
+    /// </summary>
+    internal ImmutableArray<SyntaxNodeDefinition> GetSyntaxDefinitions() => _syntaxDefinitions;
+    
+    /// <summary>
     /// Gets the NodeKind for a semantic node type.
     /// </summary>
     /// <typeparam name="T">The semantic node type.</typeparam>
@@ -125,7 +184,7 @@ public sealed class Schema
     /// <typeparam name="T">The semantic node type to query for.</typeparam>
     /// <returns>A NodeQuery that matches nodes of the specified semantic type.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the type is not registered in this schema.</exception>
-    public NodeQuery Semantic<T>() where T : SemanticNode
+    public SemanticNodeQuery Semantic<T>() where T : SemanticNode
     {
         var definition = GetDefinition<T>();
         if (definition == null)
@@ -290,6 +349,38 @@ public sealed class SchemaBuilder
     
     #endregion
     
+    #region Syntax Definitions
+    
+    private readonly List<SyntaxNodeDefinition> _syntaxDefinitions = [];
+    
+    /// <summary>Registers a syntax node definition for tree binding.</summary>
+    public SchemaBuilder DefineSyntax<T>(SyntaxNodeDefinition definition) where T : RedSyntaxNode
+    {
+        if (definition.RedType != typeof(T))
+            throw new ArgumentException($"Definition RedType must be {typeof(T).Name}", nameof(definition));
+        _syntaxDefinitions.Add(definition);
+        return this;
+    }
+    
+    /// <summary>Registers a syntax node definition for tree binding.</summary>
+    public SchemaBuilder DefineSyntax(SyntaxNodeDefinition definition)
+    {
+        _syntaxDefinitions.Add(definition);
+        return this;
+    }
+    
+    /// <summary>Registers a syntax node definition using a builder action.</summary>
+    public SchemaBuilder DefineSyntax<T>(string name, Action<SyntaxNodeDefinitionBuilder<T>> configure) 
+        where T : RedSyntaxNode
+    {
+        var builder = new SyntaxNodeDefinitionBuilder<T>(name);
+        configure(builder);
+        _syntaxDefinitions.Add(builder.Build());
+        return this;
+    }
+    
+    #endregion
+    
     #region Build
     
     /// <summary>
@@ -300,7 +391,8 @@ public sealed class SchemaBuilder
         _commentStyles,
         _operators,
         _tagPrefixes,
-        [.. _definitions]);
+        [.. _definitions],
+        [.. _syntaxDefinitions]);
     
     #endregion
 }

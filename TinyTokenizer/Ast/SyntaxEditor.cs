@@ -85,7 +85,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues removal of all nodes matching the query.
     /// </summary>
-    public SyntaxEditor Remove(NodeQuery query)
+    public SyntaxEditor Remove(INodeQuery query)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -105,7 +105,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query with new text.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, string text)
+    public SyntaxEditor Replace(INodeQuery query, string text)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -122,7 +122,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query using a transformer function.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(INodeQuery query, Func<RedNode, string> replacer)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -140,7 +140,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query with pre-built nodes.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, ImmutableArray<GreenNode> nodes)
+    public SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
     {
         var matchedNodes = query.Select(_tree).ToList();
         

@@ -278,6 +278,13 @@ public class SyntaxTree
     #region Query
     
     /// <summary>
+    /// Selects all nodes matching the query from this tree.
+    /// </summary>
+    /// <param name="query">The query to execute.</param>
+    /// <returns>All matching nodes in document order.</returns>
+    public IEnumerable<RedNode> Select(INodeQuery query) => query.Select(this);
+    
+    /// <summary>
     /// Finds the deepest node containing the specified position.
     /// </summary>
     public RedNode? FindNodeAt(int position) => Root.FindNodeAt(position);

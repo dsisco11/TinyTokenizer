@@ -819,7 +819,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var pattern = new SequencePattern(Array.Empty<NodeQuery>());
+        var pattern = new SequencePattern(Array.Empty<INodeQuery>());
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Empty(match.Parts);

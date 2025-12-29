@@ -6,11 +6,11 @@ namespace TinyTokenizer.Ast;
 /// </summary>
 /// <example>
 /// <code>
-/// // Select by kind
-/// Query.Ident.WithText("foo").First()
+/// // Select by kind - Where() preserves type
+/// Query.Ident.Where(n => ...).WithText("foo").First()
 /// 
-/// // Select blocks and get inner positions
-/// Query.BraceBlock.First().InnerStart()
+/// // Select blocks and get inner positions - InnerStart() available after Where()
+/// Query.BraceBlock.Where(n => ...).First().InnerStart()
 /// 
 /// // Combine queries
 /// Query.Ident | Query.Numeric
@@ -21,28 +21,28 @@ public static class Query
     #region Kind Queries
     
     /// <summary>Creates a query matching nodes of the specified kind.</summary>
-    public static NodeQuery Kind(NodeKind kind) => new KindNodeQuery(kind);
+    public static KindNodeQuery Kind(NodeKind kind) => new KindNodeQuery(kind);
     
     /// <summary>Matches identifier nodes.</summary>
-    public static NodeQuery Ident => new KindNodeQuery(NodeKind.Ident);
+    public static KindNodeQuery Ident => new KindNodeQuery(NodeKind.Ident);
     
     /// <summary>Matches numeric literal nodes.</summary>
-    public static NodeQuery Numeric => new KindNodeQuery(NodeKind.Numeric);
+    public static KindNodeQuery Numeric => new KindNodeQuery(NodeKind.Numeric);
     
     /// <summary>Matches string literal nodes.</summary>
-    public static NodeQuery String => new KindNodeQuery(NodeKind.String);
+    public static KindNodeQuery String => new KindNodeQuery(NodeKind.String);
     
     /// <summary>Matches operator nodes.</summary>
-    public static NodeQuery Operator => new KindNodeQuery(NodeKind.Operator);
+    public static KindNodeQuery Operator => new KindNodeQuery(NodeKind.Operator);
     
     /// <summary>Matches symbol nodes.</summary>
-    public static NodeQuery Symbol => new KindNodeQuery(NodeKind.Symbol);
+    public static KindNodeQuery Symbol => new KindNodeQuery(NodeKind.Symbol);
     
     /// <summary>Matches tagged identifier nodes (e.g., #define, @attribute).</summary>
-    public static NodeQuery TaggedIdent => new KindNodeQuery(NodeKind.TaggedIdent);
+    public static KindNodeQuery TaggedIdent => new KindNodeQuery(NodeKind.TaggedIdent);
     
     /// <summary>Matches error nodes.</summary>
-    public static NodeQuery Error => new KindNodeQuery(NodeKind.Error);
+    public static KindNodeQuery Error => new KindNodeQuery(NodeKind.Error);
     
     #endregion
     
@@ -65,10 +65,10 @@ public static class Query
     #region General Queries
     
     /// <summary>Matches any node.</summary>
-    public static NodeQuery Any => new AnyNodeQuery();
+    public static AnyNodeQuery Any => new AnyNodeQuery();
     
     /// <summary>Matches only leaf nodes (non-containers).</summary>
-    public static NodeQuery Leaf => new LeafNodeQuery();
+    public static LeafNodeQuery Leaf => new LeafNodeQuery();
     
     #endregion
 }

@@ -1,11 +1,33 @@
 namespace TinyTokenizer.Ast;
 
 /// <summary>
-/// Base class for node selectors in the AST.
-/// Queries select nodes by kind, content, position, or pattern matching.
-/// Position modifiers (Before, After, InnerStart, InnerEnd) create insertion point queries.
+/// Non-generic interface for node queries, enabling polymorphic collections and composition.
 /// </summary>
-public abstract record NodeQuery
+public interface INodeQuery
+{
+    /// <summary>
+    /// Selects all nodes matching this query from the tree.
+    /// </summary>
+    IEnumerable<RedNode> Select(SyntaxTree tree);
+    
+    /// <summary>
+    /// Selects all nodes matching this query from a subtree.
+    /// </summary>
+    IEnumerable<RedNode> Select(RedNode root);
+    
+    /// <summary>
+    /// Tests whether a single node matches this query's criteria.
+    /// </summary>
+    bool Matches(RedNode node);
+}
+
+/// <summary>
+/// Base class for node selectors using CRTP (Curiously Recurring Template Pattern).
+/// The generic parameter TSelf allows filtering methods to return the derived type,
+/// preserving type-specific methods through the fluent chain.
+/// </summary>
+/// <typeparam name="TSelf">The derived query type.</typeparam>
+public abstract record NodeQuery<TSelf> : INodeQuery where TSelf : NodeQuery<TSelf>
 {
     /// <summary>
     /// Selects all nodes matching this query from the tree.
@@ -22,61 +44,93 @@ public abstract record NodeQuery
     /// </summary>
     public abstract bool Matches(RedNode node);
     
-    #region Pseudo-Selectors
+    #region CRTP Factory Methods
+    
+    /// <summary>Creates a filtered version of this query.</summary>
+    protected abstract TSelf CreateFiltered(Func<RedNode, bool> predicate);
+    
+    /// <summary>Creates a version selecting only the first match.</summary>
+    protected abstract TSelf CreateFirst();
+    
+    /// <summary>Creates a version selecting only the last match.</summary>
+    protected abstract TSelf CreateLast();
+    
+    /// <summary>Creates a version selecting only the nth match.</summary>
+    protected abstract TSelf CreateNth(int n);
+    
+    /// <summary>Creates a version skipping the first n matches.</summary>
+    protected abstract TSelf CreateSkip(int count);
+    
+    /// <summary>Creates a version taking only the first n matches.</summary>
+    protected abstract TSelf CreateTake(int count);
+    
+    #endregion
+    
+    #region Pseudo-Selectors (return TSelf)
     
     /// <summary>
     /// Returns a query that selects only the first matching node.
     /// </summary>
-    public NodeQuery First() => new FirstNodeQuery(this);
+    public TSelf First() => CreateFirst();
     
     /// <summary>
     /// Returns a query that selects only the last matching node.
     /// </summary>
-    public NodeQuery Last() => new LastNodeQuery(this);
+    public TSelf Last() => CreateLast();
     
     /// <summary>
     /// Returns a query that selects only the nth matching node (0-based).
     /// </summary>
-    public NodeQuery Nth(int n) => new NthNodeQuery(this, n);
+    public TSelf Nth(int n) => CreateNth(n);
+    
+    /// <summary>
+    /// Returns a query that skips the first n matching nodes.
+    /// </summary>
+    public TSelf Skip(int count) => CreateSkip(count);
+    
+    /// <summary>
+    /// Returns a query that takes only the first n matching nodes.
+    /// </summary>
+    public TSelf Take(int count) => CreateTake(count);
     
     /// <summary>
     /// Returns a query that selects all matching nodes.
     /// This is the default behavior but provided for fluent readability.
     /// </summary>
-    public NodeQuery All() => this;
+    public TSelf All() => (TSelf)this;
     
     #endregion
     
-    #region Filters
+    #region Filters (return TSelf)
     
     /// <summary>
     /// Adds a predicate filter to this query.
     /// </summary>
-    public NodeQuery Where(Func<RedNode, bool> predicate) => new PredicateNodeQuery(this, predicate);
+    public TSelf Where(Func<RedNode, bool> predicate) => CreateFiltered(predicate);
     
     /// <summary>
     /// Filters to leaf nodes with exact text match.
     /// </summary>
-    public NodeQuery WithText(string text) => 
-        new PredicateNodeQuery(this, n => n is RedLeaf leaf && leaf.Text == text);
+    public TSelf WithText(string text) => 
+        CreateFiltered(n => n is RedLeaf leaf && leaf.Text == text);
     
     /// <summary>
     /// Filters to leaf nodes whose text contains the specified substring.
     /// </summary>
-    public NodeQuery WithTextContaining(string substring) => 
-        new PredicateNodeQuery(this, n => n is RedLeaf leaf && leaf.Text.Contains(substring));
+    public TSelf WithTextContaining(string substring) => 
+        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.Contains(substring));
     
     /// <summary>
     /// Filters to leaf nodes whose text starts with the specified prefix.
     /// </summary>
-    public NodeQuery WithTextStartingWith(string prefix) => 
-        new PredicateNodeQuery(this, n => n is RedLeaf leaf && leaf.Text.StartsWith(prefix));
+    public TSelf WithTextStartingWith(string prefix) => 
+        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.StartsWith(prefix));
     
     /// <summary>
     /// Filters to leaf nodes whose text ends with the specified suffix.
     /// </summary>
-    public NodeQuery WithTextEndingWith(string suffix) => 
-        new PredicateNodeQuery(this, n => n is RedLeaf leaf && leaf.Text.EndsWith(suffix));
+    public TSelf WithTextEndingWith(string suffix) => 
+        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.EndsWith(suffix));
     
     #endregion
     
@@ -98,14 +152,16 @@ public abstract record NodeQuery
     
     /// <summary>
     /// Creates a union query that matches nodes satisfying either query.
+    /// Note: Returns INodeQuery since the result may combine different query types.
     /// </summary>
-    public static NodeQuery operator |(NodeQuery left, NodeQuery right) => 
+    public static INodeQuery operator |(NodeQuery<TSelf> left, INodeQuery right) => 
         new UnionNodeQuery(left, right);
     
     /// <summary>
     /// Creates an intersection query that matches nodes satisfying both queries.
+    /// Note: Returns INodeQuery since the result may combine different query types.
     /// </summary>
-    public static NodeQuery operator &(NodeQuery left, NodeQuery right) => 
+    public static INodeQuery operator &(NodeQuery<TSelf> left, INodeQuery right) => 
         new IntersectionNodeQuery(left, right);
     
     #endregion
@@ -132,12 +188,12 @@ public enum InsertionPoint
 public sealed record InsertionQuery
 {
     /// <summary>Gets the underlying node query.</summary>
-    public NodeQuery InnerQuery { get; }
+    public INodeQuery InnerQuery { get; }
     
     /// <summary>Gets the insertion point relative to matched nodes.</summary>
     public InsertionPoint Point { get; }
     
-    internal InsertionQuery(NodeQuery inner, InsertionPoint point)
+    internal InsertionQuery(INodeQuery inner, InsertionPoint point)
     {
         InnerQuery = inner;
         Point = point;

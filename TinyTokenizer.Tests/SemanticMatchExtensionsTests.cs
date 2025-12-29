@@ -610,27 +610,3 @@ public class SemanticMatchExtensionsTests
 
     #endregion
 }
-
-/// <summary>
-/// Internal query class for testing - mirrors SemanticNodeQuery
-/// </summary>
-internal sealed record SemanticNodeQuery : NodeQuery
-{
-    private readonly NodeKind _kind;
-    
-    public SemanticNodeQuery(NodeKind kind) => _kind = kind;
-    
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
-    
-    public override IEnumerable<RedNode> Select(RedNode root)
-    {
-        var walker = new TreeWalker(root);
-        foreach (var node in walker.DescendantsAndSelf())
-        {
-            if (Matches(node))
-                yield return node;
-        }
-    }
-    
-    public override bool Matches(RedNode node) => node.Kind == _kind;
-}
