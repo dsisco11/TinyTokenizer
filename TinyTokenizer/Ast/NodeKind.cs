@@ -29,6 +29,9 @@ public enum NodeKind : ushort
     /// <summary>Error token for malformed input.</summary>
     Error,
     
+    /// <summary>End-of-file marker (holds trailing trivia at end of source).</summary>
+    EndOfFile,
+    
     // ============ Containers (non-terminals) ============
     
     /// <summary>Brace block: { }</summary>

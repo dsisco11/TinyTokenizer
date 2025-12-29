@@ -7,6 +7,11 @@ namespace TinyTokenizer.Ast;
 /// Green node for block structures: { }, [ ], ( ).
 /// Contains children and delimiter information. Supports structural sharing mutations.
 /// </summary>
+/// <remarks>
+/// Uses leading-preferred trivia model:
+/// - LeadingTrivia: trivia before the opening delimiter
+/// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
+/// </remarks>
 public sealed record GreenBlock : GreenNode
 {
     private readonly ImmutableArray<GreenNode> _children;

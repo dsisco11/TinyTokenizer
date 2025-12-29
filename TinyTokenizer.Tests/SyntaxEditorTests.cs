@@ -252,10 +252,12 @@ public class SyntaxEditorTests
             .Insert(Q.Ident.Before(), "_")
             .Commit();
         
+        // With leading trivia model: " b" and " c" have leading spaces
+        // Inserting before the node inserts before its leading trivia
         var text = tree.ToFullString();
-        Assert.Contains("_a", text);
-        Assert.Contains("_b", text);
-        Assert.Contains("_c", text);
+        Assert.Contains("_a", text);  // Before 'a' (no leading trivia)
+        Assert.Contains("_ b", text); // Before ' b' (includes leading space)
+        Assert.Contains("_ c", text); // Before ' c' (includes leading space)
     }
 
     [Fact]
@@ -659,14 +661,16 @@ public class SyntaxEditorTests
     public void Insert_BeforeFunctionBlock_InsertsBeforeOpeningBrace()
     {
         // Simulates: inserting a comment or decorator before a function
+        // With leading trivia model, the space before { is part of the block's leading trivia
         var tree = SyntaxTree.Parse("function {body}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().Before(), "/* comment */ ")
+            .Insert(Q.BraceBlock.First().Before(), "/* comment */")
             .Commit();
         
+        // Insert goes before leading trivia, so: function + /* comment */ +  {body}
         var text = tree.ToFullString();
-        Assert.StartsWith("function /* comment */ {", text);
+        Assert.StartsWith("function/* comment */ {", text);
     }
 
     [Fact]
@@ -766,15 +770,16 @@ public class SyntaxEditorTests
     public void Insert_BeforeAndAfterMultipleFunctions_HandlesCorrectly()
     {
         // Simulates: inserting around multiple function definitions
+        // With leading trivia model, " {second}" has leading space
         var tree = SyntaxTree.Parse("{first} {second}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.Before(), "/* fn */ ")
+            .Insert(Q.BraceBlock.Before(), "/* fn */")
             .Commit();
         
         var text = tree.ToFullString();
-        // Both blocks should have "/* fn */" inserted before them
-        Assert.Equal("/* fn */ {first} /* fn */ {second}", text);
+        // Insert goes before leading trivia, so second block becomes: "/* fn */" + " {second}"
+        Assert.Equal("/* fn */{first}/* fn */ {second}", text);
     }
 
     [Fact]

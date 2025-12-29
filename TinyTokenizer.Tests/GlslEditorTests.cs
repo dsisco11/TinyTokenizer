@@ -110,33 +110,6 @@ void main() {
     
     #endregion
     
-    #region Helper Methods
-    
-    /// <summary>
-    /// Finds a function by name in the tree.
-    /// </summary>
-    private static GlslFunctionSyntax? FindFunction(SyntaxTree tree, string name)
-    {
-        var walker = new TreeWalker(tree.Root);
-        return walker.DescendantsAndSelf()
-            .OfType<GlslFunctionSyntax>()
-            .FirstOrDefault(f => f.Name == name);
-    }
-    
-    /// <summary>
-    /// Finds a tagged directive by name (e.g., "version").
-    /// </summary>
-    private static RedLeaf? FindDirective(SyntaxTree tree, string directiveName)
-    {
-        var walker = new TreeWalker(tree.Root);
-        return walker.DescendantsAndSelf()
-            .OfType<RedLeaf>()
-            .FirstOrDefault(n => n.Kind == NodeKind.TaggedIdent && 
-                                  n.Text.StartsWith("#" + directiveName));
-    }
-    
-    #endregion
-    
     #region Basic Parsing Tests
     
     [Fact]
@@ -180,12 +153,12 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
         
         // Create a query that finds the main function by checking the name
-        var mainQuery = Query.Kind(mainFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "main");
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(n => n.Name == "main");
         
         tree.CreateEditor()
             .Insert(mainQuery.Before(), "// Entry point for the fragment shader\n")
@@ -207,7 +180,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
         
         // Insert at the inner start of main's body
@@ -237,7 +211,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
         
         // Insert at the inner end of main's body (before closing brace)
@@ -267,7 +242,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
         
         var mainQuery = Query.Kind(mainFunc!.Kind)
@@ -296,7 +272,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var versionDirective = FindDirective(tree, "version");
+        var versionDirectiveQuery = Query.Syntax<GlslDirectiveSyntax>().Where(d => d.Name == "version");
+        var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlslDirectiveSyntax;
         Assert.NotNull(versionDirective);
         
         // Find the numeric literal after #version (330) and insert after it
@@ -338,7 +315,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var fooFunc = FindFunction(tree, "foo");
+        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
+        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(fooFunc);
         
         var fooQuery = Query.Kind(fooFunc!.Kind)
@@ -364,8 +342,11 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFunc = FindFunction(tree, "main");
-        var fooFunc = FindFunction(tree, "foo");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
+        
+        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
+        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         var coreIdent = new TreeWalker(tree.Root)
             .DescendantsAndSelf()
             .OfType<RedLeaf>()
@@ -433,7 +414,8 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         var originalText = tree.Root.ToString();
         
-        var mainFunc = FindFunction(tree, "main");
+        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         var mainQuery = Query.Kind(mainFunc!.Kind)
             .Where(n => n is GlslFunctionSyntax f && f.Name == "main");
         

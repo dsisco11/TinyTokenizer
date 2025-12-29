@@ -950,9 +950,11 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("a b");
         var leaves = tree.Leaves.ToList();
         
-        // First ident at position 0, second at position 2
+        // First ident at position 0, second at position 1 (includes leading trivia)
+        // Use TextPosition to get actual token text position
         var secondIdent = leaves.Where(l => l.Kind == NodeKind.Ident).Skip(1).First();
-        Assert.Equal(2, secondIdent.Position);
+        Assert.Equal(1, secondIdent.Position);  // Position includes leading trivia
+        Assert.Equal(2, ((RedLeaf)secondIdent).TextPosition);  // TextPosition is where text starts
     }
     
     [Fact]
