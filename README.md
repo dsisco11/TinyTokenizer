@@ -142,6 +142,88 @@ editor.Commit();
 editor.Rollback();
 ```
 
+### Common SyntaxEditor Patterns
+
+**Insert before a function/block:**
+
+```csharp
+var tree = SyntaxTree.Parse("function {body}");
+
+tree.CreateEditor()
+    .Insert(Query.BraceBlock.First().Before(), "/* decorator */ ")
+    .Commit();
+// Result: "function /* decorator */ {body}"
+```
+
+**Insert at the start of a function body (after opening brace):**
+
+```csharp
+var tree = SyntaxTree.Parse("function {existing}");
+
+tree.CreateEditor()
+    .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter'); ")
+    .Commit();
+// Result: "function {console.log('enter'); existing}"
+```
+
+**Insert at the end of a function body (before closing brace):**
+
+```csharp
+var tree = SyntaxTree.Parse("function {existing}");
+
+tree.CreateEditor()
+    .Insert(Query.BraceBlock.First().InnerEnd(), " return result;")
+    .Commit();
+// Result: "function {existing return result;}"
+```
+
+**Insert after a function/block:**
+
+```csharp
+var tree = SyntaxTree.Parse("function {body}");
+
+tree.CreateEditor()
+    .Insert(Query.BraceBlock.First().After(), " // end of function")
+    .Commit();
+// Result: "function {body} // end of function"
+```
+
+**Multiple insertions in one commit:**
+
+```csharp
+var tree = SyntaxTree.Parse("fn {body}");
+
+tree.CreateEditor()
+    .Insert(Query.BraceBlock.First().Before(), "/* before */ ")
+    .Insert(Query.BraceBlock.First().InnerStart(), "start(); ")
+    .Insert(Query.BraceBlock.First().InnerEnd(), " end();")
+    .Insert(Query.BraceBlock.First().After(), " /* after */")
+    .Commit();
+// Result: "fn /* before */ {start(); body end();} /* after */"
+```
+
+**Replace multiple occurrences:**
+
+```csharp
+var tree = SyntaxTree.Parse("a + b + a");
+
+tree.CreateEditor()
+    .Replace(Query.Ident.WithText("a"), "x")  // Replaces ALL 'a' with 'x'
+    .Commit();
+// Result: "x + b + x"
+```
+
+**Remove nodes:**
+
+```csharp
+var tree = SyntaxTree.Parse("keep remove keep");
+
+tree.CreateEditor()
+    .Remove(Query.Ident.WithText("remove"))
+    .Commit();
+// Result: "keep  keep"
+```
+
 The editor supports `Insert`, `Remove`, and `Replace` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
 
 ## Schema — Unified Configuration
@@ -235,7 +317,7 @@ foreach (var block in blockWalker.DescendantsAndSelf())
 var walker = new TreeWalker(
     tree.Root,
     NodeFilter.All,
-    node => node.Kind == NodeKind.Ident 
+    node => node.Kind == NodeKind.Ident
         ? FilterResult.Accept    // Include this node
         : FilterResult.Skip);    // Skip node, but check children
 
@@ -267,12 +349,12 @@ var props = tree.Match<PropertyAccessNode>().ToList();
 
 ### Built-in Semantic Nodes
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| `FunctionNameNode` | `Ident(?=ParenBlock)` | `foo` in `foo(x)` |
-| `ArrayAccessNode` | `Ident + BracketBlock` | `arr[0]` |
-| `PropertyAccessNode` | `Ident + "." + Ident` | `obj.prop` |
-| `MethodCallNode` | `Ident + "." + Ident + ParenBlock` | `obj.method(x)` |
+| Type                 | Pattern                            | Example           |
+| -------------------- | ---------------------------------- | ----------------- |
+| `FunctionNameNode`   | `Ident(?=ParenBlock)`              | `foo` in `foo(x)` |
+| `ArrayAccessNode`    | `Ident + BracketBlock`             | `arr[0]`          |
+| `PropertyAccessNode` | `Ident + "." + Ident`              | `obj.prop`        |
+| `MethodCallNode`     | `Ident + "." + Ident + ParenBlock` | `obj.method(x)`   |
 
 ### Custom Semantic Nodes
 
@@ -283,7 +365,7 @@ Define your own semantic node types:
 public sealed class LambdaNode : SemanticNode
 {
     public LambdaNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
-    
+
     public RedBlock Parameters => Part<RedBlock>(0);
     public RedBlock Body => Part<RedBlock>(2);
 }
@@ -308,23 +390,23 @@ var lambdas = tree.Match<LambdaNode>().ToList();
 
 ### Pattern Builder Matchers
 
-| Matcher | Description |
-|---------|-------------|
-| `Ident()` | Any identifier |
-| `Ident("name")` | Specific identifier |
-| `Operator("==")` | Specific operator |
-| `Symbol(".")` | Specific symbol |
-| `ParenBlock()` | `( )` block |
-| `BraceBlock()` | `{ }` block |
-| `BracketBlock()` | `[ ]` block |
-| `Numeric()` | Number literal |
-| `String()` | String literal |
-| `Any()` | Any single node |
-| `Sequence(...)` | Match A then B then C |
-| `OneOf(...)` | Match A or B |
-| `Optional(...)` | Match zero or one |
-| `ZeroOrMore(...)` | Match zero or more |
-| `OneOrMore(...)` | Match one or more |
+| Matcher            | Description                   |
+| ------------------ | ----------------------------- |
+| `Ident()`          | Any identifier                |
+| `Ident("name")`    | Specific identifier           |
+| `Operator("==")`   | Specific operator             |
+| `Symbol(".")`      | Specific symbol               |
+| `ParenBlock()`     | `( )` block                   |
+| `BraceBlock()`     | `{ }` block                   |
+| `BracketBlock()`   | `[ ]` block                   |
+| `Numeric()`        | Number literal                |
+| `String()`         | String literal                |
+| `Any()`            | Any single node               |
+| `Sequence(...)`    | Match A then B then C         |
+| `OneOf(...)`       | Match A or B                  |
+| `Optional(...)`    | Match zero or one             |
+| `ZeroOrMore(...)`  | Match zero or more            |
+| `OneOrMore(...)`   | Match one or more             |
 | `LookaheadPattern` | Match A only if followed by B |
 
 ## Async Tokenization
@@ -418,19 +500,19 @@ var schema = Schema.Create()
 
 ### NodeKind Values
 
-| Kind | Description | Example |
-|------|-------------|---------|
-| `Ident` | Identifiers | `foo`, `myVar` |
-| `Whitespace` | Spaces, tabs, newlines | ` `, `\n` |
-| `Symbol` | Single characters | `,`, `;`, `:` |
-| `Operator` | Multi-char operators | `==`, `!=`, `=>` |
-| `Numeric` | Numbers | `123`, `3.14` |
-| `String` | Quoted strings | `"hello"` |
-| `TaggedIdent` | Prefixed identifiers | `#define`, `@attr` |
-| `BraceBlock` | Curly braces | `{ }` |
-| `BracketBlock` | Square brackets | `[ ]` |
-| `ParenBlock` | Parentheses | `( )` |
-| `Error` | Parse errors | unmatched `}` |
+| Kind           | Description            | Example            |
+| -------------- | ---------------------- | ------------------ |
+| `Ident`        | Identifiers            | `foo`, `myVar`     |
+| `Whitespace`   | Spaces, tabs, newlines | ` `, `\n`          |
+| `Symbol`       | Single characters      | `,`, `;`, `:`      |
+| `Operator`     | Multi-char operators   | `==`, `!=`, `=>`   |
+| `Numeric`      | Numbers                | `123`, `3.14`      |
+| `String`       | Quoted strings         | `"hello"`          |
+| `TaggedIdent`  | Prefixed identifiers   | `#define`, `@attr` |
+| `BraceBlock`   | Curly braces           | `{ }`              |
+| `BracketBlock` | Square brackets        | `[ ]`              |
+| `ParenBlock`   | Parentheses            | `( )`              |
+| `Error`        | Parse errors           | unmatched `}`      |
 
 ## Requirements
 
