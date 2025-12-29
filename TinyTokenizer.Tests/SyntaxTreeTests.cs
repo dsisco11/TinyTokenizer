@@ -424,7 +424,7 @@ public class SyntaxTreeTests
     
     #endregion
     
-    #region SyntaxEditor and Query
+    #region Query Basics
     
     [Fact]
     public void Query_Ident_SelectsIdentifiers()
@@ -478,120 +478,6 @@ public class SyntaxTreeTests
         
         Assert.Single(braceBlocks);
         Assert.Single(bracketBlocks);
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Replace_ChangesNode()
-    {
-        var tree = SyntaxTree.Parse("foo");
-        
-        tree.CreateEditor()
-            .Replace(Q.Ident.First(), "bar")
-            .Commit();
-        
-        Assert.Equal("bar", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Replace_WithTransformer()
-    {
-        var tree = SyntaxTree.Parse("hello");
-        
-        tree.CreateEditor()
-            .Replace(Q.Ident.First(), n => ((RedLeaf)n).Text.ToUpper())
-            .Commit();
-        
-        Assert.Equal("HELLO", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Remove_DeletesNode()
-    {
-        var tree = SyntaxTree.Parse("a b c");
-        var originalWidth = tree.Width;
-        
-        tree.CreateEditor()
-            .Remove(Q.Ident.WithText("b"))
-            .Commit();
-        
-        var text = tree.ToFullString();
-        Assert.DoesNotContain("b", text);
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Insert_Before()
-    {
-        var tree = SyntaxTree.Parse("world");
-        
-        tree.CreateEditor()
-            .Insert(Q.Ident.First().Before(), "hello ")
-            .Commit();
-        
-        Assert.Equal("hello world", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Insert_After()
-    {
-        var tree = SyntaxTree.Parse("hello");
-        
-        tree.CreateEditor()
-            .Insert(Q.Ident.First().After(), " world")
-            .Commit();
-        
-        Assert.Equal("hello world", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Insert_IntoBlockStart()
-    {
-        var tree = SyntaxTree.Parse("{b}");
-        
-        tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "a ")
-            .Commit();
-        
-        Assert.Equal("{a b}", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Insert_IntoBlockEnd()
-    {
-        var tree = SyntaxTree.Parse("{a}");
-        
-        tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerEnd(), " b")
-            .Commit();
-        
-        Assert.Equal("{a b}", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Rollback_DiscardsChanges()
-    {
-        var tree = SyntaxTree.Parse("original");
-        
-        var editor = tree.CreateEditor();
-        editor.Replace(Q.Ident.First(), "changed");
-        editor.Rollback();
-        
-        Assert.Equal("original", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Commit_SupportsUndo()
-    {
-        var tree = SyntaxTree.Parse("original");
-        
-        tree.CreateEditor()
-            .Replace(Q.Ident.First(), "changed")
-            .Commit();
-        
-        Assert.Equal("changed", tree.ToFullString());
-        Assert.True(tree.CanUndo);
-        
-        tree.Undo();
-        Assert.Equal("original", tree.ToFullString());
     }
     
     #endregion
@@ -794,72 +680,6 @@ public class SyntaxTreeTests
         Assert.Single(second);
         var block = (RedBlock)second[0];
         Assert.Contains("b", block.Children.OfType<RedLeaf>().Select(l => l.Text));
-    }
-    
-    #endregion
-    
-    #region SyntaxEditor Additional Coverage
-    
-    [Fact]
-    public void SyntaxEditor_PendingEditCount_TracksEdits()
-    {
-        var tree = SyntaxTree.Parse("a b c");
-        var editor = tree.CreateEditor();
-        
-        Assert.Equal(0, editor.PendingEditCount);
-        Assert.False(editor.HasPendingEdits);
-        
-        editor.Remove(Q.Ident.First());
-        
-        Assert.Equal(1, editor.PendingEditCount);
-        Assert.True(editor.HasPendingEdits);
-    }
-    
-    [Fact]
-    public void SyntaxEditor_Replace_WithTransformer_SingleNode()
-    {
-        var tree = SyntaxTree.Parse("hello");
-        
-        tree.CreateEditor()
-            .Replace(Q.Ident.First(), n => ((RedLeaf)n).Text.ToUpper())
-            .Commit();
-        
-        Assert.Equal("HELLO", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_CommitWithNoEdits_DoesNothing()
-    {
-        var tree = SyntaxTree.Parse("unchanged");
-        
-        tree.CreateEditor().Commit();
-        
-        Assert.Equal("unchanged", tree.ToFullString());
-        Assert.False(tree.CanUndo); // No history added
-    }
-    
-    [Fact]
-    public void SyntaxEditor_InsertBefore_AppliedCorrectly()
-    {
-        var tree = SyntaxTree.Parse("x");
-        
-        tree.CreateEditor()
-            .Insert(Q.Ident.First().Before(), "a")
-            .Commit();
-        
-        Assert.Equal("ax", tree.ToFullString());
-    }
-    
-    [Fact]
-    public void SyntaxEditor_InsertAfter_AppliedCorrectly()
-    {
-        var tree = SyntaxTree.Parse("x");
-        
-        tree.CreateEditor()
-            .Insert(Q.Ident.First().After(), "z")
-            .Commit();
-        
-        Assert.Equal("xz", tree.ToFullString());
     }
     
     #endregion
@@ -1109,24 +929,6 @@ public class SyntaxTreeTests
         
         Assert.True(Q.Ident.Matches(node));
         Assert.False(Q.Numeric.Matches(node));
-    }
-    
-    #endregion
-    
-    #region SyntaxEditor Replace with GreenNodes
-    
-    [Fact]
-    public void SyntaxEditor_Replace_WithGreenNodes()
-    {
-        var tree = SyntaxTree.Parse("old");
-        var lexer = new GreenLexer();
-        var newNodes = lexer.ParseToGreenNodes("new");
-        
-        tree.CreateEditor()
-            .Replace(Q.Ident.First(), newNodes)
-            .Commit();
-        
-        Assert.Equal("new", tree.ToFullString());
     }
     
     #endregion

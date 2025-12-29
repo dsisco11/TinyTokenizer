@@ -85,6 +85,23 @@ public static class SemanticMatchExtensions
         return new SemanticNodeQuery(kind);
     }
     
+    /// <summary>
+    /// Creates a query that matches semantic nodes of the specified type.
+    /// Resolves the NodeKind from the type's registration in this schema.
+    /// </summary>
+    /// <typeparam name="T">The semantic node type to query for.</typeparam>
+    /// <param name="schema">The schema containing the type registration.</param>
+    /// <returns>A NodeQuery that matches nodes of the specified semantic type.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the type is not registered in this schema.</exception>
+    /// <remarks>
+    /// This generic overload is preferred over <see cref="Semantic(Schema, string)"/> as it provides
+    /// compile-time type safety and uses the NodeKind directly for optimized scanning.
+    /// </remarks>
+    public static NodeQuery Semantic<T>(this Schema schema) where T : SemanticNode
+    {
+        return schema.Semantic<T>();
+    }
+    
     #endregion
 }
 

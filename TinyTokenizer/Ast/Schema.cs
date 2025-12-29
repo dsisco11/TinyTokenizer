@@ -110,6 +110,33 @@ public sealed class Schema
     /// <summary>Gets all definitions sorted by priority.</summary>
     internal ImmutableArray<ISemanticNodeDefinition> SortedDefinitions => _sortedDefinitions;
     
+    /// <summary>
+    /// Gets the NodeKind for a semantic node type.
+    /// </summary>
+    /// <typeparam name="T">The semantic node type.</typeparam>
+    /// <returns>The NodeKind for the type, or <see cref="NodeKind.Semantic"/> if not registered.</returns>
+    public NodeKind GetKind<T>() where T : SemanticNode =>
+        _definitionsByType.TryGetValue(typeof(T), out var def) ? def.Kind : NodeKind.Semantic;
+    
+    /// <summary>
+    /// Creates a query that matches semantic nodes of the specified type.
+    /// Uses the type's registered NodeKind for optimized scanning.
+    /// </summary>
+    /// <typeparam name="T">The semantic node type to query for.</typeparam>
+    /// <returns>A NodeQuery that matches nodes of the specified semantic type.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the type is not registered in this schema.</exception>
+    public NodeQuery Semantic<T>() where T : SemanticNode
+    {
+        var definition = GetDefinition<T>();
+        if (definition == null)
+        {
+            throw new InvalidOperationException(
+                $"Semantic node type '{typeof(T).Name}' is not registered in this schema. " +
+                $"Register it using SchemaBuilder.Define<{typeof(T).Name}>().");
+        }
+        return new SemanticNodeQuery(definition.Kind);
+    }
+    
     #endregion
     
     #region TokenizerOptions Conversion
