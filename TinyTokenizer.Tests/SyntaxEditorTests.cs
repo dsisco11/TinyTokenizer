@@ -651,6 +651,188 @@ public class SyntaxEditorTests
         Assert.Equal("(a b)", tree.ToFullString());
     }
 
+    #endregion
+
+    #region Function-Like Block Insertion Scenarios
+
+    [Fact]
+    public void Insert_BeforeFunctionBlock_InsertsBeforeOpeningBrace()
+    {
+        // Simulates: inserting a comment or decorator before a function
+        var tree = SyntaxTree.Parse("function {body}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().Before(), "/* comment */ ")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.StartsWith("function /* comment */ {", text);
+    }
+
+    [Fact]
+    public void Insert_AtFunctionStart_InsertsAfterOpeningBrace()
+    {
+        // Simulates: inserting a statement at the top of a function body
+        var tree = SyntaxTree.Parse("function {existing}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
+            .Commit();
+        
+        Assert.Equal("function {first; existing}", tree.ToFullString());
+    }
+
+    [Fact]
+    public void Insert_AtFunctionEnd_InsertsBeforeClosingBrace()
+    {
+        // Simulates: inserting a return statement at the end of a function body
+        var tree = SyntaxTree.Parse("function {existing}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerEnd(), " return")
+            .Commit();
+        
+        Assert.Equal("function {existing return}", tree.ToFullString());
+    }
+
+    [Fact]
+    public void Insert_AfterFunctionBlock_InsertsAfterClosingBrace()
+    {
+        // Simulates: inserting code after a function definition
+        var tree = SyntaxTree.Parse("function {body}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().After(), " nextFunction")
+            .Commit();
+        
+        Assert.Equal("function {body} nextFunction", tree.ToFullString());
+    }
+
+    [Fact]
+    public void Insert_MultipleFunctionPositions_AllInsertCorrectly()
+    {
+        // Simulates: inserting at multiple positions in a single commit
+        var tree = SyntaxTree.Parse("fn {body}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().Before(), "/* before */ ")
+            .Insert(Q.BraceBlock.First().InnerStart(), "start; ")
+            .Insert(Q.BraceBlock.First().InnerEnd(), " end;")
+            .Insert(Q.BraceBlock.First().After(), " /* after */")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("/* before */", text);
+        Assert.Contains("{start;", text);
+        Assert.Contains("end;}", text);
+        Assert.Contains("} /* after */", text);
+    }
+
+    [Fact]
+    public void Insert_NestedFunctionBlocks_InsertsAtCorrectLevel()
+    {
+        // Simulates: a function with an inner block (like if/while)
+        var tree = SyntaxTree.Parse("function {outer {inner}}");
+        
+        // Insert at the outer function's start
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Equal("function {first; outer {inner}}", text);
+    }
+
+    [Fact]
+    public void Insert_InnerBlockStart_InsertsInNestedBlock()
+    {
+        // Simulates: inserting inside an inner block (like inside an if statement)
+        var tree = SyntaxTree.Parse("function {outer {inner}}");
+        
+        // Find the inner block (second brace block)
+        var innerBlocks = Q.BraceBlock.Select(tree).ToList();
+        Assert.Equal(2, innerBlocks.Count);
+        
+        // Use Nth(1) to get the second (inner) block
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.Nth(1).InnerStart(), "nested; ")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("{nested; inner}", text);
+    }
+
+    [Fact]
+    public void Insert_BeforeAndAfterMultipleFunctions_HandlesCorrectly()
+    {
+        // Simulates: inserting around multiple function definitions
+        var tree = SyntaxTree.Parse("{first} {second}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.Before(), "/* fn */ ")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        // Both blocks should have "/* fn */" inserted before them
+        Assert.Equal("/* fn */ {first} /* fn */ {second}", text);
+    }
+
+    [Fact]
+    public void Insert_EmptyFunctionBody_InsertsCorrectly()
+    {
+        // Simulates: adding content to an empty function body
+        var tree = SyntaxTree.Parse("function {}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerStart(), "statement;")
+            .Commit();
+        
+        Assert.Equal("function {statement;}", tree.ToFullString());
+    }
+
+    [Fact]
+    public void Insert_FunctionWithWhitespace_PreservesFormatting()
+    {
+        // Test that whitespace/trivia is preserved correctly
+        var tree = SyntaxTree.Parse("fn { body }");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().InnerStart(), "new; ")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("{new;", text);
+        Assert.Contains("body", text);
+    }
+
+    [Fact]
+    public void Insert_BeforeFirstBlock_InsertsAtDocumentStart()
+    {
+        var tree = SyntaxTree.Parse("{only}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().Before(), "prefix ")
+            .Commit();
+        
+        Assert.Equal("prefix {only}", tree.ToFullString());
+    }
+
+    [Fact]
+    public void Insert_AfterLastBlock_InsertsAtDocumentEnd()
+    {
+        var tree = SyntaxTree.Parse("{only}");
+        
+        tree.CreateEditor()
+            .Insert(Q.BraceBlock.First().After(), " suffix")
+            .Commit();
+        
+        Assert.Equal("{only} suffix", tree.ToFullString());
+    }
+
+    #endregion
+
+    #region Replace Operations for Blocks
+
     [Fact]
     public void Replace_NestedBlock_PreservesOuter()
     {
