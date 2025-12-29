@@ -145,9 +145,9 @@ public sealed record InsertionQuery
     
     /// <summary>
     /// Resolves insertion positions for all matched nodes.
-    /// Returns (parent path, child index) pairs for insertion.
+    /// Returns (parent path, child index, document position) tuples for insertion.
     /// </summary>
-    public IEnumerable<(NodePath ParentPath, int ChildIndex)> ResolvePositions(SyntaxTree tree)
+    public IEnumerable<(NodePath ParentPath, int ChildIndex, int Position)> ResolvePositions(SyntaxTree tree)
     {
         foreach (var node in InnerQuery.Select(tree))
         {
@@ -157,7 +157,7 @@ public sealed record InsertionQuery
         }
     }
     
-    private (NodePath ParentPath, int ChildIndex)? ResolvePosition(RedNode node)
+    private (NodePath ParentPath, int ChildIndex, int Position)? ResolvePosition(RedNode node)
     {
         var parent = node.Parent;
         if (parent == null)
@@ -181,10 +181,10 @@ public sealed record InsertionQuery
         
         return Point switch
         {
-            InsertionPoint.Before => (parentPath, childIndex),
-            InsertionPoint.After => (parentPath, childIndex + 1),
-            InsertionPoint.InnerStart when node is RedBlock => (NodePath.FromNode(node), 0),
-            InsertionPoint.InnerEnd when node is RedBlock block => (NodePath.FromNode(node), block.ChildCount),
+            InsertionPoint.Before => (parentPath, childIndex, node.Position),
+            InsertionPoint.After => (parentPath, childIndex + 1, node.EndPosition),
+            InsertionPoint.InnerStart when node is RedBlock block => (NodePath.FromNode(node), 0, block.Position + 1), // After opener
+            InsertionPoint.InnerEnd when node is RedBlock block => (NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1), // Before closer
             _ => null
         };
     }

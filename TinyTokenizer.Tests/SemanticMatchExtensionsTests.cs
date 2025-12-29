@@ -221,6 +221,148 @@ public class SemanticMatchExtensionsTests
 
     #endregion
 
+    #region Schema.Semantic<T> Generic Extension
+
+    [Fact]
+    public void Schema_SemanticGeneric_CreatesQuery()
+    {
+        var schema = Schema.Default;
+        
+        var query = schema.Semantic<FunctionNameNode>();
+        
+        Assert.NotNull(query);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_QueryMatchesSameAsStringVersion()
+    {
+        var tree = SyntaxTree.Parse("foo(x) bar(y)");
+        var schema = Schema.Default;
+        
+        var genericQuery = schema.Semantic<FunctionNameNode>();
+        var stringQuery = schema.Semantic("FunctionName");
+        
+        // Both queries should select the same nodes (comparing behavior, not instances)
+        var genericResults = genericQuery.Select(tree).ToList();
+        var stringResults = stringQuery.Select(tree).ToList();
+        
+        Assert.Equal(stringResults.Count, genericResults.Count);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_UsesCorrectNodeKind()
+    {
+        var schema = Schema.Default;
+        var expectedKind = schema.GetKind("FunctionName");
+        
+        // GetKind<T> should return the same kind as GetKind(name)
+        var genericKind = schema.GetKind<FunctionNameNode>();
+        
+        Assert.Equal(expectedKind, genericKind);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_UnregisteredType_Throws()
+    {
+        // Create schema without FunctionName definition
+        var schema = Schema.Create().Build();
+        
+        Assert.Throws<InvalidOperationException>(() => schema.Semantic<FunctionNameNode>());
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_UnregisteredType_ThrowsWithHelpfulMessage()
+    {
+        var schema = Schema.Create().Build();
+        
+        var ex = Assert.Throws<InvalidOperationException>(() => schema.Semantic<FunctionNameNode>());
+        
+        Assert.Contains("FunctionNameNode", ex.Message);
+        Assert.Contains("not registered", ex.Message);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_AllBuiltInTypes_HaveDistinctKinds()
+    {
+        var schema = Schema.Default;
+        
+        var functionKind = schema.GetKind<FunctionNameNode>();
+        var arrayKind = schema.GetKind<ArrayAccessNode>();
+        var propertyKind = schema.GetKind<PropertyAccessNode>();
+        var methodKind = schema.GetKind<MethodCallNode>();
+        
+        // Each type should have a distinct NodeKind
+        var kinds = new[] { functionKind, arrayKind, propertyKind, methodKind };
+        Assert.Equal(4, kinds.Distinct().Count());
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_KindsAreSemanticRange()
+    {
+        var schema = Schema.Default;
+        
+        var functionKind = schema.GetKind<FunctionNameNode>();
+        var arrayKind = schema.GetKind<ArrayAccessNode>();
+        var propertyKind = schema.GetKind<PropertyAccessNode>();
+        var methodKind = schema.GetKind<MethodCallNode>();
+        
+        // All semantic kinds should be >= 1000
+        Assert.True(functionKind.IsSemantic());
+        Assert.True(arrayKind.IsSemantic());
+        Assert.True(propertyKind.IsSemantic());
+        Assert.True(methodKind.IsSemantic());
+    }
+
+    [Fact]
+    public void Schema_GetKind_Generic_UnregisteredType_ReturnsDefaultSemantic()
+    {
+        var schema = Schema.Create().Build();
+        
+        var kind = schema.GetKind<FunctionNameNode>();
+        
+        Assert.Equal(NodeKind.Semantic, kind);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_CanBeChainedWithFilters()
+    {
+        var schema = Schema.Default;
+        
+        // Should be able to chain .First() and other modifiers
+        var query = schema.Semantic<FunctionNameNode>().First();
+        
+        Assert.NotNull(query);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_CanBeUsedInUnion()
+    {
+        var schema = Schema.Default;
+        
+        // Should be able to combine with | operator
+        var query = schema.Semantic<FunctionNameNode>() | schema.Semantic<ArrayAccessNode>();
+        
+        Assert.NotNull(query);
+    }
+
+    [Fact]
+    public void Schema_SemanticGeneric_ExtensionMethodDelegatesToSchemaMethod()
+    {
+        var schema = Schema.Default;
+        
+        // Both the extension method and direct method should work identically
+        var fromExtension = SemanticMatchExtensions.Semantic<FunctionNameNode>(schema);
+        var fromDirect = schema.Semantic<FunctionNameNode>();
+        
+        // They should produce equivalent queries (same kind)
+        var tree = SyntaxTree.Parse("test");
+        Assert.Equal(
+            fromExtension.Select(tree).Count(),
+            fromDirect.Select(tree).Count());
+    }
+
+    #endregion
+
     #region SemanticMatchExtensions.Semantic (Static)
 
     [Fact]
