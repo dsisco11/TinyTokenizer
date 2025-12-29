@@ -8,6 +8,9 @@ A high-performance, zero-allocation tokenizer library for .NET 8+ that parses te
 - **SIMD-optimized** — Uses .NET 8's `SearchValues<char>` for vectorized character matching
 - **Two-level architecture** — Lexer (character classification) + TokenParser (semantic parsing)
 - **TinyAst** — Red-green tree with structural sharing, fluent queries, and undo/redo support
+- **Schema system** — Unified configuration for tokenization + semantic node definitions
+- **Semantic nodes** — Pattern-based AST matching for function calls, property access, etc.
+- **TreeWalker** — DOM-style filtered tree traversal inspired by W3C TreeWalker
 - **Async streaming** — Tokenize `Stream` and `PipeReader` sources with `IAsyncEnumerable<Token>`
 - **Recursive declaration blocks** — Automatically parses nested `{}`, `[]`, and `()` blocks with child tokens
 - **String literals** — Supports single and double-quoted strings with escape sequences
@@ -18,7 +21,6 @@ A high-performance, zero-allocation tokenizer library for .NET 8+ that parses te
 - **Configurable symbols** — Define which characters are recognized as symbol tokens
 - **Immutable tokens** — All token types are immutable record classes
 - **Error recovery** — Gracefully handles malformed input with `ErrorToken` and continues parsing
-- **Custom tokens (Level 3)** — Pattern-based matching to create composite tokens like function calls, property access, etc.
 
 ## Installation
 
@@ -85,180 +87,6 @@ var parser = new TokenParser(options);
 
 var simpleTokens = lexer.Lex(source);
 var tokens = parser.ParseToArray(simpleTokens);
-```
-
-## Custom Tokens (Level 3) — Pattern Matching
-
-TinyTokenizer supports a third level of tokenization that matches token sequences against patterns and creates composite tokens. This is useful for recognizing higher-level constructs like function calls, property access, type annotations, and more.
-
-### Quick Start
-
-```csharp
-using TinyTokenizer;
-
-// Parse and apply patterns
-var tokens = "obj.method(x, y)".TokenizeToTokens();
-var result = tokens.ApplyPatterns(
-    TokenDefinitions.PropertyAccess(),
-    TokenDefinitions.FunctionCall());
-
-// result contains composite tokens:
-// - PropertyAccessToken (obj.method) 
-// - or FunctionCallToken depending on pattern priority
-```
-
-### Built-in Pattern Definitions
-
-```csharp
-// Function call: Ident + ParenBlock  →  func(args)
-TokenDefinitions.FunctionCall()
-
-// Property access: Ident + '.' + Ident  →  obj.property
-TokenDefinitions.PropertyAccess()
-
-// Type annotation: Ident + ':' + Ident  →  param: string
-TokenDefinitions.TypeAnnotation()
-
-// Assignment: Ident + '=' + Any  →  x = value
-TokenDefinitions.Assignment()
-
-// Array access: Ident + BracketBlock  →  arr[index]
-TokenDefinitions.ArrayAccess()
-```
-
-### Custom Pattern Definitions
-
-Create your own patterns using `TokenDefinition<T>` and the `Match` factory:
-
-```csharp
-// Define a custom composite token type
-public sealed record MethodCallToken : CompositeToken
-{
-    public ReadOnlySpan<char> ObjectSpan => MatchedTokens[0].ContentSpan;
-    public ReadOnlySpan<char> MethodSpan => MatchedTokens[2].ContentSpan;
-}
-
-// Create a pattern definition
-var methodCall = new TokenDefinition<MethodCallToken>
-{
-    Name = "MethodCall",
-    Patterns = [[Match.Ident(), Match.Symbol('.'), Match.Ident(), Match.Block('(')]],
-    SkipWhitespace = true,  // Skip whitespace between tokens (default: true)
-    Priority = 10           // Higher priority patterns match first (default: 0)
-};
-
-// Apply the pattern
-var result = tokens.ApplyPatterns(methodCall);
-```
-
-### Match Selectors
-
-The `Match` class provides fluent factory methods for creating token selectors:
-
-```csharp
-// Basic type matchers
-Match.Any()              // Matches any token
-Match.Ident()            // Any identifier
-Match.Ident("function")  // Specific identifier
-Match.Whitespace()       // Whitespace tokens
-Match.Numeric()          // Any number
-Match.Numeric(NumericType.Integer)  // Integer only
-Match.String()           // Any string literal
-Match.String('"')        // Double-quoted strings
-Match.Comment()          // Comments
-Match.TaggedIdent()      // Any tagged identifier (#define, @attr)
-Match.TaggedIdent('@')   // Specific tag prefix
-
-// Operators and symbols
-Match.Operator()         // Any operator
-Match.Operator("==")     // Specific operator
-Match.Symbol('.')        // Specific symbol character
-
-// Blocks
-Match.Block()            // Any block type
-Match.Block('(')         // Parenthesis block
-Match.Block('[')         // Bracket block
-Match.Block('{')         // Brace block
-
-// Combinators
-Match.AnyOf(Match.Ident(), Match.Numeric())  // OR logic
-
-// Content matchers
-Match.ContentStartsWith("_")
-Match.ContentEndsWith("Async")
-Match.ContentContains("test")
-Match.ContentMatches(content => content.Length > 5)
-```
-
-### Pattern Alternatives (OR Logic)
-
-Define multiple pattern alternatives that can match:
-
-```csharp
-var definition = new TokenDefinition<MyToken>
-{
-    Name = "FlexiblePattern",
-    Patterns =
-    [
-        // Alternative 1: identifier followed by paren block
-        [Match.Ident(), Match.Block('(')],
-        // Alternative 2: identifier followed by bracket block
-        [Match.Ident(), Match.Block('[')]
-    ]
-};
-```
-
-### Composite Token Properties
-
-Composite tokens provide access to their matched tokens:
-
-```csharp
-var funcCall = (FunctionCallToken)result[0];
-
-// Access specific parts computed from MatchedTokens
-funcCall.FunctionNameSpan;  // "myFunc"
-funcCall.PatternName;       // "FunctionCall"
-funcCall.Content;           // Full matched content
-funcCall.MatchedTokens;     // All tokens that were matched
-funcCall.Children;          // Alias for MatchedTokens
-```
-
-### Diagnostics
-
-Get detailed information about pattern matching:
-
-```csharp
-var report = tokens.ApplyPatternsWithDiagnostics(
-    TokenDefinitions.FunctionCall(),
-    TokenDefinitions.PropertyAccess());
-
-// Access results
-report.OutputTokens;   // The processed tokens
-report.InputTokens;    // Original input
-
-// Inspect match attempts
-foreach (var attempt in report.Attempts)
-{
-    Console.WriteLine($"{attempt.PatternName} at {attempt.TokenIndex}: {attempt.Result}");
-    
-    foreach (var selector in attempt.SelectorResults)
-    {
-        Console.WriteLine($"  {selector.SelectorDescription}: {selector.Result}");
-    }
-}
-```
-
-### Recursive Pattern Application
-
-Patterns are automatically applied recursively to block contents:
-
-```csharp
-var tokens = "outer(inner())".TokenizeToTokens();
-var result = tokens.ApplyPatterns(TokenDefinitions.FunctionCall());
-
-// The outer FunctionCallToken's children also have patterns applied
-var outerCall = (FunctionCallToken)result[0];
-// Inner function call is also recognized within the block
 ```
 
 ## TinyAst — Syntax Tree API
@@ -408,15 +236,16 @@ var tree = SyntaxTree.Parse("{ a + b }");
 var node = tree.FindNodeAt(3);      // Deepest node at position
 var leaf = tree.FindLeafAt(3);      // Leaf at position
 
-// Traversal
-foreach (var leaf in tree.Leaves)
+// Traversal with TreeWalker
+var walker = tree.CreateTreeWalker();
+foreach (var node in walker.DescendantsAndSelf())
 {
-    Console.WriteLine($"{leaf.Kind}: {leaf.Text}");
+    Console.WriteLine($"{node.Kind}: {node.Position}");
 }
 
 // From any node
 foreach (var child in node.Children) { }
-foreach (var desc in node.DescendantsAndSelf()) { }
+var sibling = node.NextSibling();
 var parent = node.Parent;
 ```
 
@@ -465,6 +294,327 @@ if (tree.CanRedo) { }
 tree.ClearHistory();
 ```
 
+## Schema — Unified Configuration
+
+The `Schema` class provides unified configuration for both tokenization and semantic node definitions.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer.Ast;
+
+// Create a schema with tokenization settings and semantic definitions
+var schema = Schema.Create()
+    .WithOperators(CommonOperators.JavaScript)
+    .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+    .Define(BuiltInDefinitions.FunctionName)
+    .Define(BuiltInDefinitions.ArrayAccess)
+    .Define(BuiltInDefinitions.PropertyAccess)
+    .Define(BuiltInDefinitions.MethodCall)
+    .Build();
+
+// Parse with schema
+var tree = SyntaxTree.Parse("obj.method(x)", schema);
+
+// Match semantic nodes using the attached schema
+var methods = tree.Match<MethodCallNode>().ToList();
+```
+
+### Built-in Schema
+
+```csharp
+// Schema.Default includes:
+// - CommonOperators.Universal
+// - C-style single and multi-line comments
+// - FunctionName, ArrayAccess, PropertyAccess, MethodCall definitions
+var tree = SyntaxTree.Parse(source, Schema.Default);
+```
+
+### Converting from TokenizerOptions
+
+```csharp
+// Create schema from existing TokenizerOptions
+var options = TokenizerOptions.Default
+    .WithOperators(CommonOperators.CFamily)
+    .WithCommentStyles(CommentStyle.CStyleSingleLine);
+
+var schema = Schema.FromOptions(options);
+```
+
+## TreeWalker — DOM-Style Traversal
+
+The `TreeWalker` provides filtered tree traversal similar to the W3C DOM TreeWalker specification.
+
+### Basic Usage
+
+```csharp
+var tree = SyntaxTree.Parse("foo { bar(x) }");
+
+// Create walker from tree or node
+var walker = tree.CreateTreeWalker();
+// or: var walker = new TreeWalker(tree.Root);
+
+// Enumerate all descendants
+foreach (var node in walker.DescendantsAndSelf())
+{
+    Console.WriteLine($"{node.Kind} at {node.Position}");
+}
+```
+
+### Filtered Traversal
+
+```csharp
+// Filter by node type using NodeFilter flags
+var leafWalker = new TreeWalker(tree.Root, NodeFilter.Leaves);
+foreach (var leaf in leafWalker.DescendantsAndSelf())
+{
+    // Only leaf nodes (identifiers, operators, etc.)
+}
+
+var blockWalker = new TreeWalker(tree.Root, NodeFilter.Blocks);
+foreach (var block in blockWalker.DescendantsAndSelf())
+{
+    // Only block nodes ({ }, [ ], ( ))
+}
+```
+
+### Custom Filter Functions
+
+```csharp
+// Use FilterResult for fine-grained control
+var walker = new TreeWalker(
+    tree.Root,
+    NodeFilter.All,
+    node => node.Kind == NodeKind.Ident 
+        ? FilterResult.Accept    // Include this node
+        : FilterResult.Skip);    // Skip node, but check children
+
+// FilterResult options:
+// - Accept: Include node in results
+// - Skip: Skip node, continue to children  
+// - Reject: Skip node and all descendants
+
+var idents = walker.DescendantsAndSelf().ToList();
+```
+
+### Navigation Methods
+
+```csharp
+var walker = tree.CreateTreeWalker();
+
+// Cursor-based navigation (mutates walker.Current)
+walker.NextNode();        // Next in document order
+walker.PreviousNode();    // Previous in document order
+walker.ParentNode();      // Move to parent
+walker.FirstChild();      // Move to first child
+walker.LastChild();       // Move to last child
+walker.NextSibling();     // Move to next sibling
+walker.PreviousSibling(); // Move to previous sibling
+
+// Enumeration (does not mutate Current)
+walker.Descendants();       // All descendants
+walker.DescendantsAndSelf(); // Root + all descendants
+walker.Ancestors();         // Ancestors to root
+walker.FollowingSiblings(); // Siblings after current
+walker.PrecedingSiblings(); // Siblings before current
+```
+
+### NodeFilter Flags
+
+```csharp
+[Flags]
+public enum NodeFilter
+{
+    None = 0,
+    Leaves = 1 << 0,   // Leaf nodes (idents, operators, etc.)
+    Blocks = 1 << 1,   // Block nodes ({ }, [ ], ( ))
+    Root = 1 << 2,     // The root list node
+    All = Leaves | Blocks | Root
+}
+```
+
+## Semantic Nodes — AST Pattern Matching
+
+Semantic nodes provide a way to match structural patterns in the AST and create typed wrapper objects.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer.Ast;
+
+// Parse with schema
+var tree = SyntaxTree.Parse("foo(x) + bar.baz", Schema.Default);
+
+// Find all function names (identifiers followed by parentheses)
+var funcNames = tree.Match<FunctionNameNode>().ToList();
+// funcNames[0].Name == "foo"
+
+// Find all property accesses
+var props = tree.Match<PropertyAccessNode>().ToList();
+// props[0].Object == "bar", props[0].Property == "baz"
+```
+
+### Built-in Semantic Nodes
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| `FunctionNameNode` | `Ident(?=ParenBlock)` | `foo` in `foo(x)` |
+| `ArrayAccessNode` | `Ident + BracketBlock` | `arr[0]` |
+| `PropertyAccessNode` | `Ident + "." + Ident` | `obj.prop` |
+| `MethodCallNode` | `Ident + "." + Ident + ParenBlock` | `obj.method(x)` |
+
+### FunctionNameNode
+
+Captures just the function name (not the arguments):
+
+```csharp
+var tree = SyntaxTree.Parse("calculate(a, b)", Schema.Default);
+var func = tree.Match<FunctionNameNode>().First();
+
+func.Name;       // "calculate"
+func.NameNode;   // The RedLeaf for the identifier
+func.Arguments;  // The following ParenBlock (via sibling navigation)
+```
+
+### ArrayAccessNode
+
+```csharp
+var tree = SyntaxTree.Parse("items[0]", Schema.Default);
+var access = tree.Match<ArrayAccessNode>().First();
+
+access.Target;      // "items"
+access.IndexBlock;  // The [0] block
+```
+
+### PropertyAccessNode
+
+```csharp
+var tree = SyntaxTree.Parse("user.name", Schema.Default);
+var prop = tree.Match<PropertyAccessNode>().First();
+
+prop.Object;    // "user"
+prop.Property;  // "name"
+```
+
+### MethodCallNode
+
+```csharp
+var tree = SyntaxTree.Parse("list.add(item)", Schema.Default);
+var method = tree.Match<MethodCallNode>().First();
+
+method.Object;     // "list"
+method.Method;     // "add"
+method.Arguments;  // The (item) block
+```
+
+### Custom Semantic Nodes
+
+Define your own semantic node types:
+
+```csharp
+// 1. Define the node class
+public sealed class LambdaNode : SemanticNode
+{
+    public LambdaNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
+    
+    public RedBlock Parameters => Part<RedBlock>(0);
+    public RedBlock Body => Part<RedBlock>(2);
+}
+
+// 2. Create a definition with pattern
+var lambdaDef = Semantic.Define<LambdaNode>("Lambda")
+    .Match(p => p.ParenBlock().Operator("=>").BraceBlock())
+    .Create((match, kind) => new LambdaNode(match, kind))
+    .WithPriority(15)
+    .Build();
+
+// 3. Add to schema
+var schema = Schema.Create()
+    .WithOperators(CommonOperators.JavaScript)
+    .Define(lambdaDef)
+    .Build();
+
+// 4. Match
+var tree = SyntaxTree.Parse("(x) => { return x; }", schema);
+var lambdas = tree.Match<LambdaNode>().ToList();
+```
+
+### Pattern Builder API
+
+The fluent pattern builder provides matchers for AST nodes:
+
+```csharp
+var pattern = new PatternBuilder()
+    .Ident()                    // Match identifier
+    .Symbol(".")                // Match dot symbol
+    .Ident()                    // Match identifier
+    .ParenBlock()               // Match ( ) block
+    .Build();
+
+// Available matchers:
+builder.Ident()                 // Any identifier
+builder.Ident("specific")       // Specific identifier text
+builder.Operator("==")          // Specific operator
+builder.Symbol(".")             // Specific symbol
+builder.ParenBlock()            // ( ) block
+builder.BraceBlock()            // { } block
+builder.BracketBlock()          // [ ] block
+builder.AnyBlock()              // Any block type
+builder.Numeric()               // Number literal
+builder.String()                // String literal
+builder.Any()                   // Any single node
+```
+
+### Pattern Combinators
+
+```csharp
+// Sequence: A then B then C
+var seq = NodePattern.Sequence(Query.Ident, Query.ParenBlock);
+
+// Alternatives: A or B
+var alt = NodePattern.OneOf(pattern1, pattern2);
+
+// Optional: zero or one
+var opt = NodePattern.Optional(pattern);
+
+// Repetition
+var zeroOrMore = NodePattern.ZeroOrMore(pattern);
+var oneOrMore = NodePattern.OneOrMore(pattern);
+var exactly3 = NodePattern.Repeat(pattern, 3, 3);
+
+// Lookahead (match A only if followed by B, B not consumed)
+var lookahead = new LookaheadPattern(
+    new QueryPattern(Query.Ident),      // Match and capture
+    new QueryPattern(Query.ParenBlock)  // Must follow (not captured)
+);
+```
+
+### SemanticContext
+
+Pass context to semantic node factories:
+
+```csharp
+using Microsoft.Extensions.Logging;
+
+var context = new SemanticContext
+{
+    Tree = tree,
+    Logger = loggerFactory.CreateLogger("Semantic"),
+    StrictMode = true
+};
+
+// Register services for dependency injection
+context.AddService(mySymbolTable);
+context.AddService(myTypeChecker);
+
+// Use in matching
+var nodes = tree.Match<FunctionNameNode>(context);
+
+// Access services in node factory
+var symbolTable = context.GetService<ISymbolTable>();
+var required = context.GetRequiredService<ITypeChecker>(); // throws if missing
+```
+
 ## Token Types
 
 | Type               | Description                           | Example                        |
@@ -479,7 +629,6 @@ tree.ClearHistory();
 | `CommentToken`     | Single or multi-line comments         | `// comment`, `/* block */`    |
 | `BlockToken`       | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`      |
 | `ErrorToken`       | Parsing errors (unmatched delimiters) | `}` without opening `{`        |
-| `CompositeToken`   | Pattern-matched token sequences       | `FunctionCallToken`, `PropertyAccessToken` |
 
 ### Token Properties
 
@@ -517,21 +666,6 @@ op.Operator;  // "==" or "!=" etc. (string)
 var tagged = (TaggedIdentToken)token;
 tagged.Tag;      // '#' or '@' or '$' etc.
 tagged.NameSpan; // "define" or "Override" (ReadOnlySpan<char>)
-
-// CompositeToken (base for pattern-matched tokens)
-var composite = (CompositeToken)token;
-composite.PatternName;    // "FunctionCall" etc.
-composite.MatchedTokens;  // ImmutableArray<Token> of matched tokens
-composite.Children;       // Alias for MatchedTokens
-
-// FunctionCallToken
-var funcCall = (FunctionCallToken)token;
-funcCall.FunctionNameSpan; // The function name
-
-// PropertyAccessToken
-var propAccess = (PropertyAccessToken)token;
-propAccess.TargetSpan;    // "obj" in obj.property
-propAccess.MemberSpan;    // "property" in obj.property
 ```
 
 ## Async Tokenization
@@ -745,11 +879,6 @@ IAsyncEnumerable<Token> TokenizeStreamingAsync(this Stream, TokenizerOptions?, E
 // PipeReader extensions
 Task<ImmutableArray<Token>> TokenizeAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
 IAsyncEnumerable<Token> TokenizeStreamingAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
-
-// Pattern matching extensions on ImmutableArray<Token>
-ImmutableArray<Token> ApplyPatterns(this ImmutableArray<Token> tokens, params ITokenDefinition[] definitions)
-ImmutableArray<Token> ApplyPatterns(this ImmutableArray<Token> tokens, IEnumerable<ITokenDefinition> definitions)
-PatternMatchReport ApplyPatternsWithDiagnostics(this ImmutableArray<Token> tokens, params ITokenDefinition[] definitions)
 ```
 
 ### Tokenizer (ref struct)
@@ -790,59 +919,6 @@ public sealed class TokenParser
 }
 ```
 
-### PatternMatcher
-
-```csharp
-public sealed class PatternMatcher
-{
-    public PatternMatcher(IEnumerable<ITokenDefinition> definitions, bool enableDiagnostics = false);
-
-    public ImmutableArray<Token> Apply(ImmutableArray<Token> tokens);
-    public PatternMatchReport ApplyWithDiagnostics(ImmutableArray<Token> tokens);
-}
-```
-
-### TokenDefinition
-
-```csharp
-public sealed record TokenDefinition<T> : ITokenDefinition where T : CompositeToken, new()
-{
-    public required string Name { get; init; }
-    public required ImmutableArray<ImmutableArray<TokenSelector>> Patterns { get; init; }
-    public bool SkipWhitespace { get; init; } = true;
-    public int Priority { get; init; } = 0;
-}
-```
-
-### Match (selector factory)
-
-```csharp
-public static class Match
-{
-    public static TokenSelector Any();
-    public static TokenSelector Ident();
-    public static TokenSelector Ident(string content);
-    public static TokenSelector Whitespace();
-    public static TokenSelector Symbol(char symbol);
-    public static TokenSelector Operator();
-    public static TokenSelector Operator(string op);
-    public static TokenSelector Numeric();
-    public static TokenSelector Numeric(NumericType numericType);
-    public static TokenSelector String();
-    public static TokenSelector String(char quote);
-    public static TokenSelector Comment();
-    public static TokenSelector TaggedIdent();
-    public static TokenSelector TaggedIdent(char prefix);
-    public static TokenSelector Block();
-    public static TokenSelector Block(char opener);
-    public static TokenSelector AnyOf(params TokenSelector[] selectors);
-    public static TokenSelector ContentStartsWith(string prefix);
-    public static TokenSelector ContentEndsWith(string suffix);
-    public static TokenSelector ContentContains(string substring);
-    public static TokenSelector ContentMatches(Func<ReadOnlyMemory<char>, bool> predicate);
-}
-```
-
 ### Token (abstract record)
 
 ```csharp
@@ -868,8 +944,204 @@ public enum TokenType
     Comment,          // comments
     Error,            // parsing errors
     Operator,         // multi-character operators
-    TaggedIdent,      // tag prefix + identifier
-    Composite         // pattern-matched token sequences
+    TaggedIdent       // tag prefix + identifier
+}
+```
+
+### Schema
+
+```csharp
+public sealed class Schema
+{
+    // Properties (tokenization settings)
+    ImmutableHashSet<char> Symbols { get; }
+    ImmutableArray<string> Operators { get; }
+    ImmutableHashSet<char> TagPrefixes { get; }
+    ImmutableArray<CommentStyle> CommentStyles { get; }
+    
+    // Semantic definitions
+    ImmutableArray<ISemanticNodeDefinition> SortedDefinitions { get; }
+    
+    // Factory methods
+    static SchemaBuilder Create();
+    static Schema FromOptions(TokenizerOptions options);
+    static Schema Default { get; }
+    
+    // Query
+    SemanticNodeDefinition<T>? GetDefinition<T>() where T : SemanticNode;
+    NodeKind GetKind(string definitionName);
+    TokenizerOptions ToTokenizerOptions();
+}
+
+public sealed class SchemaBuilder
+{
+    SchemaBuilder WithSymbols(params char[] symbols);
+    SchemaBuilder WithOperators(params string[] operators);
+    SchemaBuilder WithOperators(IEnumerable<string> operators);
+    SchemaBuilder WithCommentStyles(params CommentStyle[] styles);
+    SchemaBuilder WithTagPrefixes(params char[] prefixes);
+    SchemaBuilder Define<T>(SemanticNodeDefinition<T> definition) where T : SemanticNode;
+    Schema Build();
+}
+```
+
+### TreeWalker
+
+```csharp
+public sealed class TreeWalker
+{
+    // Constructor
+    TreeWalker(RedNode root, NodeFilter whatToShow = NodeFilter.All, 
+               Func<RedNode, FilterResult>? filter = null);
+    
+    // Properties
+    RedNode Root { get; }
+    RedNode Current { get; }
+    NodeFilter WhatToShow { get; }
+    
+    // Cursor navigation (mutates Current)
+    RedNode? ParentNode();
+    RedNode? FirstChild();
+    RedNode? LastChild();
+    RedNode? NextSibling();
+    RedNode? PreviousSibling();
+    RedNode? NextNode();
+    RedNode? PreviousNode();
+    
+    // Enumeration
+    IEnumerable<RedNode> Descendants();
+    IEnumerable<RedNode> DescendantsAndSelf();
+    IEnumerable<RedNode> Ancestors();
+    IEnumerable<RedNode> FollowingSiblings();
+    IEnumerable<RedNode> PrecedingSiblings();
+}
+
+[Flags]
+public enum NodeFilter
+{
+    None = 0,
+    Leaves = 1 << 0,
+    Blocks = 1 << 1,
+    Root = 1 << 2,
+    All = Leaves | Blocks | Root
+}
+
+public enum FilterResult
+{
+    Accept,  // Include node
+    Skip,    // Skip node, continue to children
+    Reject   // Skip node and all descendants
+}
+```
+
+### SemanticNode
+
+```csharp
+public abstract class SemanticNode
+{
+    // Properties
+    NodeKind Kind { get; }
+    int Position { get; }
+    int Width { get; }
+    int PartCount { get; }
+    
+    // Access matched parts
+    T Part<T>(int index) where T : RedNode;
+}
+
+// Built-in semantic nodes
+public sealed class FunctionNameNode : SemanticNode
+{
+    RedLeaf NameNode { get; }
+    string Name { get; }
+    RedBlock? Arguments { get; }  // Via sibling navigation
+}
+
+public sealed class ArrayAccessNode : SemanticNode
+{
+    string Target { get; }
+    RedBlock IndexBlock { get; }
+}
+
+public sealed class PropertyAccessNode : SemanticNode
+{
+    string Object { get; }
+    string Property { get; }
+}
+
+public sealed class MethodCallNode : SemanticNode
+{
+    string Object { get; }
+    string Method { get; }
+    RedBlock Arguments { get; }
+}
+```
+
+### SemanticNodeDefinition
+
+```csharp
+public sealed class SemanticNodeDefinition<T> where T : SemanticNode
+{
+    string Name { get; }
+    ImmutableArray<NodePattern> Patterns { get; }
+    int Priority { get; }
+    
+    T? TryCreate(NodeMatch match, SemanticContext? context);
+}
+
+// Fluent builder
+public static class Semantic
+{
+    static SemanticNodeDefinitionBuilder<T> Define<T>(string name) where T : SemanticNode;
+}
+
+public sealed class SemanticNodeDefinitionBuilder<T>
+{
+    SemanticNodeDefinitionBuilder<T> Match(Func<PatternBuilder, NodePattern> configure);
+    SemanticNodeDefinitionBuilder<T> Match(NodePattern pattern);
+    SemanticNodeDefinitionBuilder<T> Create(Func<NodeMatch, NodeKind, T> factory);
+    SemanticNodeDefinitionBuilder<T> WithPriority(int priority);
+    SemanticNodeDefinition<T> Build();
+}
+```
+
+### SemanticContext
+
+```csharp
+public class SemanticContext
+{
+    SyntaxTree? Tree { get; init; }
+    ILogger Logger { get; init; }  // Defaults to NullLogger.Instance
+    bool StrictMode { get; init; }
+    
+    SemanticContext AddService<T>(T service) where T : class;
+    T? GetService<T>() where T : class;
+    T GetRequiredService<T>() where T : class;  // Throws if missing
+    bool HasService<T>() where T : class;
+}
+```
+
+### SyntaxTree (Semantic Matching)
+
+```csharp
+public class SyntaxTree
+{
+    // Parse with schema
+    static SyntaxTree Parse(string source, Schema schema);
+    static SyntaxTree Parse(ReadOnlyMemory<char> source, Schema schema);
+    
+    // Attached schema
+    Schema? Schema { get; }
+    
+    // Semantic matching
+    IEnumerable<T> Match<T>(SemanticContext? context = null) where T : SemanticNode;
+    IEnumerable<T> Match<T>(Schema schema, SemanticContext? context = null) where T : SemanticNode;
+    IEnumerable<SemanticNode> MatchAll(SemanticContext? context = null);
+    IEnumerable<SemanticNode> MatchAll(Schema schema, SemanticContext? context = null);
+    
+    // TreeWalker creation
+    TreeWalker CreateTreeWalker(NodeFilter whatToShow = NodeFilter.All,
+                                Func<RedNode, FilterResult>? filter = null);
 }
 ```
 
