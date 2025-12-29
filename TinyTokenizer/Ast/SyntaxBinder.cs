@@ -187,7 +187,7 @@ public sealed class SyntaxBinder
         // Create a temporary red tree view for pattern matching
         // This is a simplification - in production we'd want a more efficient approach
         var greenList = new GreenList(children.Skip(startIndex).ToImmutableArray());
-        var redList = (RedBlock)greenList.CreateRed(null, 0);
+        var redList = (RedList)greenList.CreateRed(null, 0);
         
         // Get the children as red nodes for matching
         var redChildren = redList.Children.ToList();
