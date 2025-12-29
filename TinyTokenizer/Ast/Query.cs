@@ -71,4 +71,20 @@ public static class Query
     public static LeafNodeQuery Leaf => new LeafNodeQuery();
     
     #endregion
+    
+    #region Syntax Queries
+    
+    /// <summary>
+    /// Creates a query matching syntax nodes of the specified type.
+    /// Resolves the NodeKind from the tree's schema at query time.
+    /// </summary>
+    /// <typeparam name="T">The syntax node type to match.</typeparam>
+    /// <example>
+    /// <code>
+    /// Query.Syntax&lt;GlslFunctionSyntax&gt;().Where(f => f.Name == "main").Select(tree)
+    /// </code>
+    /// </example>
+    public static SyntaxNodeQuery<T> Syntax<T>() where T : SyntaxNode => new SyntaxNodeQuery<T>();
+    
+    #endregion
 }

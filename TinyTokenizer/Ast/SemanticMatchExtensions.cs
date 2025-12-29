@@ -166,3 +166,107 @@ public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
     private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
+
+/// <summary>
+/// Generic query that matches syntax nodes by C# type.
+/// Resolves NodeKind from the tree's schema at Select time for optimized matching.
+/// Falls back to type checking when no schema is available.
+/// </summary>
+/// <typeparam name="T">The syntax node type to match.</typeparam>
+public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T : SyntaxNode
+{
+    private readonly Func<T, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    
+    public SyntaxNodeQuery() : this(null, SelectionMode.All, 0) { }
+    
+    internal SyntaxNodeQuery(Func<T, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
+    
+    public override IEnumerable<RedNode> Select(SyntaxTree tree)
+    {
+        // Try to resolve NodeKind from schema for optimized matching
+        var def = tree.Schema?.GetSyntaxDefinition<T>();
+        if (def != null)
+        {
+            // Use kind-based matching (fast path)
+            return SelectWithKind(tree.Root, def.Kind);
+        }
+        
+        // Fallback: match by C# type
+        return Select(tree.Root);
+    }
+    
+    private IEnumerable<RedNode> SelectWithKind(RedNode root, NodeKind kind)
+    {
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf()
+            .Where(n => n.Kind == kind && (_predicate == null || _predicate((T)n)));
+        
+        return ApplyMode(matches);
+    }
+    
+    public override IEnumerable<RedNode> Select(RedNode root)
+    {
+        // Match by C# type (no schema available)
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf().Where(Matches);
+        
+        return ApplyMode(matches);
+    }
+    
+    private IEnumerable<RedNode> ApplyMode(IEnumerable<RedNode> matches)
+    {
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <summary>
+    /// Selects and casts to the strongly-typed syntax node.
+    /// </summary>
+    public IEnumerable<T> SelectTyped(SyntaxTree tree) => Select(tree).Cast<T>();
+    
+    /// <summary>
+    /// Selects and casts to the strongly-typed syntax node.
+    /// </summary>
+    public IEnumerable<T> SelectTyped(RedNode root) => Select(root).Cast<T>();
+    
+    public override bool Matches(RedNode node) => 
+        node is T typed && (_predicate == null || _predicate(typed));
+    
+    public override bool MatchesGreen(GreenNode node) => 
+        node is GreenSyntaxNode gsn && gsn.RedType == typeof(T);
+    
+    /// <summary>
+    /// Filters by a strongly-typed predicate.
+    /// </summary>
+    public SyntaxNodeQuery<T> Where(Func<T, bool> predicate)
+    {
+        if (_predicate == null)
+            return new SyntaxNodeQuery<T>(predicate, _mode, _modeArg);
+        
+        var combined = (T n) => _predicate(n) && predicate(n);
+        return new SyntaxNodeQuery<T>(combined, _mode, _modeArg);
+    }
+    
+    protected override SyntaxNodeQuery<T> CreateFiltered(Func<RedNode, bool> predicate) =>
+        new SyntaxNodeQuery<T>(n => (_predicate == null || _predicate(n)) && predicate(n), _mode, _modeArg);
+    
+    protected override SyntaxNodeQuery<T> CreateFirst() => new SyntaxNodeQuery<T>(_predicate, SelectionMode.First, 0);
+    protected override SyntaxNodeQuery<T> CreateLast() => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Last, 0);
+    protected override SyntaxNodeQuery<T> CreateNth(int n) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Nth, n);
+    protected override SyntaxNodeQuery<T> CreateSkip(int count) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Skip, count);
+    protected override SyntaxNodeQuery<T> CreateTake(int count) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Take, count);
+}
