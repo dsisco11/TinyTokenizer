@@ -425,7 +425,7 @@ public class SyntaxNodeTests
     }
     
     [Fact]
-    public void Tree_Bind_AppliesSyntaxBinding()
+    public void Tree_Parse_AutoBindsWhenSchemaHasDefinitions()
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
@@ -433,12 +433,41 @@ public class SyntaxNodeTests
                 .Build())
             .Build();
         
-        // First parse without binding
+        // Parse auto-binds when schema has definitions
         var tree = SyntaxTree.Parse("foo()", schema);
+        var funcCall = tree.Root.Children.OfType<RedFunctionCall>().FirstOrDefault();
+        
+        Assert.NotNull(funcCall);
+        Assert.Equal("foo", funcCall!.Name);
+    }
+    
+    [Fact]
+    public void Tree_Parse_NoAutoBindWhenNoDefinitions()
+    {
+        var schema = Schema.Create().Build(); // No syntax definitions
+        
+        var tree = SyntaxTree.Parse("foo()", schema);
+        
+        // Should not contain RedFunctionCall since no definitions
+        Assert.DoesNotContain(tree.Root.Children, n => n is RedFunctionCall);
+    }
+    
+    [Fact]
+    public void Tree_Bind_CanReapplyBindingExplicitly()
+    {
+        var schemaWithoutDefs = Schema.Create().Build();
+        var schemaWithDefs = Schema.Create()
+            .DefineSyntax(Syntax.Define<RedFunctionCall>("FunctionCall")
+                .Match(Query.Ident, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        // Parse without definitions
+        var tree = SyntaxTree.Parse("foo()", schemaWithoutDefs);
         Assert.DoesNotContain(tree.Root.Children, n => n is RedFunctionCall);
         
-        // Then bind
-        var boundTree = tree.Bind();
+        // Bind with a different schema that has definitions
+        var boundTree = tree.Bind(schemaWithDefs);
         var funcCall = boundTree.Root.Children.OfType<RedFunctionCall>().FirstOrDefault();
         
         Assert.NotNull(funcCall);

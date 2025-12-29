@@ -127,6 +127,7 @@ public class SyntaxTree
     /// <summary>
     /// Creates a syntax tree by parsing source text with a schema.
     /// The schema provides both tokenization settings and semantic definitions.
+    /// If the schema has syntax definitions, binding is automatically applied.
     /// </summary>
     /// <param name="source">The source text to parse.</param>
     /// <param name="schema">The schema for tokenization and semantic matching.</param>
@@ -135,18 +136,37 @@ public class SyntaxTree
         var opts = schema.ToTokenizerOptions();
         var lexer = new GreenLexer(opts);
         var tree = lexer.Parse(source);
-        return new SyntaxTree(tree.GreenRoot, schema);
+        var root = tree.GreenRoot;
+        
+        // Auto-bind if schema has syntax definitions
+        if (!schema.SyntaxDefinitions.IsEmpty)
+        {
+            var binder = new SyntaxBinder(schema);
+            root = binder.Bind(root);
+        }
+        
+        return new SyntaxTree(root, schema);
     }
     
     /// <summary>
     /// Creates a syntax tree by parsing source text with a schema.
+    /// If the schema has syntax definitions, binding is automatically applied.
     /// </summary>
     public static SyntaxTree Parse(ReadOnlyMemory<char> source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
         var lexer = new GreenLexer(opts);
         var tree = lexer.Parse(source);
-        return new SyntaxTree(tree.GreenRoot, schema);
+        var root = tree.GreenRoot;
+        
+        // Auto-bind if schema has syntax definitions
+        if (!schema.SyntaxDefinitions.IsEmpty)
+        {
+            var binder = new SyntaxBinder(schema);
+            root = binder.Bind(root);
+        }
+        
+        return new SyntaxTree(root, schema);
     }
     
     /// <summary>
