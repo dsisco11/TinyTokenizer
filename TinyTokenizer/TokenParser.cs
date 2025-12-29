@@ -7,7 +7,7 @@ namespace TinyTokenizer;
 /// Level 2 of the two-level tokenizer architecture.
 /// Handles blocks, strings, comments, operators, tagged identifiers, and emits error tokens for failures.
 /// </summary>
-public sealed class TokenParser
+public sealed partial class TokenParser
 {
     private readonly TokenizerOptions _options;
     private readonly ImmutableArray<string> _sortedOperators;
@@ -39,7 +39,7 @@ public sealed class TokenParser
     public IEnumerable<Token> Parse(IEnumerable<SimpleToken> simpleTokens)
     {
         using var enumerator = simpleTokens.GetEnumerator();
-        var reader = new TokenReader(enumerator);
+        var reader = new SimpleTokenReader(enumerator);
 
         while (reader.TryPeek(out _))
         {
@@ -62,7 +62,7 @@ public sealed class TokenParser
 
     #region Token Parsing Logic
 
-    private IEnumerable<Token> ParseToken(TokenReader reader, SimpleTokenType? expectedCloser)
+    private IEnumerable<Token> ParseToken(SimpleTokenReader reader, SimpleTokenType? expectedCloser)
     {
         if (!reader.TryPeek(out var token))
             yield break;
@@ -75,10 +75,12 @@ public sealed class TokenParser
         if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
-            yield return new ErrorToken(
-                token.Content,
-                $"Unexpected closing delimiter '{token.FirstChar}'",
-                token.Position);
+            yield return new ErrorToken
+            {
+                Content = token.Content,
+                ErrorMessage = $"Unexpected closing delimiter '{token.FirstChar}'",
+                Position = token.Position
+            };
             yield break;
         }
 
@@ -125,7 +127,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -151,7 +153,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -177,7 +179,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -202,7 +204,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -216,7 +218,7 @@ public sealed class TokenParser
                 yield break;
             }
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -224,7 +226,7 @@ public sealed class TokenParser
         if (token.Type == SimpleTokenType.Backslash)
         {
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -255,7 +257,7 @@ public sealed class TokenParser
             }
             // Not an operator - emit as symbol
             reader.Advance();
-            yield return new SymbolToken(token.Content, token.Position);
+            yield return new SymbolToken { Content = token.Content, Position = token.Position };
             yield break;
         }
 
@@ -263,11 +265,11 @@ public sealed class TokenParser
         reader.Advance();
         yield return token.Type switch
         {
-            SimpleTokenType.Ident => new IdentToken(token.Content, token.Position),
-            SimpleTokenType.Whitespace => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Newline => new WhitespaceToken(token.Content, token.Position),
-            SimpleTokenType.Symbol => new SymbolToken(token.Content, token.Position),
-            _ => new IdentToken(token.Content, token.Position)
+            SimpleTokenType.Ident => new IdentToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Whitespace => new WhitespaceToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Newline => new WhitespaceToken { Content = token.Content, Position = token.Position },
+            SimpleTokenType.Symbol => new SymbolToken { Content = token.Content, Position = token.Position },
+            _ => new IdentToken { Content = token.Content, Position = token.Position }
         };
     }
 
@@ -328,7 +330,7 @@ public sealed class TokenParser
     /// Tries to parse an operator starting from the current position.
     /// Uses greedy matching (longest operator first).
     /// </summary>
-    private OperatorToken? TryParseOperator(TokenReader reader)
+    private OperatorToken? TryParseOperator(SimpleTokenReader reader)
     {
         if (_sortedOperators.IsEmpty)
             return null;
@@ -383,7 +385,7 @@ public sealed class TokenParser
                 }
 
                 var content = contentBuilder.ToArray().AsMemory();
-                return new OperatorToken(content, startPosition);
+                return new OperatorToken { Content = content, Position = startPosition };
             }
         }
 
@@ -393,7 +395,7 @@ public sealed class TokenParser
     /// <summary>
     /// Tries to parse a tagged identifier (tag + identifier, e.g., #define, @attribute).
     /// </summary>
-    private TaggedIdentToken? TryParseTaggedIdent(TokenReader reader, char tagChar)
+    private TaggedIdentToken? TryParseTaggedIdent(SimpleTokenReader reader, char tagChar)
     {
         if (!reader.TryPeek(out var tagToken))
             return null;
@@ -416,15 +418,14 @@ public sealed class TokenParser
         reader.Advance();
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new TaggedIdentToken(content, tagChar, identName, startPosition);
+        return new TaggedIdentToken { Content = content, Tag = tagChar, Name = identName, Position = startPosition };
     }
 
-    private Token ParseBlock(TokenReader reader)
+    private Token ParseBlock(SimpleTokenReader reader)
     {
         reader.TryPeek(out var openToken);
         reader.Advance();
 
-        var opener = openToken.FirstChar;
         var closerType = GetMatchingCloser(openToken.Type);
         var blockType = GetBlockTokenType(openToken.Type);
         var startPosition = openToken.Position;
@@ -452,16 +453,17 @@ public sealed class TokenParser
 
                 var fullContent = contentBuilder.ToArray().AsMemory();
                 var innerMemory = innerContent.AsMemory();
-                var closer = token.FirstChar;
 
-                return new BlockToken(
-                    fullContent,
-                    innerMemory,
-                    children.ToImmutable(),
-                    blockType,
-                    opener,
-                    closer,
-                    startPosition);
+                return new SimpleBlock
+                {
+                    Content = fullContent,
+                    InnerContent = innerMemory,
+                    Children = children.ToImmutable(),
+                    BlockType = blockType,
+                    OpeningDelimiter = openToken,
+                    ClosingDelimiter = token,
+                    Position = startPosition
+                };
             }
 
             // Parse child token
@@ -473,13 +475,15 @@ public sealed class TokenParser
         }
 
         // Unclosed block
-        return new ErrorToken(
-            openToken.Content,
-            $"Unclosed block starting with '{opener}'",
-            startPosition);
+        return new ErrorToken
+        {
+            Content = openToken.Content,
+            ErrorMessage = $"Unclosed block starting with '{openToken.FirstChar}'",
+            Position = startPosition
+        };
     }
 
-    private Token ParseString(TokenReader reader)
+    private Token ParseString(SimpleTokenReader reader)
     {
         reader.TryPeek(out var quoteToken);
         reader.Advance();
@@ -520,7 +524,7 @@ public sealed class TokenParser
                 reader.Advance();
 
                 var content = contentBuilder.ToArray().AsMemory();
-                return new StringToken(content, quote, startPosition);
+                return new StringToken { Content = content, Quote = quote, Position = startPosition };
             }
 
             // Regular content
@@ -529,10 +533,10 @@ public sealed class TokenParser
         }
 
         // Unterminated string - emit opening quote as symbol
-        return new SymbolToken(quoteToken.Content, startPosition);
+        return new SymbolToken { Content = quoteToken.Content, Position = startPosition };
     }
 
-    private Token? TryParseComment(TokenReader reader, SimpleToken slashToken, SimpleToken nextToken)
+    private Token? TryParseComment(SimpleTokenReader reader, SimpleToken slashToken, SimpleToken nextToken)
     {
         // Check for C-style comments
         var hasCSingleLine = _options.CommentStyles.Any(s => s.Start == "//");
@@ -553,7 +557,7 @@ public sealed class TokenParser
         return null;
     }
 
-    private CommentToken ParseSingleLineComment(TokenReader reader)
+    private CommentToken ParseSingleLineComment(SimpleTokenReader reader)
     {
         var contentBuilder = new List<char>();
         long startPosition = 0;
@@ -584,10 +588,10 @@ public sealed class TokenParser
         }
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new CommentToken(content, IsMultiLine: false, startPosition);
+        return new CommentToken { Content = content, IsMultiLine = false, Position = startPosition };
     }
 
-    private Token ParseMultiLineComment(TokenReader reader)
+    private Token ParseMultiLineComment(SimpleTokenReader reader)
     {
         var contentBuilder = new List<char>();
         long startPosition = 0;
@@ -621,7 +625,7 @@ public sealed class TokenParser
                     reader.Advance(); // /
 
                     var content = contentBuilder.ToArray().AsMemory();
-                    return new CommentToken(content, IsMultiLine: true, startPosition);
+                    return new CommentToken { Content = content, IsMultiLine = true, Position = startPosition };
                 }
             }
 
@@ -631,17 +635,19 @@ public sealed class TokenParser
 
         // Unterminated comment
         var errorContent = contentBuilder.ToArray().AsMemory();
-        return new ErrorToken(
-            errorContent,
-            "Unterminated multi-line comment",
-            startPosition);
+        return new ErrorToken
+        {
+            Content = errorContent,
+            ErrorMessage = "Unterminated multi-line comment",
+            Position = startPosition
+        };
     }
 
     /// <summary>
     /// Parses a numeric token starting from a Digits token.
     /// Handles patterns: 123, 123.456
     /// </summary>
-    private NumericToken ParseNumericFromDigits(TokenReader reader)
+    private NumericToken ParseNumericFromDigits(SimpleTokenReader reader)
     {
         reader.TryPeek(out var digitsToken);
         var startPosition = digitsToken.Position;
@@ -671,14 +677,14 @@ public sealed class TokenParser
 
         var content = contentBuilder.ToArray().AsMemory();
         var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
-        return new NumericToken(content, numericType, startPosition);
+        return new NumericToken { Content = content, NumericType = numericType, Position = startPosition };
     }
 
     /// <summary>
     /// Parses a numeric token starting from a Dot token.
     /// Handles pattern: .456
     /// </summary>
-    private NumericToken ParseNumericFromDot(TokenReader reader)
+    private NumericToken ParseNumericFromDot(SimpleTokenReader reader)
     {
         reader.TryPeek(out var dotToken);
         var startPosition = dotToken.Position;
@@ -696,7 +702,7 @@ public sealed class TokenParser
         }
 
         var content = contentBuilder.ToArray().AsMemory();
-        return new NumericToken(content, NumericType.FloatingPoint, startPosition);
+        return new NumericToken { Content = content, NumericType = NumericType.FloatingPoint, Position = startPosition };
     }
 
     #endregion
@@ -740,67 +746,6 @@ public sealed class TokenParser
         for (int i = 0; i < content.Length; i++)
         {
             buffer.Add(content.Span[i]);
-        }
-    }
-
-    #endregion
-
-    #region Token Reader
-
-    /// <summary>
-    /// Token reader with lookahead support.
-    /// </summary>
-    private sealed class TokenReader : IDisposable
-    {
-        private readonly IEnumerator<SimpleToken> _enumerator;
-        private readonly List<SimpleToken> _buffer = new();
-        private int _position;
-        private bool _exhausted;
-
-        public TokenReader(IEnumerator<SimpleToken> enumerator)
-        {
-            _enumerator = enumerator;
-        }
-
-        public bool TryPeek(out SimpleToken token)
-        {
-            return TryPeek(0, out token);
-        }
-
-        public bool TryPeek(int offset, out SimpleToken token)
-        {
-            var targetIndex = _position + offset;
-
-            while (_buffer.Count <= targetIndex && !_exhausted)
-            {
-                if (_enumerator.MoveNext())
-                {
-                    _buffer.Add(_enumerator.Current);
-                }
-                else
-                {
-                    _exhausted = true;
-                }
-            }
-
-            if (targetIndex < _buffer.Count)
-            {
-                token = _buffer[targetIndex];
-                return true;
-            }
-
-            token = default;
-            return false;
-        }
-
-        public void Advance()
-        {
-            _position++;
-        }
-
-        public void Dispose()
-        {
-            _enumerator.Dispose();
         }
     }
 

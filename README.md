@@ -1,22 +1,17 @@
 # TinyTokenizer
 
-A high-performance, zero-allocation tokenizer library for .NET 8+ that parses text into abstract tokens using `ReadOnlySpan<char>` and SIMD-optimized `SearchValues<char>` for maximum efficiency.
+A high-performance, zero-allocation tokenizer library for .NET 8+ with SIMD-optimized character matching.
 
 ## Features
 
-- **Zero-allocation parsing** — Uses `ReadOnlySpan<char>` internally for fast, allocation-free text traversal
-- **SIMD-optimized** — Uses .NET 8's `SearchValues<char>` for vectorized character matching
-- **Two-level architecture** — Lexer (character classification) + TokenParser (semantic parsing)
-- **Async streaming** — Tokenize `Stream` and `PipeReader` sources with `IAsyncEnumerable<Token>`
-- **Recursive declaration blocks** — Automatically parses nested `{}`, `[]`, and `()` blocks with child tokens
-- **String literals** — Supports single and double-quoted strings with escape sequences
-- **Numeric literals** — Parses integers and floating-point numbers
-- **Comment support** — Configurable single-line and multi-line comment styles
-- **Operators** — Configurable multi-character operators with greedy matching
-- **Tagged identifiers** — Configurable prefix characters for patterns like `#define`, `@attribute`, `$variable`
-- **Configurable symbols** — Define which characters are recognized as symbol tokens
-- **Immutable tokens** — All token types are immutable record classes
-- **Error recovery** — Gracefully handles malformed input with `ErrorToken` and continues parsing
+- **High performance** — Zero-allocation parsing with SIMD-optimized `SearchValues<char>`
+- **TinyAst** — Red-green syntax tree with fluent queries, editing, and undo/redo
+- **Schema system** — Unified configuration for tokenization + semantic node definitions
+- **Semantic nodes** — Pattern-based AST matching (function calls, property access, etc.)
+- **TreeWalker** — DOM-style filtered tree traversal
+- **Async streaming** — Tokenize from `Stream` and `PipeReader` with `IAsyncEnumerable`
+- **Full tokenization** — Blocks, strings, numbers, comments, operators, tagged identifiers
+- **Error recovery** — Gracefully handles malformed input and continues parsing
 
 ## Installation
 
@@ -49,102 +44,292 @@ var options = TokenizerOptions.Default
 var tokens = "x = 42; // comment".TokenizeToTokens(options);
 ```
 
-## Architecture
+## TinyAst — Syntax Tree API
 
-TinyTokenizer uses a two-level tokenization architecture:
+TinyTokenizer includes a syntax tree for efficient AST manipulation with fluent queries and undo/redo support.
 
-### Level 1: Lexer
-
-The `Lexer` is a stateless character classifier that never backtracks and never fails. It produces `SimpleToken` instances representing atomic character sequences:
-
-- `Ident` — identifier characters
-- `Whitespace` — spaces, tabs (excluding newlines)
-- `Newline` — `\n` or `\r\n` (separate for single-line comment detection)
-- `Digits` — consecutive digit characters
-- `Symbol` — configured symbol characters
-- `Dot`, `Slash`, `Asterisk`, `Backslash` — special characters for parsing
-- `OpenBrace/CloseBrace`, `OpenBracket/CloseBracket`, `OpenParen/CloseParen`
-- `SingleQuote`, `DoubleQuote`
-
-### Level 2: TokenParser
-
-The `TokenParser` combines simple tokens into semantic tokens:
-
-- **Block parsing** — recursive nesting of `{}`, `[]`, `()`
-- **String literals** — quoted strings with escape sequences
-- **Numeric literals** — integers and floating-point numbers
-- **Comments** — single-line and multi-line
-- **Error recovery** — produces `ErrorToken` for malformed input
+### Quick Start
 
 ```csharp
-// Using two-level API directly
-var lexer = new Lexer(options);
-var parser = new TokenParser(options);
+using TinyTokenizer.Ast;
 
-var simpleTokens = lexer.Lex(source);
-var tokens = parser.ParseToArray(simpleTokens);
+// Parse source into a syntax tree
+var tree = SyntaxTree.Parse("function foo() { return 1; }");
+
+// Query nodes
+var idents = tree.Leaves.Where(l => l.Kind == NodeKind.Ident);
+
+// Fluent mutations with undo support
+tree.CreateEditor()
+    .Replace(Query.Ident.WithText("foo"), "bar")
+    .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
+    .Commit();
+
+// Undo/redo
+tree.Undo();
+tree.Redo();
 ```
 
-## Token Types
+### Querying with NodeQuery
 
-| Type               | Description                           | Example                        |
-| ------------------ | ------------------------------------- | ------------------------------ |
-| `IdentToken`       | Identifier/text content               | `hello`, `func`, `_name`       |
-| `WhitespaceToken`  | Spaces, tabs, newlines                | ` `, `\t`, `\n`                |
-| `SymbolToken`      | Configurable symbol characters        | `/`, `:`, `,`, `;`             |
-| `OperatorToken`    | Multi-character operators             | `==`, `!=`, `&&`, `\|\|`, `->` |
-| `TaggedIdentToken` | Tag prefix + identifier               | `#define`, `@Override`, `$var` |
-| `NumericToken`     | Integer or floating-point numbers     | `123`, `3.14`, `.5`            |
-| `StringToken`      | Quoted string literals                | `"hello"`, `'c'`               |
-| `CommentToken`     | Single or multi-line comments         | `// comment`, `/* block */`    |
-| `BlockToken`       | Declaration blocks with delimiters    | `{...}`, `[...]`, `(...)`      |
-| `ErrorToken`       | Parsing errors (unmatched delimiters) | `}` without opening `{`        |
-
-### Token Properties
+The `Query` static class provides a fluent CSS-like selector API:
 
 ```csharp
-// All tokens have Position tracking
-var token = tokens[0];
-long position = token.Position;  // Character offset in source
+using TinyTokenizer.Ast;
 
-// NumericToken
-var num = (NumericToken)token;
-num.NumericType;  // NumericType.Integer or NumericType.FloatingPoint
+// By kind
+Query.Ident                    // All identifiers
+Query.Numeric                  // All numbers
+Query.String                   // All strings
+Query.Operator                 // All operators
 
-// StringToken
-var str = (StringToken)token;
-str.Quote;  // '"' or '\''
-str.Value;  // Content without quotes (ReadOnlySpan<char>)
+// Blocks
+Query.BraceBlock               // All { } blocks
+Query.BracketBlock             // All [ ] blocks
+Query.ParenBlock               // All ( ) blocks
+Query.AnyBlock                 // Any block type
 
-// CommentToken
-var comment = (CommentToken)token;
-comment.IsMultiLine;  // true for /* */, false for //
+// Filters
+Query.Ident.WithText("foo")              // Exact match
+Query.Ident.WithTextContaining("test")   // Contains
+Query.Ident.WithTextStartingWith("_")    // Prefix
+Query.Ident.Where(n => n.Width > 5)      // Custom predicate
 
-// BlockToken
-var block = (BlockToken)token;
-block.FullContent;       // "{inner content}" (includes delimiters)
-block.InnerContent;      // "inner content" (excludes delimiters)
-block.Children;          // ImmutableArray<Token> of parsed inner tokens
-block.OpeningDelimiter;  // '{'
-block.ClosingDelimiter;  // '}'
+// Pseudo-selectors
+Query.Ident.First()            // First match only
+Query.Ident.Last()             // Last match only
+Query.Ident.Nth(2)             // Third match (0-indexed)
 
-// OperatorToken
-var op = (OperatorToken)token;
-op.Operator;  // "==" or "!=" etc. (string)
-
-// TaggedIdentToken
-var tagged = (TaggedIdentToken)token;
-tagged.Tag;      // '#' or '@' or '$' etc.
-tagged.NameSpan; // "define" or "Override" (ReadOnlySpan<char>)
+// Composition
+Query.Ident | Query.Numeric    // Union (OR)
+Query.Ident & Query.Leaf       // Intersection (AND)
 ```
+
+### Insertion Positions
+
+Queries resolve to insertion points with position modifiers:
+
+```csharp
+// Relative to matched node
+Query.Ident.First().Before()   // Insert before first ident
+Query.Ident.First().After()    // Insert after first ident
+
+// Inside blocks
+Query.BraceBlock.First().InnerStart()  // After opening {
+Query.BraceBlock.First().InnerEnd()    // Before closing }
+```
+
+### SyntaxEditor
+
+The `SyntaxEditor` provides batched mutations with atomic commit:
+
+```csharp
+var tree = SyntaxTree.Parse("a + b");
+
+var editor = tree.CreateEditor();
+
+// Queue multiple edits
+editor
+    .Replace(Query.Ident.WithText("a"), "x")
+    .Replace(Query.Ident.WithText("b"), "y")
+    .Insert(Query.Operator.First().Before(), "(")
+    .Insert(Query.Operator.First().After(), ")");
+
+// Apply atomically (supports undo)
+editor.Commit();
+
+// Or discard
+editor.Rollback();
+```
+
+The editor supports `Insert`, `Remove`, and `Replace` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
+
+## Schema — Unified Configuration
+
+The `Schema` class provides unified configuration for both tokenization and semantic node definitions.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer.Ast;
+
+// Create a schema with tokenization settings and semantic definitions
+var schema = Schema.Create()
+    .WithOperators(CommonOperators.JavaScript)
+    .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+    .Define(BuiltInDefinitions.FunctionName)
+    .Define(BuiltInDefinitions.ArrayAccess)
+    .Define(BuiltInDefinitions.PropertyAccess)
+    .Define(BuiltInDefinitions.MethodCall)
+    .Build();
+
+// Parse with schema
+var tree = SyntaxTree.Parse("obj.method(x)", schema);
+
+// Match semantic nodes using the attached schema
+var methods = tree.Match<MethodCallNode>().ToList();
+```
+
+### Built-in Schema
+
+```csharp
+// Schema.Default includes:
+// - CommonOperators.Universal
+// - C-style single and multi-line comments
+// - FunctionName, ArrayAccess, PropertyAccess, MethodCall definitions
+var tree = SyntaxTree.Parse(source, Schema.Default);
+```
+
+### Converting from TokenizerOptions
+
+```csharp
+// Create schema from existing TokenizerOptions
+var options = TokenizerOptions.Default
+    .WithOperators(CommonOperators.CFamily)
+    .WithCommentStyles(CommentStyle.CStyleSingleLine);
+
+var schema = Schema.FromOptions(options);
+```
+
+## TreeWalker — DOM-Style Traversal
+
+The `TreeWalker` provides filtered tree traversal similar to the W3C DOM TreeWalker specification.
+
+### Basic Usage
+
+```csharp
+var tree = SyntaxTree.Parse("foo { bar(x) }");
+
+// Create walker from tree or node
+var walker = tree.CreateTreeWalker();
+// or: var walker = new TreeWalker(tree.Root);
+
+// Enumerate all descendants
+foreach (var node in walker.DescendantsAndSelf())
+{
+    Console.WriteLine($"{node.Kind} at {node.Position}");
+}
+```
+
+### Filtered Traversal
+
+```csharp
+// Filter by node type using NodeFilter flags
+var leafWalker = new TreeWalker(tree.Root, NodeFilter.Leaves);
+foreach (var leaf in leafWalker.DescendantsAndSelf())
+{
+    // Only leaf nodes (identifiers, operators, etc.)
+}
+
+var blockWalker = new TreeWalker(tree.Root, NodeFilter.Blocks);
+foreach (var block in blockWalker.DescendantsAndSelf())
+{
+    // Only block nodes ({ }, [ ], ( ))
+}
+```
+
+### Custom Filter Functions
+
+```csharp
+// Use FilterResult for fine-grained control
+var walker = new TreeWalker(
+    tree.Root,
+    NodeFilter.All,
+    node => node.Kind == NodeKind.Ident 
+        ? FilterResult.Accept    // Include this node
+        : FilterResult.Skip);    // Skip node, but check children
+
+var idents = walker.DescendantsAndSelf().ToList();
+```
+
+The walker also provides cursor-based navigation (`NextNode`, `ParentNode`, `FirstChild`, etc.) and enumeration methods (`Descendants`, `Ancestors`, `FollowingSiblings`).
+
+## Semantic Nodes — AST Pattern Matching
+
+Semantic nodes provide a way to match structural patterns in the AST and create typed wrapper objects.
+
+### Quick Start
+
+```csharp
+using TinyTokenizer.Ast;
+
+// Parse with schema
+var tree = SyntaxTree.Parse("foo(x) + bar.baz", Schema.Default);
+
+// Find all function names (identifiers followed by parentheses)
+var funcNames = tree.Match<FunctionNameNode>().ToList();
+// funcNames[0].Name == "foo"
+
+// Find all property accesses
+var props = tree.Match<PropertyAccessNode>().ToList();
+// props[0].Object == "bar", props[0].Property == "baz"
+```
+
+### Built-in Semantic Nodes
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| `FunctionNameNode` | `Ident(?=ParenBlock)` | `foo` in `foo(x)` |
+| `ArrayAccessNode` | `Ident + BracketBlock` | `arr[0]` |
+| `PropertyAccessNode` | `Ident + "." + Ident` | `obj.prop` |
+| `MethodCallNode` | `Ident + "." + Ident + ParenBlock` | `obj.method(x)` |
+
+### Custom Semantic Nodes
+
+Define your own semantic node types:
+
+```csharp
+// 1. Define the node class
+public sealed class LambdaNode : SemanticNode
+{
+    public LambdaNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
+    
+    public RedBlock Parameters => Part<RedBlock>(0);
+    public RedBlock Body => Part<RedBlock>(2);
+}
+
+// 2. Create a definition with pattern
+var lambdaDef = Semantic.Define<LambdaNode>("Lambda")
+    .Match(p => p.ParenBlock().Operator("=>").BraceBlock())
+    .Create((match, kind) => new LambdaNode(match, kind))
+    .WithPriority(15)
+    .Build();
+
+// 3. Add to schema
+var schema = Schema.Create()
+    .WithOperators(CommonOperators.JavaScript)
+    .Define(lambdaDef)
+    .Build();
+
+// 4. Match
+var tree = SyntaxTree.Parse("(x) => { return x; }", schema);
+var lambdas = tree.Match<LambdaNode>().ToList();
+```
+
+### Pattern Builder Matchers
+
+| Matcher | Description |
+|---------|-------------|
+| `Ident()` | Any identifier |
+| `Ident("name")` | Specific identifier |
+| `Operator("==")` | Specific operator |
+| `Symbol(".")` | Specific symbol |
+| `ParenBlock()` | `( )` block |
+| `BraceBlock()` | `{ }` block |
+| `BracketBlock()` | `[ ]` block |
+| `Numeric()` | Number literal |
+| `String()` | String literal |
+| `Any()` | Any single node |
+| `Sequence(...)` | Match A then B then C |
+| `OneOf(...)` | Match A or B |
+| `Optional(...)` | Match zero or one |
+| `ZeroOrMore(...)` | Match zero or more |
+| `OneOrMore(...)` | Match one or more |
+| `LookaheadPattern` | Match A only if followed by B |
 
 ## Async Tokenization
 
-Tokenize streams and pipes asynchronously:
-
 ```csharp
-using TinyTokenizer;
-
 // From Stream
 await using var stream = File.OpenRead("source.txt");
 var tokens = await stream.TokenizeAsync();
@@ -154,163 +339,26 @@ await foreach (var token in stream.TokenizeStreamingAsync())
 {
     Console.WriteLine(token);
 }
-
-// From PipeReader
-var pipeReader = PipeReader.Create(stream);
-var tokens = await pipeReader.TokenizeAsync();
-
-// With custom encoding
-var tokens = await stream.TokenizeAsync(
-    options: TokenizerOptions.Default,
-    encoding: Encoding.UTF8,
-    leaveOpen: false,
-    cancellationToken: ct);
 ```
 
-## Configuration
-
-### Symbols
-
-```csharp
-// Default symbols: / : , ; = + - * < > ! & | . @ # ? % ^ ~ \
-var options = TokenizerOptions.Default;
-
-// Add custom symbols
-options = options.WithAdditionalSymbols('$', '_');
-
-// Remove symbols (they become part of identifier tokens)
-options = options.WithoutSymbols('/');
-
-// Replace entire symbol set
-options = options.WithSymbols(':', ',', ';');
-```
-
-### Comment Styles
-
-```csharp
-// Built-in comment styles
-CommentStyle.CStyleSingleLine   // //
-CommentStyle.CStyleMultiLine    // /* */
-CommentStyle.HashSingleLine     // #
-CommentStyle.SqlSingleLine      // --
-CommentStyle.HtmlComment        // <!-- -->
-
-// Configure tokenizer with comments
-var options = TokenizerOptions.Default
-    .WithCommentStyles(
-        CommentStyle.CStyleSingleLine,
-        CommentStyle.CStyleMultiLine);
-
-// Add additional comment styles
-options = options.WithAdditionalCommentStyles(CommentStyle.HashSingleLine);
-
-// Custom comment style
-var customComment = new CommentStyle("REM", null);  // Single-line ending at newline
-var blockComment = new CommentStyle("(*", "*)");    // Multi-line Pascal-style
-```
-
-### Operators
-
-```csharp
-// Built-in operator sets
-CommonOperators.Universal   // +, -, *, /, %, ==, !=, <, >, <=, >=, &&, ||, !, =, +=, -=, *=, /=
-CommonOperators.CFamily     // Universal + ++, --, &, |, ^, ~, <<, >>, ->, ::, etc.
-CommonOperators.JavaScript  // CFamily + ===, !==, =>, ?., ??, ??=, **
-CommonOperators.Python      // Universal + //, **, ->, :=, @, &, |, ^, ~
-CommonOperators.Sql         // Universal + <>, ::
-
-// Configure operators (uses greedy matching - longest operator first)
-var options = TokenizerOptions.Default
-    .WithOperators(CommonOperators.CFamily);
-
-// Add custom operators
-options = options.WithAdditionalOperators("<=>", "??", "?.");
-
-// Remove specific operators
-options = options.WithoutOperators("++", "--");
-
-// No operators (all symbols emit individually)
-options = options.WithNoOperators();
-```
-
-### Tagged Identifiers
-
-Tagged identifiers recognize patterns like `#define`, `@attribute`, or `$variable`:
-
-```csharp
-// Enable C-style preprocessor tags
-var options = TokenizerOptions.Default.WithTagPrefixes('#');
-var tokens = "#include #define".TokenizeToTokens(options);
-// tokens: TaggedIdentToken("#include"), WhitespaceToken, TaggedIdentToken("#define")
-
-// Enable Java/C# style annotations
-var options = TokenizerOptions.Default.WithTagPrefixes('@');
-var tokens = "@Override @NotNull".TokenizeToTokens(options);
-
-// Enable shell/PHP style variables
-var options = TokenizerOptions.Default.WithTagPrefixes('$');
-var tokens = "$name $count".TokenizeToTokens(options);
-
-// Multiple prefixes for multi-language support
-var options = TokenizerOptions.Default.WithTagPrefixes('#', '@', '$');
-
-// Add/remove prefixes
-options = options.WithAdditionalTagPrefixes('~');
-options = options.WithoutTagPrefixes('#');
-options = options.WithNoTagPrefixes();  // Disable all
-```
-
-**Note:** Tag prefix characters are automatically treated as symbols by the Lexer, so any character can be used as a tag prefix.
-
-## Nested Blocks
-
-Declaration blocks are parsed recursively:
-
-```csharp
-var tokens = "{outer [inner (deepest)]}".TokenizeToTokens();
-
-var braceBlock = (BlockToken)tokens[0];                  // {outer [inner (deepest)]}
-var bracketBlock = (BlockToken)braceBlock.Children[2];   // [inner (deepest)]
-var parenBlock = (BlockToken)bracketBlock.Children[2];   // (deepest)
-```
+Also supports `PipeReader` and custom encoding options.
 
 ## Error Handling
 
 The tokenizer produces `ErrorToken` for malformed input and continues parsing:
 
 ```csharp
-var tokens = "}hello{".TokenizeToTokens();
+var tree = SyntaxTree.Parse("}hello{");
 
-// tokens contains:
-// - ErrorToken("}", "Unexpected closing delimiter '}'", position: 0)
-// - IdentToken("hello")
-// - ErrorToken("{", "Unclosed block starting with '{'", position: 6)
+// Query for error nodes
+var errors = tree.Root.Children
+    .Where(n => n.Kind == NodeKind.Error)
+    .Cast<RedLeaf>();
 
-// Check for errors
-if (tokens.HasErrors())
+foreach (var error in errors)
 {
-    foreach (var error in tokens.GetErrors())
-    {
-        Console.WriteLine($"Error at {error.Position}: {error.ErrorMessage}");
-    }
+    Console.WriteLine($"Error at {error.Position}: {error.Text}");
 }
-```
-
-## Utility Extensions
-
-Extensions on `ImmutableArray<Token>` for common operations:
-
-```csharp
-// Check if any errors exist (including nested)
-bool hasErrors = tokens.HasErrors();
-
-// Get all errors (including nested)
-IEnumerable<ErrorToken> errors = tokens.GetErrors();
-
-// Get all tokens of a specific type (including nested)
-IEnumerable<IdentToken> idents = tokens.OfTokenType<IdentToken>();
-IEnumerable<BlockToken> blocks = tokens.OfTokenType<BlockToken>();
-IEnumerable<NumericToken> numbers = tokens.OfTokenType<NumericToken>();
 ```
 
 ## Benchmarks
@@ -333,90 +381,56 @@ dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter "*"
 
 ## API Reference
 
-### Extension Methods
+### Core Types
 
 ```csharp
-// String extensions
-ImmutableArray<Token> TokenizeToTokens(this string source, TokenizerOptions? options = null)
+// Parse source into syntax tree (recommended)
+var tree = SyntaxTree.Parse(source, Schema.Default);
 
-// ReadOnlyMemory<char> extensions
-ImmutableArray<Token> Tokenize(this ReadOnlyMemory<char> source, TokenizerOptions? options = null)
+// Low-level tokenization (if needed)
+var tokens = source.TokenizeToTokens(options);
 
-// Stream extensions
-Task<ImmutableArray<Token>> TokenizeAsync(this Stream, TokenizerOptions?, Encoding?, bool leaveOpen, CancellationToken)
-IAsyncEnumerable<Token> TokenizeStreamingAsync(this Stream, TokenizerOptions?, Encoding?, bool leaveOpen, CancellationToken)
-
-// PipeReader extensions
-Task<ImmutableArray<Token>> TokenizeAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
-IAsyncEnumerable<Token> TokenizeStreamingAsync(this PipeReader, TokenizerOptions?, Encoding?, CancellationToken)
+// Async streaming from files
+await foreach (var token in stream.TokenizeStreamingAsync()) { }
 ```
 
-### Tokenizer (ref struct)
+### Schema Configuration
 
 ```csharp
-public ref struct Tokenizer
-{
-    public Tokenizer(ReadOnlyMemory<char> source, TokenizerOptions? options = null);
-    public ImmutableArray<Token> Tokenize();
-}
+// Built-in operator sets
+CommonOperators.Universal    // Basic: ==, !=, &&, ||, etc.
+CommonOperators.CFamily      // C/C++: ++, --, ->, ::, etc.
+CommonOperators.JavaScript   // JS: ===, =>, ?., ??, etc.
+
+// Built-in comment styles
+CommentStyle.CStyleSingleLine   // //
+CommentStyle.CStyleMultiLine    // /* */
+CommentStyle.HashSingleLine     // #
+
+// Create custom schema
+var schema = Schema.Create()
+    .WithOperators(CommonOperators.JavaScript)
+    .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+    .WithTagPrefixes('#', '@')
+    .Define(BuiltInDefinitions.FunctionName)
+    .Build();
 ```
 
-### Lexer
+### NodeKind Values
 
-```csharp
-public sealed class Lexer
-{
-    public Lexer();
-    public Lexer(ImmutableHashSet<char> symbols);
-    public Lexer(TokenizerOptions options);
-
-    public IEnumerable<SimpleToken> Lex(ReadOnlyMemory<char> input);
-    public IEnumerable<SimpleToken> Lex(string input);
-    public ImmutableArray<SimpleToken> LexToArray(ReadOnlyMemory<char> input);
-}
-```
-
-### TokenParser
-
-```csharp
-public sealed class TokenParser
-{
-    public TokenParser();
-    public TokenParser(TokenizerOptions options);
-
-    public IEnumerable<Token> Parse(IEnumerable<SimpleToken> simpleTokens);
-    public ImmutableArray<Token> ParseToArray(IEnumerable<SimpleToken> simpleTokens);
-}
-```
-
-### Token (abstract record)
-
-```csharp
-public abstract record Token(ReadOnlyMemory<char> Content, TokenType Type, long Position)
-{
-    public ReadOnlySpan<char> ContentSpan { get; }
-}
-```
-
-### TokenType (enum)
-
-```csharp
-public enum TokenType
-{
-    BraceBlock,       // { }
-    BracketBlock,     // [ ]
-    ParenthesisBlock, // ( )
-    Symbol,           // configurable characters
-    Ident,            // identifiers
-    Whitespace,       // spaces, tabs, newlines
-    Numeric,          // numbers
-    String,           // quoted strings
-    Comment,          // comments
-    Error,            // parsing errors
-    Operator,         // multi-character operators
-    TaggedIdent       // tag prefix + identifier
-}
-```
+| Kind | Description | Example |
+|------|-------------|---------|
+| `Ident` | Identifiers | `foo`, `myVar` |
+| `Whitespace` | Spaces, tabs, newlines | ` `, `\n` |
+| `Symbol` | Single characters | `,`, `;`, `:` |
+| `Operator` | Multi-char operators | `==`, `!=`, `=>` |
+| `Numeric` | Numbers | `123`, `3.14` |
+| `String` | Quoted strings | `"hello"` |
+| `TaggedIdent` | Prefixed identifiers | `#define`, `@attr` |
+| `BraceBlock` | Curly braces | `{ }` |
+| `BracketBlock` | Square brackets | `[ ]` |
+| `ParenBlock` | Parentheses | `( )` |
+| `Error` | Parse errors | unmatched `}` |
 
 ## Requirements
 

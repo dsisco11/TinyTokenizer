@@ -3,71 +3,43 @@ using System.Collections.Immutable;
 namespace TinyTokenizer;
 
 /// <summary>
-/// Represents a declaration block delimited by matching brackets.
+/// Represents a simple block delimited by matching brackets.
 /// Contains both the full content (with delimiters) and inner content (without delimiters),
 /// along with recursively parsed child tokens.
+/// Aligns with W3C CSS Syntax "simple block" concept.
 /// </summary>
-public sealed record BlockToken : Token
+public sealed record SimpleBlock : Token
 {
+    /// <inheritdoc/>
+    public override TokenType Type => BlockType;
+
     /// <summary>
-    /// Gets the full content of the block including the opening and closing delimiters.
+    /// Gets the specific block type (BraceBlock, BracketBlock, or ParenthesisBlock).
     /// </summary>
-    public ReadOnlyMemory<char> FullContent { get; }
+    public required TokenType BlockType { get; init; }
 
     /// <summary>
     /// Gets the inner content of the block excluding the delimiters.
     /// </summary>
-    public ReadOnlyMemory<char> InnerContent { get; }
+    public required ReadOnlyMemory<char> InnerContent { get; init; }
 
     /// <summary>
     /// Gets the recursively parsed child tokens within this block.
     /// </summary>
-    public ImmutableArray<Token> Children { get; }
+    public required ImmutableArray<Token> Children { get; init; }
 
     /// <summary>
-    /// Gets the opening delimiter character.
+    /// Gets the opening delimiter token.
     /// </summary>
-    public char OpeningDelimiter { get; }
+    public required SimpleToken OpeningDelimiter { get; init; }
 
     /// <summary>
-    /// Gets the closing delimiter character.
+    /// Gets the closing delimiter token.
     /// </summary>
-    public char ClosingDelimiter { get; }
-
-    /// <summary>
-    /// Initializes a new instance of <see cref="BlockToken"/>.
-    /// </summary>
-    /// <param name="fullContent">The full content including delimiters.</param>
-    /// <param name="innerContent">The inner content excluding delimiters.</param>
-    /// <param name="children">The child tokens parsed from the inner content.</param>
-    /// <param name="type">The token type indicating the delimiter type.</param>
-    /// <param name="openingDelimiter">The opening delimiter character.</param>
-    /// <param name="closingDelimiter">The closing delimiter character.</param>
-    /// <param name="position">The absolute position in the source where this block starts.</param>
-    public BlockToken(
-        ReadOnlyMemory<char> fullContent,
-        ReadOnlyMemory<char> innerContent,
-        ImmutableArray<Token> children,
-        TokenType type,
-        char openingDelimiter,
-        char closingDelimiter,
-        long position = 0)
-        : base(fullContent, type, position)
-    {
-        FullContent = fullContent;
-        InnerContent = innerContent;
-        Children = children;
-        OpeningDelimiter = openingDelimiter;
-        ClosingDelimiter = closingDelimiter;
-    }
+    public required SimpleToken ClosingDelimiter { get; init; }
 
     /// <summary>
     /// Gets the inner content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.
     /// </summary>
     public ReadOnlySpan<char> InnerContentSpan => InnerContent.Span;
-
-    /// <summary>
-    /// Gets the full content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.
-    /// </summary>
-    public ReadOnlySpan<char> FullContentSpan => FullContent.Span;
 }

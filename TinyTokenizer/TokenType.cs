@@ -82,5 +82,11 @@ public enum TokenType
     /// Examples: #define, @attribute, $variable.
     /// Configured via <see cref="TokenizerOptions.TagPrefixes"/>.
     /// </summary>
-    TaggedIdent
+    TaggedIdent,
+
+    /// <summary>
+    /// A composite token created by pattern matching in Level 3.
+    /// Wraps matched token sequences from Level 2 output.
+    /// </summary>
+    Composite
 }

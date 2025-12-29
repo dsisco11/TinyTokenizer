@@ -1,0 +1,168 @@
+using System.Collections.Immutable;
+
+namespace TinyTokenizer.Ast;
+
+/// <summary>
+/// Green node for the root token list (top-level sequence of nodes).
+/// Similar to GreenBlock but without delimiters.
+/// </summary>
+public sealed record GreenList : GreenNode
+{
+    private readonly ImmutableArray<GreenNode> _children;
+    private readonly int _width;
+    private readonly int[]? _childOffsets;
+    
+    /// <inheritdoc/>
+    public override NodeKind Kind => NodeKind.TokenList;
+    
+    /// <inheritdoc/>
+    public override int Width => _width;
+    
+    /// <inheritdoc/>
+    public override int SlotCount => _children.Length;
+    
+    /// <summary>
+    /// Creates a new token list.
+    /// </summary>
+    public GreenList(ImmutableArray<GreenNode> children)
+    {
+        _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
+        
+        // Compute width
+        int width = 0;
+        foreach (var child in _children)
+            width += child.Width;
+        _width = width;
+        
+        // Pre-compute offsets for large lists
+        if (_children.Length >= 10)
+        {
+            _childOffsets = new int[_children.Length];
+            int offset = 0;
+            for (int i = 0; i < _children.Length; i++)
+            {
+                _childOffsets[i] = offset;
+                offset += _children[i].Width;
+            }
+        }
+    }
+    
+    /// <inheritdoc/>
+    public override GreenNode? GetSlot(int index)
+        => index >= 0 && index < _children.Length ? _children[index] : null;
+    
+    /// <inheritdoc/>
+    public override int GetSlotOffset(int index)
+    {
+        if (_childOffsets != null)
+            return _childOffsets[index];
+        
+        int offset = 0;
+        for (int i = 0; i < index; i++)
+            offset += _children[i].Width;
+        return offset;
+    }
+    
+    /// <inheritdoc/>
+    public override RedNode CreateRed(RedNode? parent, int position)
+        => new RedList(this, parent, position);
+    
+    #region Structural Sharing Mutations
+    
+    /// <summary>
+    /// Creates a new list with one child replaced.
+    /// </summary>
+    public GreenList WithSlot(int index, GreenNode newChild)
+    {
+        if (index < 0 || index >= _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        return new GreenList(_children.SetItem(index, newChild));
+    }
+    
+    /// <summary>
+    /// Creates a new list with children inserted.
+    /// </summary>
+    public GreenList WithInsert(int index, ImmutableArray<GreenNode> nodes)
+    {
+        if (index < 0 || index > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        var builder = _children.ToBuilder();
+        builder.InsertRange(index, nodes);
+        return new GreenList(builder.ToImmutable());
+    }
+    
+    /// <summary>
+    /// Creates a new list with children removed.
+    /// </summary>
+    public GreenList WithRemove(int index, int count)
+    {
+        if (index < 0 || count < 0 || index + count > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        var builder = _children.ToBuilder();
+        builder.RemoveRange(index, count);
+        return new GreenList(builder.ToImmutable());
+    }
+    
+    /// <summary>
+    /// Creates a new list with a range replaced.
+    /// </summary>
+    public GreenList WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
+    {
+        if (index < 0 || count < 0 || index + count > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        var builder = _children.ToBuilder();
+        builder.RemoveRange(index, count);
+        builder.InsertRange(index, replacement);
+        return new GreenList(builder.ToImmutable());
+    }
+    
+    #endregion
+}
+
+/// <summary>
+/// Red node wrapper for the root token list.
+/// </summary>
+public sealed class RedList : RedNode
+{
+    private RedNode?[]? _children;
+    
+    /// <summary>
+    /// Creates a new red list.
+    /// </summary>
+    public RedList(GreenList green, RedNode? parent, int position)
+        : base(green, parent, position)
+    {
+    }
+    
+    /// <summary>The underlying green list.</summary>
+    public new GreenList Green => (GreenList)base.Green;
+    
+    /// <summary>Number of children.</summary>
+    public int ChildCount => Green.SlotCount;
+    
+    /// <inheritdoc/>
+    public override RedNode? GetChild(int index)
+    {
+        if (index < 0 || index >= Green.SlotCount)
+            return null;
+        
+        _children ??= new RedNode?[Green.SlotCount];
+        
+        if (_children[index] != null)
+            return _children[index];
+        
+        var greenChild = Green.GetSlot(index);
+        if (greenChild == null)
+            return null;
+        
+        var childPosition = Position + Green.GetSlotOffset(index);
+        var redChild = greenChild.CreateRed(this, childPosition);
+        
+        Interlocked.CompareExchange(ref _children[index], redChild, null);
+        return _children[index];
+    }
+}

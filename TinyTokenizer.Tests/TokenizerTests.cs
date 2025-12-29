@@ -93,40 +93,40 @@ public class TokenizerTests
     #region Block Tokenization Tests
 
     [Fact]
-    public void Tokenize_SimpleBraceBlock_ReturnsBlockToken()
+    public void Tokenize_SimpleBraceBlock_ReturnsSimpleBlock()
     {
         var tokens = Tokenize("{content}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, block.Type);
-        Assert.Equal("{content}", block.FullContentSpan.ToString());
+        Assert.Equal("{content}", block.ContentSpan.ToString());
         Assert.Equal("content", block.InnerContentSpan.ToString());
-        Assert.Equal('{', block.OpeningDelimiter);
-        Assert.Equal('}', block.ClosingDelimiter);
+        Assert.Equal('{', block.OpeningDelimiter.FirstChar);
+        Assert.Equal('}', block.ClosingDelimiter.FirstChar);
     }
 
     [Fact]
-    public void Tokenize_SimpleBracketBlock_ReturnsBlockToken()
+    public void Tokenize_SimpleBracketBlock_ReturnsSimpleBlock()
     {
         var tokens = Tokenize("[content]");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BracketBlock, block.Type);
-        Assert.Equal("[content]", block.FullContentSpan.ToString());
+        Assert.Equal("[content]", block.ContentSpan.ToString());
         Assert.Equal("content", block.InnerContentSpan.ToString());
     }
 
     [Fact]
-    public void Tokenize_SimpleParenthesisBlock_ReturnsBlockToken()
+    public void Tokenize_SimpleParenthesisBlock_ReturnsSimpleBlock()
     {
         var tokens = Tokenize("(content)");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.ParenthesisBlock, block.Type);
-        Assert.Equal("(content)", block.FullContentSpan.ToString());
+        Assert.Equal("(content)", block.ContentSpan.ToString());
         Assert.Equal("content", block.InnerContentSpan.ToString());
     }
 
@@ -136,8 +136,8 @@ public class TokenizerTests
         var tokens = Tokenize("{}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
-        Assert.Equal("{}", block.FullContentSpan.ToString());
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
+        Assert.Equal("{}", block.ContentSpan.ToString());
         Assert.Equal("", block.InnerContentSpan.ToString());
         Assert.Empty(block.Children);
     }
@@ -148,7 +148,7 @@ public class TokenizerTests
         var tokens = Tokenize("{hello world}");
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(3, block.Children.Length);
         Assert.IsType<IdentToken>(block.Children[0]);
         Assert.IsType<WhitespaceToken>(block.Children[1]);
@@ -166,21 +166,21 @@ public class TokenizerTests
 
         Assert.Single(tokens);
 
-        var braceBlock = Assert.IsType<BlockToken>(tokens[0]);
+        var braceBlock = Assert.IsType<SimpleBlock>(tokens[0]);
         Assert.Equal(TokenType.BraceBlock, braceBlock.Type);
         Assert.Single(braceBlock.Children);
 
-        var bracketBlock = Assert.IsType<BlockToken>(braceBlock.Children[0]);
+        var bracketBlock = Assert.IsType<SimpleBlock>(braceBlock.Children[0]);
         Assert.Equal(TokenType.BracketBlock, bracketBlock.Type);
         Assert.Single(bracketBlock.Children);
 
-        var parenBlock = Assert.IsType<BlockToken>(bracketBlock.Children[0]);
+        var parenBlock = Assert.IsType<SimpleBlock>(bracketBlock.Children[0]);
         Assert.Equal(TokenType.ParenthesisBlock, parenBlock.Type);
         Assert.Empty(parenBlock.Children);
     }
 
     [Fact]
-    public void Tokenize_SiblingBlocks_ReturnsMultipleBlockTokens()
+    public void Tokenize_SiblingBlocks_ReturnsMultipleSimpleBlocks()
     {
         var tokens = Tokenize("{}[]()");
 
@@ -200,7 +200,7 @@ public class TokenizerTests
         var text = Assert.IsType<IdentToken>(tokens[0]);
         Assert.Equal("func", text.ContentSpan.ToString());
 
-        var block = Assert.IsType<BlockToken>(tokens[1]);
+        var block = Assert.IsType<SimpleBlock>(tokens[1]);
         Assert.Equal(TokenType.ParenthesisBlock, block.Type);
 
         // Inside: a, b (text, symbol, whitespace, text)
@@ -681,7 +681,7 @@ public class TokenizerTests
         Assert.IsType<CommentToken>(tokens[0]);
         Assert.IsType<WhitespaceToken>(tokens[1]);
         Assert.IsType<IdentToken>(tokens[2]);
-        Assert.IsType<BlockToken>(tokens[3]);
+        Assert.IsType<SimpleBlock>(tokens[3]);
     }
 
     [Fact]
@@ -1031,7 +1031,7 @@ public class TokenizerTests
         var tokens = TokenizeTwoLevel("{#define}", options);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         var tagged = block.Children.OfType<TaggedIdentToken>().SingleOrDefault();
         Assert.NotNull(tagged);
         Assert.Equal("define", tagged.NameSpan.ToString());
@@ -1167,7 +1167,7 @@ public class TokenizerTests
         var tokens = TokenizeTwoLevel("(#test)", options);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         var tagged = block.Children.OfType<TaggedIdentToken>().Single();
         Assert.Equal("test", tagged.NameSpan.ToString());
     }
@@ -1179,7 +1179,7 @@ public class TokenizerTests
         var tokens = TokenizeTwoLevel("[x #end]", options);
 
         Assert.Single(tokens);
-        var block = Assert.IsType<BlockToken>(tokens[0]);
+        var block = Assert.IsType<SimpleBlock>(tokens[0]);
         var tagged = block.Children.OfType<TaggedIdentToken>().Single();
         Assert.Equal("end", tagged.NameSpan.ToString());
     }

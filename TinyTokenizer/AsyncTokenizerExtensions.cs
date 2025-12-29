@@ -187,4 +187,85 @@ public static class AsyncTokenizerExtensions
     }
 
     #endregion
+
+    #region Async Pattern Matching Extensions
+
+    /// <summary>
+    /// Applies pattern matching to an async token stream.
+    /// Collects tokens into a buffer for pattern matching, then yields results.
+    /// </summary>
+    /// <param name="tokens">The input token stream.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of tokens with patterns applied.</returns>
+    public static async IAsyncEnumerable<Token> ApplyPatternsAsync(
+        this IAsyncEnumerable<Token> tokens,
+        IEnumerable<ITokenDefinition> definitions,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        // Collect all tokens first (pattern matching requires lookahead)
+        var tokenList = new List<Token>();
+        await foreach (var token in tokens.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            tokenList.Add(token);
+        }
+
+        var matcher = new PatternMatcher(definitions);
+        var result = matcher.Apply([.. tokenList]);
+
+        foreach (var token in result)
+        {
+            yield return token;
+        }
+    }
+
+    /// <summary>
+    /// Applies pattern matching to an async token stream.
+    /// </summary>
+    /// <param name="tokens">The input token stream.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>An async enumerable of tokens with patterns applied.</returns>
+    public static IAsyncEnumerable<Token> ApplyPatternsAsync(
+        this IAsyncEnumerable<Token> tokens,
+        params ITokenDefinition[] definitions)
+    {
+        return ApplyPatternsAsync(tokens, definitions.AsEnumerable(), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Applies pattern matching to an async token stream and returns a diagnostic report.
+    /// </summary>
+    /// <param name="tokens">The input token stream.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A report containing the output tokens and diagnostic information.</returns>
+    public static async Task<PatternMatchReport> ApplyPatternsWithDiagnosticsAsync(
+        this IAsyncEnumerable<Token> tokens,
+        IEnumerable<ITokenDefinition> definitions,
+        CancellationToken cancellationToken = default)
+    {
+        var tokenList = new List<Token>();
+        await foreach (var token in tokens.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            tokenList.Add(token);
+        }
+
+        var matcher = new PatternMatcher(definitions, enableDiagnostics: true);
+        return matcher.ApplyWithDiagnostics([.. tokenList]);
+    }
+
+    /// <summary>
+    /// Applies pattern matching to an async token stream and returns a diagnostic report.
+    /// </summary>
+    /// <param name="tokens">The input token stream.</param>
+    /// <param name="definitions">The pattern definitions to match against.</param>
+    /// <returns>A report containing the output tokens and diagnostic information.</returns>
+    public static Task<PatternMatchReport> ApplyPatternsWithDiagnosticsAsync(
+        this IAsyncEnumerable<Token> tokens,
+        params ITokenDefinition[] definitions)
+    {
+        return ApplyPatternsWithDiagnosticsAsync(tokens, definitions.AsEnumerable(), CancellationToken.None);
+    }
+
+    #endregion
 }

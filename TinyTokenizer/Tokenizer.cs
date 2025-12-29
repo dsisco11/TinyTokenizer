@@ -77,10 +77,12 @@ public ref struct Tokenizer
             // Check for unexpected closing delimiter
             if (TokenizerCore.IsClosingDelimiter(current))
             {
-                tokens.Add(new ErrorToken(
-                    _source.Slice(_position, 1),
-                    $"Unexpected closing delimiter '{current}'",
-                    _position));
+                tokens.Add(new ErrorToken
+                {
+                    Content = _source.Slice(_position, 1),
+                    ErrorMessage = $"Unexpected closing delimiter '{current}'",
+                    Position = _position
+                });
                 _position++;
                 continue;
             }
@@ -126,7 +128,7 @@ public ref struct Tokenizer
             // Check for symbol
             if (_options.Symbols.Contains(current))
             {
-                tokens.Add(new SymbolToken(_source.Slice(_position, 1), _position));
+                tokens.Add(new SymbolToken { Content = _source.Slice(_position, 1), Position = _position });
                 _position++;
                 continue;
             }
@@ -150,11 +152,17 @@ public ref struct Tokenizer
     /// </summary>
     /// <param name="opener">The opening delimiter character.</param>
     /// <param name="closer">The expected closing delimiter character.</param>
-    /// <returns>A <see cref="BlockToken"/> or <see cref="ErrorToken"/> if the block is malformed.</returns>
+    /// <returns>A <see cref="SimpleBlock"/> or <see cref="ErrorToken"/> if the block is malformed.</returns>
     private Token ParseBlock(char opener, char closer)
     {
         int startPosition = _position;
         TokenizerCore.TryGetBlockTokenType(opener, out TokenType blockType);
+        
+        // Create opening delimiter SimpleToken
+        var openingDelimiter = new SimpleToken(
+            TokenizerCore.GetOpeningDelimiterType(opener),
+            _source.Slice(startPosition, 1),
+            startPosition);
 
         // Consume the opening delimiter
         _position++;
@@ -168,29 +176,39 @@ public ref struct Tokenizer
         // Check if we found the closing delimiter
         if (_position < _span.Length && _span[_position] == closer)
         {
+            // Create closing delimiter SimpleToken
+            var closingDelimiter = new SimpleToken(
+                TokenizerCore.GetClosingDelimiterType(closer),
+                _source.Slice(_position, 1),
+                _position);
+            
             // Consume the closing delimiter
             _position++;
 
             var fullContent = _source.Slice(startPosition, _position - startPosition);
             var innerContent = _source.Slice(innerStart, innerEnd - innerStart);
 
-            return new BlockToken(
-                fullContent,
-                innerContent,
-                children,
-                blockType,
-                opener,
-                closer,
-                startPosition);
+            return new SimpleBlock
+            {
+                Content = fullContent,
+                InnerContent = innerContent,
+                Children = children,
+                BlockType = blockType,
+                OpeningDelimiter = openingDelimiter,
+                ClosingDelimiter = closingDelimiter,
+                Position = startPosition
+            };
         }
         else
         {
             // Unclosed block - emit error token for the opening delimiter
             // The children are lost, but we've already advanced past them
-            return new ErrorToken(
-                _source.Slice(startPosition, 1),
-                $"Unclosed block starting with '{opener}'",
-                startPosition);
+            return new ErrorToken
+            {
+                Content = _source.Slice(startPosition, 1),
+                ErrorMessage = $"Unclosed block starting with '{opener}'",
+                Position = startPosition
+            };
         }
     }
 
@@ -207,7 +225,7 @@ public ref struct Tokenizer
             _position++;
         }
 
-        return new WhitespaceToken(_source.Slice(start, _position - start), start);
+        return new WhitespaceToken { Content = _source.Slice(start, _position - start), Position = start };
     }
 
     /// <summary>
@@ -250,7 +268,7 @@ public ref struct Tokenizer
             _position++;
         }
 
-        return new IdentToken(_source.Slice(start, _position - start), start);
+        return new IdentToken { Content = _source.Slice(start, _position - start), Position = start };
     }
 
     /// <summary>
@@ -281,7 +299,7 @@ public ref struct Tokenizer
             if (current == quote)
             {
                 _position++;
-                return new StringToken(_source.Slice(start, _position - start), quote, start);
+                return new StringToken { Content = _source.Slice(start, _position - start), Quote = quote, Position = start };
             }
 
             _position++;
@@ -289,7 +307,7 @@ public ref struct Tokenizer
 
         // Unterminated string - reset position and emit the quote as a symbol
         _position = start + 1;
-        return new SymbolToken(_source.Slice(start, 1), start);
+        return new SymbolToken { Content = _source.Slice(start, 1), Position = start };
     }
 
     /// <summary>
@@ -328,7 +346,7 @@ public ref struct Tokenizer
         }
 
         var numericType = hasDecimalPoint ? NumericType.FloatingPoint : NumericType.Integer;
-        return new NumericToken(_source.Slice(start, _position - start), numericType, start);
+        return new NumericToken { Content = _source.Slice(start, _position - start), NumericType = numericType, Position = start };
     }
 
     /// <summary>
@@ -423,7 +441,7 @@ public ref struct Tokenizer
             }
         }
 
-        return new CommentToken(_source.Slice(start, _position - start), style.IsMultiLine, start);
+        return new CommentToken { Content = _source.Slice(start, _position - start), IsMultiLine = style.IsMultiLine, Position = start };
     }
 
     /// <summary>
@@ -445,7 +463,7 @@ public ref struct Tokenizer
             {
                 var start = _position;
                 _position += op.Length;
-                return new OperatorToken(_source.Slice(start, op.Length), start);
+                return new OperatorToken { Content = _source.Slice(start, op.Length), Position = start };
             }
         }
 
