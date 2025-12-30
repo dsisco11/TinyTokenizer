@@ -84,6 +84,9 @@ public sealed record GreenBlock : GreenNode
         }
     }
     
+    /// <summary>Gets the children of this block.</summary>
+    public ImmutableArray<GreenNode> Children => _children;
+    
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index)
         => index >= 0 && index < _children.Length ? _children[index] : null;

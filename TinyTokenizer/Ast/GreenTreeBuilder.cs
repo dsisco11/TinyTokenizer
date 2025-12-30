@@ -92,6 +92,25 @@ public class GreenTreeBuilder
         return ReplaceChild(path.AsSpan(), childIndex, newChild);
     }
     
+    /// <summary>
+    /// Updates the leading trivia of a node at the specified path.
+    /// </summary>
+    /// <param name="path">Sequence of child indices from root to target container.</param>
+    /// <param name="childIndex">Index of the child node to update.</param>
+    /// <param name="newLeadingTrivia">The new leading trivia.</param>
+    public GreenNode UpdateLeadingTrivia(ReadOnlySpan<int> path, int childIndex, ImmutableArray<GreenTrivia> newLeadingTrivia)
+    {
+        return UpdateLeadingTriviaRecursive(_root, path, 0, childIndex, newLeadingTrivia);
+    }
+    
+    /// <summary>
+    /// Updates the leading trivia of a node at the specified path (array overload).
+    /// </summary>
+    public GreenNode UpdateLeadingTrivia(int[] path, int childIndex, ImmutableArray<GreenTrivia> newLeadingTrivia)
+    {
+        return UpdateLeadingTrivia(path.AsSpan(), childIndex, newLeadingTrivia);
+    }
+    
     #region Recursive Implementation
     
     private static GreenNode InsertAtRecursive(
@@ -191,6 +210,49 @@ public class GreenTreeBuilder
         {
             GreenBlock block => block.WithSlot(childSlot, modifiedChild),
             GreenList list => list.WithSlot(childSlot, modifiedChild),
+            _ => throw new InvalidOperationException("Cannot descend into leaf node")
+        };
+    }
+    
+    private static GreenNode UpdateLeadingTriviaRecursive(
+        GreenNode current,
+        ReadOnlySpan<int> path,
+        int pathIndex,
+        int childIndex,
+        ImmutableArray<GreenTrivia> newLeadingTrivia)
+    {
+        if (pathIndex >= path.Length)
+        {
+            // Reached target container - update the child's leading trivia
+            var child = current.GetSlot(childIndex)
+                ?? throw new InvalidOperationException($"No child at slot {childIndex}");
+            
+            var modifiedChild = child switch
+            {
+                GreenLeaf leaf => leaf.WithLeadingTrivia(newLeadingTrivia),
+                GreenBlock block => new GreenBlock(block.Opener, block.Children, newLeadingTrivia, block.TrailingTrivia),
+                _ => child // Can't update trivia on other node types
+            };
+            
+            return current switch
+            {
+                GreenBlock block => block.WithSlot(childIndex, modifiedChild),
+                GreenList list => list.WithSlot(childIndex, modifiedChild),
+                _ => throw new InvalidOperationException("Cannot update child in leaf node")
+            };
+        }
+        
+        // Descend into child
+        int childSlot = path[pathIndex];
+        var pathChild = current.GetSlot(childSlot)
+            ?? throw new InvalidOperationException($"No child at slot {childSlot}");
+        
+        var modifiedPathChild = UpdateLeadingTriviaRecursive(pathChild, path, pathIndex + 1, childIndex, newLeadingTrivia);
+        
+        return current switch
+        {
+            GreenBlock block => block.WithSlot(childSlot, modifiedPathChild),
+            GreenList list => list.WithSlot(childSlot, modifiedPathChild),
             _ => throw new InvalidOperationException("Cannot descend into leaf node")
         };
     }

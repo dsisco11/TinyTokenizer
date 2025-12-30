@@ -252,12 +252,13 @@ public class SyntaxEditorTests
             .Insert(Q.Ident.Before(), "_")
             .Commit();
         
-        // With leading trivia model: " b" and " c" have leading spaces
-        // Inserting before the node inserts before its leading trivia
+        // With leading trivia transfer: inserted content takes target's leading trivia
+        // " b" has leading space, so "_" takes the space, becoming " _b"
         var text = tree.ToFullString();
         Assert.Contains("_a", text);  // Before 'a' (no leading trivia)
-        Assert.Contains("_ b", text); // Before ' b' (includes leading space)
-        Assert.Contains("_ c", text); // Before ' c' (includes leading space)
+        Assert.Contains("_b", text);  // '_' took the space from 'b', so it's now " _b" 
+        Assert.Contains("_c", text);  // Same for 'c'
+        Assert.Equal("_a _b _c", text);  // Full result
     }
 
     [Fact]
@@ -660,17 +661,17 @@ public class SyntaxEditorTests
     [Fact]
     public void Insert_BeforeFunctionBlock_InsertsBeforeOpeningBrace()
     {
-        // Simulates: inserting a comment or decorator before a function
-        // With leading trivia model, the space before { is part of the block's leading trivia
+        // Simulates: inserting a comment or decorator before a function block
+        // With trivia transfer: inserted content takes target's leading trivia (space before {)
         var tree = SyntaxTree.Parse("function {body}");
         
         tree.CreateEditor()
             .Insert(Q.BraceBlock.First().Before(), "/* comment */")
             .Commit();
         
-        // Insert goes before leading trivia, so: function + /* comment */ +  {body}
+        // /* comment */ takes the space from {, so result is: "function /* comment */{body}"
         var text = tree.ToFullString();
-        Assert.StartsWith("function/* comment */ {", text);
+        Assert.Equal("function /* comment */{body}", text);
     }
 
     [Fact]
@@ -770,7 +771,7 @@ public class SyntaxEditorTests
     public void Insert_BeforeAndAfterMultipleFunctions_HandlesCorrectly()
     {
         // Simulates: inserting around multiple function definitions
-        // With leading trivia model, " {second}" has leading space
+        // With trivia transfer: inserted content takes target's leading trivia
         var tree = SyntaxTree.Parse("{first} {second}");
         
         tree.CreateEditor()
@@ -778,8 +779,9 @@ public class SyntaxEditorTests
             .Commit();
         
         var text = tree.ToFullString();
-        // Insert goes before leading trivia, so second block becomes: "/* fn */" + " {second}"
-        Assert.Equal("/* fn */{first}/* fn */ {second}", text);
+        // First block has no leading trivia: "/* fn */{first}"
+        // Second block had leading space, transferred to inserted content: " /* fn */{second}"
+        Assert.Equal("/* fn */{first} /* fn */{second}", text);
     }
 
     [Fact]

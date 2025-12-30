@@ -55,9 +55,9 @@ public sealed class SyntaxEditor
     {
         var positions = query.ResolvePositions(_tree).ToList();
         
-        foreach (var (parentPath, childIndex, position) in positions)
+        foreach (var pos in positions)
         {
-            _edits.Add(new InsertEdit(parentPath, childIndex, text, position) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -70,9 +70,9 @@ public sealed class SyntaxEditor
     {
         var positions = query.ResolvePositions(_tree).ToList();
         
-        foreach (var (parentPath, childIndex, position) in positions)
+        foreach (var pos in positions)
         {
-            _edits.Add(new InsertNodesEdit(parentPath, childIndex, nodes, position) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -240,49 +240,136 @@ internal abstract class PendingEdit
 
 internal sealed class InsertEdit : PendingEdit
 {
-    private readonly NodePath _parentPath;
-    private readonly int _childIndex;
+    private readonly InsertionPosition _insertPos;
     private readonly string _text;
-    private readonly int _position;
     
-    public InsertEdit(NodePath parentPath, int childIndex, string text, int position)
+    public InsertEdit(InsertionPosition insertPos, string text)
     {
-        _parentPath = parentPath;
-        _childIndex = childIndex;
+        _insertPos = insertPos;
         _text = text;
-        _position = position;
     }
     
-    public override int Position => _position;
+    public override int Position => _insertPos.Position;
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
         var lexer = new GreenLexer(options);
         var nodes = lexer.ParseToGreenNodes(_text);
-        return builder.InsertAt(_parentPath.ToArray(), _childIndex, nodes);
+        
+        // For Before insertions: transfer target's leading trivia to inserted content,
+        // and give inserted content's trailing trivia to the target as its new leading
+        if (_insertPos.Point == InsertionPoint.Before && nodes.Length > 0)
+        {
+            // Step 1: Give target's leading trivia to the first inserted node
+            if (!_insertPos.TargetLeadingTrivia.IsEmpty)
+            {
+                nodes = PrependLeadingTrivia(nodes, _insertPos.TargetLeadingTrivia);
+            }
+            
+            // Step 2: Extract trailing trivia from last inserted node - this becomes target's new leading
+            var (nodesWithoutTrailing, extractedTrailing) = ExtractTrailingTrivia(nodes);
+            nodes = nodesWithoutTrailing;
+            
+            // Step 3: We need to also update the target node to have the extracted trailing as its new leading.
+            // First, get the current target node and update its trivia, then insert everything together.
+            
+            // Get the current target from root
+            var targetNode = GetNodeAtPath(root, _insertPos.ParentPath.ToArray(), _insertPos.ChildIndex);
+            if (targetNode != null)
+            {
+                // Update target's leading trivia
+                var updatedTarget = UpdateNodeLeadingTrivia(targetNode, extractedTrailing);
+                
+                // Replace target with updated target, then insert nodes before it
+                root = builder.ReplaceAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, 1, 
+                    nodes.Add(updatedTarget));
+                return root;
+            }
+        }
+        
+        return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, nodes);
+    }
+    
+    private static GreenNode? GetNodeAtPath(GreenNode root, int[] path, int childIndex)
+    {
+        var current = root;
+        foreach (var idx in path)
+        {
+            current = current.GetSlot(idx);
+            if (current == null) return null;
+        }
+        return current.GetSlot(childIndex);
+    }
+    
+    private static GreenNode UpdateNodeLeadingTrivia(GreenNode node, ImmutableArray<GreenTrivia> newLeading)
+    {
+        return node switch
+        {
+            GreenLeaf leaf => leaf.WithLeadingTrivia(newLeading),
+            GreenBlock block => new GreenBlock(block.Opener, block.Children, newLeading, block.TrailingTrivia),
+            _ => node
+        };
+    }
+    
+    private static ImmutableArray<GreenNode> PrependLeadingTrivia(ImmutableArray<GreenNode> nodes, ImmutableArray<GreenTrivia> trivia)
+    {
+        if (nodes.IsEmpty || trivia.IsEmpty)
+            return nodes;
+        
+        var first = nodes[0];
+        var newFirst = first switch
+        {
+            GreenLeaf leaf => leaf.WithLeadingTrivia(trivia.AddRange(leaf.LeadingTrivia)),
+            GreenBlock block => new GreenBlock(block.Opener, block.Children, trivia.AddRange(block.LeadingTrivia), block.TrailingTrivia),
+            _ => first
+        };
+        
+        return nodes.SetItem(0, newFirst);
+    }
+    
+    private static (ImmutableArray<GreenNode> Nodes, ImmutableArray<GreenTrivia> Trailing) ExtractTrailingTrivia(ImmutableArray<GreenNode> nodes)
+    {
+        if (nodes.IsEmpty)
+            return (nodes, ImmutableArray<GreenTrivia>.Empty);
+        
+        var last = nodes[^1];
+        var trailing = last switch
+        {
+            GreenLeaf leaf => leaf.TrailingTrivia,
+            GreenBlock block => block.TrailingTrivia,
+            _ => ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        if (trailing.IsEmpty)
+            return (nodes, ImmutableArray<GreenTrivia>.Empty);
+        
+        var newLast = last switch
+        {
+            GreenLeaf leaf => leaf.WithTrailingTrivia(ImmutableArray<GreenTrivia>.Empty),
+            GreenBlock block => new GreenBlock(block.Opener, block.Children, block.LeadingTrivia, ImmutableArray<GreenTrivia>.Empty),
+            _ => last
+        };
+        
+        return (nodes.SetItem(nodes.Length - 1, newLast), trailing);
     }
 }
 
 internal sealed class InsertNodesEdit : PendingEdit
 {
-    private readonly NodePath _parentPath;
-    private readonly int _childIndex;
+    private readonly InsertionPosition _insertPos;
     private readonly ImmutableArray<GreenNode> _nodes;
-    private readonly int _position;
     
-    public InsertNodesEdit(NodePath parentPath, int childIndex, ImmutableArray<GreenNode> nodes, int position)
+    public InsertNodesEdit(InsertionPosition insertPos, ImmutableArray<GreenNode> nodes)
     {
-        _parentPath = parentPath;
-        _childIndex = childIndex;
+        _insertPos = insertPos;
         _nodes = nodes;
-        _position = position;
     }
     
-    public override int Position => _position;
+    public override int Position => _insertPos.Position;
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
-        return builder.InsertAt(_parentPath.ToArray(), _childIndex, _nodes);
+        return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, _nodes);
     }
 }
 

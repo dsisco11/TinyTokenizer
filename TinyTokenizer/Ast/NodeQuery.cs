@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace TinyTokenizer.Ast;
 
 /// <summary>
@@ -213,9 +215,9 @@ public sealed record InsertionQuery
     
     /// <summary>
     /// Resolves insertion positions for all matched nodes.
-    /// Returns (parent path, child index, document position) tuples for insertion.
+    /// Returns tuples containing path, index, position, and trivia context for proper insertion.
     /// </summary>
-    public IEnumerable<(NodePath ParentPath, int ChildIndex, int Position)> ResolvePositions(SyntaxTree tree)
+    public IEnumerable<InsertionPosition> ResolvePositions(SyntaxTree tree)
     {
         foreach (var node in InnerQuery.Select(tree))
         {
@@ -225,7 +227,7 @@ public sealed record InsertionQuery
         }
     }
     
-    private (NodePath ParentPath, int ChildIndex, int Position)? ResolvePosition(RedNode node)
+    private InsertionPosition? ResolvePosition(RedNode node)
     {
         var parent = node.Parent;
         if (parent == null)
@@ -246,14 +248,46 @@ public sealed record InsertionQuery
             return null;
         
         var parentPath = NodePath.FromNode(parent);
+        var targetPath = NodePath.FromNode(node);
+        
+        // Get trivia from target node for Before/After insertions
+        var (targetLeading, targetTrailing) = GetNodeTrivia(node);
         
         return Point switch
         {
-            InsertionPoint.Before => (parentPath, childIndex, node.Position),
-            InsertionPoint.After => (parentPath, childIndex + 1, node.EndPosition),
-            InsertionPoint.InnerStart when node is RedBlock block => (NodePath.FromNode(node), 0, block.Position + 1), // After opener
-            InsertionPoint.InnerEnd when node is RedBlock block => (NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1), // Before closer
+            InsertionPoint.Before => new InsertionPosition(
+                parentPath, childIndex, node.Position, Point, targetPath, targetLeading, targetTrailing),
+            InsertionPoint.After => new InsertionPosition(
+                parentPath, childIndex + 1, node.EndPosition, Point, targetPath, targetLeading, targetTrailing),
+            InsertionPoint.InnerStart when node is RedBlock block => new InsertionPosition(
+                NodePath.FromNode(node), 0, block.Position + 1, Point, null, 
+                ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
+            InsertionPoint.InnerEnd when node is RedBlock block => new InsertionPosition(
+                NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1, Point, null,
+                ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
             _ => null
         };
     }
+    
+    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(RedNode node)
+    {
+        return node.Green switch
+        {
+            GreenLeaf leaf => (leaf.LeadingTrivia, leaf.TrailingTrivia),
+            GreenBlock block => (block.LeadingTrivia, block.TrailingTrivia),
+            _ => (ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty)
+        };
+    }
 }
+
+/// <summary>
+/// Contains all information needed to perform an insertion.
+/// </summary>
+public readonly record struct InsertionPosition(
+    NodePath ParentPath,
+    int ChildIndex,
+    int Position,
+    InsertionPoint Point,
+    NodePath? TargetPath,
+    ImmutableArray<GreenTrivia> TargetLeadingTrivia,
+    ImmutableArray<GreenTrivia> TargetTrailingTrivia);
