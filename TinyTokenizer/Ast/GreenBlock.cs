@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -6,7 +7,12 @@ namespace TinyTokenizer.Ast;
 /// Green node for block structures: { }, [ ], ( ).
 /// Contains children and delimiter information. Supports structural sharing mutations.
 /// </summary>
-public sealed record GreenBlock : GreenNode
+/// <remarks>
+/// Uses leading-preferred trivia model:
+/// - LeadingTrivia: trivia before the opening delimiter
+/// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
+/// </remarks>
+public sealed record GreenBlock : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
@@ -29,9 +35,6 @@ public sealed record GreenBlock : GreenNode
     
     /// <inheritdoc/>
     public override int Width => _width;
-    
-    /// <inheritdoc/>
-    public override int SlotCount => _children.Length;
     
     /// <summary>Total width of leading trivia.</summary>
     public int LeadingTriviaWidth { get; }
@@ -78,6 +81,9 @@ public sealed record GreenBlock : GreenNode
         }
     }
     
+    /// <summary>Gets the children of this block.</summary>
+    public override ImmutableArray<GreenNode> Children => _children;
+    
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index)
         => index >= 0 && index < _children.Length ? _children[index] : null;
@@ -102,13 +108,23 @@ public sealed record GreenBlock : GreenNode
     public override RedNode CreateRed(RedNode? parent, int position)
         => new RedBlock(this, parent, position);
     
+    /// <inheritdoc/>
+    public override void WriteTo(StringBuilder builder)
+    {
+        foreach (var trivia in LeadingTrivia)
+            builder.Append(trivia.Text);
+        builder.Append(Opener);
+        foreach (var child in _children)
+            child.WriteTo(builder);
+        builder.Append(Closer);
+        foreach (var trivia in TrailingTrivia)
+            builder.Append(trivia.Text);
+    }
+    
     #region Structural Sharing Mutations
     
-    /// <summary>
-    /// Creates a new block with one child replaced.
-    /// Other children are shared by reference.
-    /// </summary>
-    public GreenBlock WithSlot(int index, GreenNode newChild)
+    /// <inheritdoc/>
+    public override GreenBlock WithSlot(int index, GreenNode newChild)
     {
         if (index < 0 || index >= _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -117,11 +133,12 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, newChildren, LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with children inserted at the specified index.
-    /// Existing children are shared by reference.
-    /// </summary>
-    public GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
+    /// <inheritdoc/>
+    public override GreenBlock WithChildren(ImmutableArray<GreenNode> newChildren)
+        => new(Opener, newChildren, LeadingTrivia, TrailingTrivia);
+    
+    /// <inheritdoc/>
+    public override GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
     {
         if (index < 0 || index > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -131,11 +148,8 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with children removed from the specified range.
-    /// Remaining children are shared by reference.
-    /// </summary>
-    public GreenBlock WithRemove(int index, int count)
+    /// <inheritdoc/>
+    public override GreenBlock WithRemove(int index, int count)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -145,10 +159,8 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with a range of children replaced.
-    /// </summary>
-    public GreenBlock WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
+    /// <inheritdoc/>
+    public override GreenBlock WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));

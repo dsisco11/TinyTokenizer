@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace TinyTokenizer.Ast;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Red nodes are ephemeral - created on demand and discarded after mutations.
 /// They provide parent links and computed absolute positions.
 /// </summary>
-public abstract class RedNode
+public abstract class RedNode : IFormattable
 {
     private readonly GreenNode _green;
     private readonly RedNode? _parent;
@@ -195,6 +197,55 @@ public abstract class RedNode
         
         return _parent.GetChild(index - 1);
     }
+    
+    #endregion
+    
+    #region IFormattable
+    
+    /// <summary>
+    /// Formats this node using the specified format string.
+    /// </summary>
+    /// <param name="format">
+    /// Format string:
+    /// - null, "", or "G": Full text content (serialized form)
+    /// - "K": Kind only (e.g., "Ident")
+    /// - "P": Position only (e.g., "0")
+    /// - "R": Range only (e.g., "0..5")
+    /// - "D": Debug info (e.g., "Ident[0..5]")
+    /// - "T": Type name (e.g., "RedLeaf")
+    /// </param>
+    /// <param name="formatProvider">Format provider (unused).</param>
+    public string ToString(string? format, IFormatProvider? formatProvider)
+    {
+        return format switch
+        {
+            null or "" or "G" => ToText(),
+            "K" => Kind.ToString(),
+            "P" => _position.ToString(),
+            "R" => $"{_position}..{EndPosition}",
+            "D" => SlotCount > 0 
+                ? $"{Kind}[{_position}..{EndPosition}] ({SlotCount} children)" 
+                : $"{Kind}[{_position}..{EndPosition}]",
+            "T" => GetType().Name,
+            _ => ToText()
+        };
+    }
+    
+    /// <summary>
+    /// Writes the text content of this node to a StringBuilder.
+    /// Delegates to the underlying green node.
+    /// </summary>
+    public void WriteTo(StringBuilder builder) => _green.WriteTo(builder);
+    
+    /// <summary>
+    /// Returns the text content of this node.
+    /// </summary>
+    public string ToText() => _green.ToText();
+    
+    /// <summary>
+    /// Returns the text content of this node.
+    /// </summary>
+    public override string ToString() => ToText();
     
     #endregion
 }

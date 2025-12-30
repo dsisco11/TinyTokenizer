@@ -87,7 +87,9 @@ public readonly struct NodePath : IEquatable<NodePath>
             current = parent;
         }
         
-        return new NodePath(ImmutableArray.CreateRange(indices.Reverse()));
+        // Stack enumeration is LIFO (last pushed = first yielded)
+        // We push leaf-to-root, so enumeration gives root-to-leaf order
+        return new NodePath(ImmutableArray.CreateRange(indices));
     }
     
     /// <summary>

@@ -82,27 +82,30 @@ public sealed class GreenLexer
         var builder = ImmutableArray.CreateBuilder<GreenNode>();
         var reader = new TokenReader(tokens);
         
+        // First token gets all initial trivia as leading
+        var leadingTrivia = CollectLeadingTrivia(ref reader);
+        
         while (reader.HasMore)
         {
-            // Collect leading trivia
-            var leadingTrivia = CollectTrivia(ref reader);
-            
-            if (!reader.HasMore)
-            {
-                // Trailing trivia at end - attach to empty marker or skip
-                // For now, we'll create a synthetic node if we have trivia
-                if (!leadingTrivia.IsEmpty)
-                {
-                    // Attach trailing trivia to a zero-width marker
-                    // This preserves formatting at end of file
-                }
-                break;
-            }
-            
-            // Parse the main node
+            // Parse the main node with leading trivia
             var node = ParseNode(ref reader, null, leadingTrivia);
             if (node != null)
+            {
+                // Collect trailing trivia (same-line content up to and including newline)
+                var trailingTrivia = CollectTrailingTrivia(ref reader);
+                node = AttachTrailingTrivia(node, trailingTrivia);
                 builder.Add(node);
+            }
+            
+            // Collect leading trivia for next token (newlines from prev line + indentation)
+            leadingTrivia = CollectLeadingTrivia(ref reader);
+        }
+        
+        // EOF: any remaining trivia (collected as leadingTrivia) goes to last node as trailing
+        if (!leadingTrivia.IsEmpty && builder.Count > 0)
+        {
+            var last = builder[^1];
+            builder[^1] = AttachTrailingTrivia(last, leadingTrivia);
         }
         
         return builder.ToImmutable();
@@ -124,8 +127,8 @@ public sealed class GreenLexer
         if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
-            var trailingTrivia = CollectTrailingTrivia(ref reader);
-            return new GreenLeaf(NodeKind.Error, token.Content.ToString(), leadingTrivia, trailingTrivia);
+            // Leading-only trivia model: no trailing trivia
+            return new GreenLeaf(NodeKind.Error, token.Content.ToString(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
         }
         
         // Opening delimiter - parse block
@@ -190,16 +193,16 @@ public sealed class GreenLexer
         {
             var text = reader.CurrentText;
             reader.Advance();
-            var trailingTrivia = CollectTrailingTrivia(ref reader);
-            return GreenNodeCache.Create(NodeKind.Ident, text, leadingTrivia, trailingTrivia);
+            // Leading-only trivia model: no trailing trivia
+            return GreenNodeCache.Create(NodeKind.Ident, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
         }
         
         // Symbol (single character)
         var symbolText = reader.CurrentText;
         reader.Advance();
-        var trailing = CollectTrailingTrivia(ref reader);
+        // Leading-only trivia model: no trailing trivia
         var kind = GetLeafKind(token.Type);
-        return GreenNodeCache.Create(kind, symbolText, leadingTrivia, trailing);
+        return GreenNodeCache.Create(kind, symbolText, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenBlock ParseBlock(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -212,47 +215,45 @@ public sealed class GreenLexer
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         
+        // Collect leading trivia for first child (or closer)
+        var childLeading = CollectLeadingTrivia(ref reader);
+        
         while (reader.HasMore)
         {
             var token = reader.Current;
             
             if (token.Type == closerType)
             {
-                // Found closer
+                // Found closer - any remaining trivia goes to last child as trailing
+                if (!childLeading.IsEmpty && children.Count > 0)
+                {
+                    children[^1] = AttachTrailingTrivia(children[^1], childLeading);
+                }
                 reader.Advance();
-                var trailingTrivia = CollectTrailingTrivia(ref reader);
-                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, trailingTrivia);
+                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
             }
             
-            // Collect leading trivia for child
-            var childLeading = CollectTrivia(ref reader);
-            
-            if (!reader.HasMore || reader.Current.Type == closerType)
-            {
-                // Handle case where we collected trivia but hit end/closer
-                // Trivia will be attached to the block's trailing
-                if (!childLeading.IsEmpty)
-                {
-                    // TODO: Could attach as block's inner trailing trivia
-                }
-                if (reader.HasMore && reader.Current.Type == closerType)
-                {
-                    reader.Advance();
-                    var trailing = CollectTrailingTrivia(ref reader);
-                    // Merge childLeading into trailing somehow, or just drop for now
-                    return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, trailing);
-                }
-                break;
-            }
-            
-            // Parse child node
+            // Parse child node with its leading trivia
             var child = ParseNode(ref reader, closerType, childLeading);
             if (child != null)
+            {
+                // Collect trailing trivia for this child
+                var childTrailing = CollectTrailingTrivia(ref reader);
+                child = AttachTrailingTrivia(child, childTrailing);
                 children.Add(child);
+            }
+            
+            // Collect leading trivia for next child
+            childLeading = CollectLeadingTrivia(ref reader);
         }
         
-        // Unclosed block - return as error
-        return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
+        // Unclosed block - attach any remaining trivia to last child
+        if (!childLeading.IsEmpty && children.Count > 0)
+        {
+            children[^1] = AttachTrailingTrivia(children[^1], childLeading);
+        }
+        
+        return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
     }
     
     private GreenLeaf ParseString(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -291,8 +292,8 @@ public sealed class GreenLexer
             {
                 textBuilder.Append(quoteChar);
                 reader.Advance();
-                var trailingTrivia = CollectTrailingTrivia(ref reader);
-                return new GreenLeaf(NodeKind.String, textBuilder.ToString(), leadingTrivia, trailingTrivia);
+                // Leading-only trivia model: no trailing trivia
+                return new GreenLeaf(NodeKind.String, textBuilder.ToString(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
             }
             
             textBuilder.Append(reader.CurrentText);
@@ -300,8 +301,8 @@ public sealed class GreenLexer
         }
         
         // Unterminated string - return what we have
-        var trailing = CollectTrailingTrivia(ref reader);
-        return new GreenLeaf(NodeKind.Error, textBuilder.ToString(), leadingTrivia, trailing);
+        // Leading-only trivia model: no trailing trivia
+        return new GreenLeaf(NodeKind.Error, textBuilder.ToString(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenLeaf ParseNumeric(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -318,13 +319,13 @@ public sealed class GreenLexer
                 var afterDotText = reader.CurrentText;
                 reader.Advance(); // consume digits
                 var text = digitsText + "." + afterDotText;
-                var trailing = CollectTrailingTrivia(ref reader);
-                return new GreenLeaf(NodeKind.Numeric, text, leadingTrivia, trailing);
+                // Leading-only trivia model: no trailing trivia
+                return new GreenLeaf(NodeKind.Numeric, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
             }
         }
         
-        var trailingTrivia = CollectTrailingTrivia(ref reader);
-        return new GreenLeaf(NodeKind.Numeric, digitsText, leadingTrivia, trailingTrivia);
+        // Leading-only trivia model: no trailing trivia
+        return new GreenLeaf(NodeKind.Numeric, digitsText, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenLeaf ParseDecimalFromDot(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -334,8 +335,8 @@ public sealed class GreenLexer
         reader.Advance(); // consume digits
         
         var text = "." + digitsText;
-        var trailing = CollectTrailingTrivia(ref reader);
-        return new GreenLeaf(NodeKind.Numeric, text, leadingTrivia, trailing);
+        // Leading-only trivia model: no trailing trivia
+        return new GreenLeaf(NodeKind.Numeric, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenLeaf ParseTaggedIdent(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -346,8 +347,8 @@ public sealed class GreenLexer
         reader.Advance();
         
         var text = tagText + identText;
-        var trailing = CollectTrailingTrivia(ref reader);
-        return new GreenLeaf(NodeKind.TaggedIdent, text, leadingTrivia, trailing);
+        // Leading-only trivia model: no trailing trivia
+        return new GreenLeaf(NodeKind.TaggedIdent, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenLeaf ParseSingleLineComment(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -370,8 +371,8 @@ public sealed class GreenLexer
             reader.Advance();
         }
         
-        var trailing = CollectTrailingTrivia(ref reader);
-        return new GreenLeaf(NodeKind.Symbol, textBuilder.ToString(), leadingTrivia, trailing);
+        // Leading-only trivia model: no trailing trivia
+        return new GreenLeaf(NodeKind.Symbol, textBuilder.ToString(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenLeaf ParseMultiLineComment(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
@@ -397,8 +398,8 @@ public sealed class GreenLexer
                     reader.Advance();
                     textBuilder.Append('/');
                     reader.Advance();
-                    var trailing = CollectTrailingTrivia(ref reader);
-                    return new GreenLeaf(NodeKind.Symbol, textBuilder.ToString(), leadingTrivia, trailing);
+                    // Leading-only trivia model: no trailing trivia
+                    return new GreenLeaf(NodeKind.Symbol, textBuilder.ToString(), leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
                 }
             }
             
@@ -450,8 +451,8 @@ public sealed class GreenLexer
                 for (int i = 0; i < op.Length; i++)
                     reader.Advance();
                 
-                var trailing = CollectTrailingTrivia(ref reader);
-                return GreenNodeCache.Create(NodeKind.Operator, op, leadingTrivia, trailing);
+                // Leading-only trivia model: no trailing trivia
+                return GreenNodeCache.Create(NodeKind.Operator, op, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
             }
         }
         
@@ -462,7 +463,11 @@ public sealed class GreenLexer
     
     #region Trivia Collection
     
-    private ImmutableArray<GreenTrivia> CollectTrivia(ref TokenReader reader)
+    /// <summary>
+    /// Collects leading trivia: everything from after previous token's trailing trivia
+    /// up to the current token. This includes newlines from previous lines and indentation.
+    /// </summary>
+    private ImmutableArray<GreenTrivia> CollectLeadingTrivia(ref TokenReader reader)
     {
         var builder = ImmutableArray.CreateBuilder<GreenTrivia>();
         
@@ -494,6 +499,12 @@ public sealed class GreenLexer
         return builder.ToImmutable();
     }
     
+    /// <summary>
+    /// Collects trailing trivia: same-line content after the token up to and including newline.
+    /// - Whitespace on same line → trailing
+    /// - Comments starting on same line → trailing (even if multi-line)
+    /// - Newline → trailing (terminates collection)
+    /// </summary>
     private ImmutableArray<GreenTrivia> CollectTrailingTrivia(ref TokenReader reader)
     {
         var builder = ImmutableArray.CreateBuilder<GreenTrivia>();
@@ -504,29 +515,80 @@ public sealed class GreenLexer
             
             if (token.Type == SimpleTokenType.Whitespace)
             {
+                // Same-line whitespace is trailing
                 builder.Add(GreenTrivia.Whitespace(reader.CurrentText));
                 reader.Advance();
             }
             else if (token.Type == SimpleTokenType.Newline)
             {
-                // Newline ends trailing trivia (include it)
+                // Newline terminates trailing trivia (and is included in it)
                 builder.Add(GreenTrivia.Newline(reader.CurrentText));
                 reader.Advance();
-                break;
+                break; // Stop after newline
             }
             else if (IsCommentStart(ref reader))
             {
+                // Comment starting on same line is trailing (even if it spans lines)
                 var comment = ConsumeComment(ref reader);
                 builder.Add(comment);
+                // If it was a single-line comment, the newline wasn't consumed, so continue
+                // If it was a multi-line comment, continue collecting trailing
             }
             else
             {
+                // Hit a significant token - stop collecting trailing
                 break;
             }
         }
         
         return builder.ToImmutable();
     }
+    
+    /// <summary>
+    /// Attaches trailing trivia to a node (fallback when leading trivia isn't possible).
+    /// Creates a new node with the trivia appended to existing trailing trivia.
+    /// </summary>
+    private static GreenNode AttachTrailingTrivia(GreenNode node, ImmutableArray<GreenTrivia> trivia)
+    {
+        if (trivia.IsEmpty)
+            return node;
+        
+        return node switch
+        {
+            GreenLeaf leaf => new GreenLeaf(
+                leaf.Kind, 
+                leaf.Text, 
+                leaf.LeadingTrivia, 
+                leaf.TrailingTrivia.AddRange(trivia)),
+            
+            GreenBlock block when block.SlotCount > 0 => 
+                // Attach to last child of block
+                block.WithSlot(block.SlotCount - 1, 
+                    AttachTrailingTrivia(block.GetSlot(block.SlotCount - 1)!, trivia)),
+            
+            GreenBlock block => 
+                // Empty block - attach as block's trailing trivia
+                new GreenBlock(block.Opener, ImmutableArray<GreenNode>.Empty, 
+                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia)),
+            
+            GreenList list when list.SlotCount > 0 => 
+                list.WithSlot(list.SlotCount - 1, 
+                    AttachTrailingTrivia(list.GetSlot(list.SlotCount - 1)!, trivia)),
+            
+            GreenSyntaxNode syntax when syntax.SlotCount > 0 =>
+                new GreenSyntaxNode(syntax.Kind, syntax.RedType, 
+                    syntax.Children.SetItem(syntax.Children.Length - 1, 
+                        AttachTrailingTrivia(syntax.GetSlot(syntax.Children.Length - 1)!, trivia))),
+            
+            _ => node // Unknown node type or empty container, return unchanged
+        };
+    }
+    
+    // Roslyn-style trivia model:
+    // - Trailing trivia = same-line content after token up to and including newline
+    // - Leading trivia = content from after previous token's trailing up to current token
+    // - First token gets all initial trivia as leading
+    // - EOF: remaining trivia goes to last token as trailing
     
     private bool IsCommentStart(ref TokenReader reader)
     {

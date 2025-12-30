@@ -431,7 +431,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("foo bar baz");
         
-        var idents = Q.Ident.Select(tree).ToList();
+        var idents = Q.AnyIdent.Select(tree).ToList();
         
         Assert.Equal(3, idents.Count);
     }
@@ -441,7 +441,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("foo bar foo");
         
-        var foos = Q.Ident.WithText("foo").Select(tree).ToList();
+        var foos = Q.AnyIdent.WithText("foo").Select(tree).ToList();
         
         Assert.Equal(2, foos.Count);
     }
@@ -451,7 +451,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a b c");
         
-        var first = Q.Ident.First().Select(tree).ToList();
+        var first = Q.AnyIdent.First().Select(tree).ToList();
         
         Assert.Single(first);
         Assert.Equal("a", ((RedLeaf)first[0]).Text);
@@ -462,7 +462,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a b c");
         
-        var last = Q.Ident.Last().Select(tree).ToList();
+        var last = Q.AnyIdent.Last().Select(tree).ToList();
         
         Assert.Single(last);
         Assert.Equal("c", ((RedLeaf)last[0]).Text);
@@ -489,7 +489,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("x = 42 + 3.14");
         
-        var nums = Q.Numeric.Select(tree).ToList();
+        var nums = Q.AnyNumeric.Select(tree).ToList();
         
         Assert.Equal(2, nums.Count);
     }
@@ -499,7 +499,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a = \"hello\" + 'c'");
         
-        var strings = Q.String.Select(tree).ToList();
+        var strings = Q.AnyString.Select(tree).ToList();
         
         Assert.Equal(2, strings.Count);
     }
@@ -510,7 +510,7 @@ public class SyntaxTreeTests
         var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
         var tree = SyntaxTree.Parse("a == b && c != d", options);
         
-        var ops = Q.Operator.Select(tree).ToList();
+        var ops = Q.AnyOperator.Select(tree).ToList();
         
         Assert.Equal(3, ops.Count);
     }
@@ -520,7 +520,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a, b; c");
         
-        var symbols = Q.Symbol.Select(tree).ToList();
+        var symbols = Q.AnySymbol.Select(tree).ToList();
         
         Assert.Equal(2, symbols.Count); // , and ;
     }
@@ -531,7 +531,7 @@ public class SyntaxTreeTests
         var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
         var tree = SyntaxTree.Parse("#define @attr foo", options);
         
-        var tags = Q.TaggedIdent.Select(tree).ToList();
+        var tags = Q.AnyTaggedIdent.Select(tree).ToList();
         
         Assert.Equal(2, tags.Count);
     }
@@ -572,6 +572,241 @@ public class SyntaxTreeTests
     
     #endregion
     
+    #region Query Named Methods (Concise API)
+    
+    [Fact]
+    public void Query_Ident_WithText_SelectsSpecificIdentifier()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz foo");
+        
+        var foos = Q.Ident("foo").Select(tree).ToList();
+        
+        Assert.Equal(2, foos.Count);
+        Assert.All(foos, node => Assert.Equal("foo", ((RedLeaf)node).Text));
+    }
+    
+    [Fact]
+    public void Query_Ident_WithText_NoMatch_ReturnsEmpty()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        var matches = Q.Ident("nonexistent").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    [Fact]
+    public void Query_Ident_CaseSensitive()
+    {
+        var tree = SyntaxTree.Parse("Foo foo FOO");
+        
+        var foos = Q.Ident("foo").Select(tree).ToList();
+        
+        Assert.Single(foos);
+        Assert.Equal("foo", ((RedLeaf)foos[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_Symbol_WithText_SelectsSpecificSymbol()
+    {
+        var tree = SyntaxTree.Parse("a, b; c: d");
+        
+        var commas = Q.Symbol(",").Select(tree).ToList();
+        var semicolons = Q.Symbol(";").Select(tree).ToList();
+        var colons = Q.Symbol(":").Select(tree).ToList();
+        
+        Assert.Single(commas);
+        Assert.Single(semicolons);
+        Assert.Single(colons);
+    }
+    
+    [Fact]
+    public void Query_Operator_WithText_SelectsSpecificOperator()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("a == b && c != d || e", options);
+        
+        var equals = Q.Operator("==").Select(tree).ToList();
+        var ands = Q.Operator("&&").Select(tree).ToList();
+        var notEquals = Q.Operator("!=").Select(tree).ToList();
+        var ors = Q.Operator("||").Select(tree).ToList();
+        
+        Assert.Single(equals);
+        Assert.Single(ands);
+        Assert.Single(notEquals);
+        Assert.Single(ors);
+    }
+    
+    [Fact]
+    public void Query_Numeric_WithText_SelectsSpecificNumber()
+    {
+        var tree = SyntaxTree.Parse("x = 42 + 3.14 + 42");
+        
+        var fortyTwos = Q.Numeric("42").Select(tree).ToList();
+        var pis = Q.Numeric("3.14").Select(tree).ToList();
+        
+        Assert.Equal(2, fortyTwos.Count);
+        Assert.Single(pis);
+    }
+    
+    [Fact]
+    public void Query_String_WithText_SelectsSpecificString()
+    {
+        var tree = SyntaxTree.Parse("a = \"hello\" + \"world\" + \"hello\"");
+        
+        var hellos = Q.String("\"hello\"").Select(tree).ToList();
+        var worlds = Q.String("\"world\"").Select(tree).ToList();
+        
+        Assert.Equal(2, hellos.Count);
+        Assert.Single(worlds);
+    }
+    
+    [Fact]
+    public void Query_TaggedIdent_WithText_SelectsSpecificTag()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
+        var tree = SyntaxTree.Parse("#define #include @attr #define", options);
+        
+        var defines = Q.TaggedIdent("#define").Select(tree).ToList();
+        var includes = Q.TaggedIdent("#include").Select(tree).ToList();
+        var attrs = Q.TaggedIdent("@attr").Select(tree).ToList();
+        
+        Assert.Equal(2, defines.Count);
+        Assert.Single(includes);
+        Assert.Single(attrs);
+    }
+    
+    [Fact]
+    public void Query_Named_EquivalentToWithText()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo");
+        
+        // These should produce identical results
+        var namedQuery = Q.Ident("foo").Select(tree).ToList();
+        var withTextQuery = Q.AnyIdent.WithText("foo").Select(tree).ToList();
+        
+        Assert.Equal(namedQuery.Count, withTextQuery.Count);
+        Assert.Equal(2, namedQuery.Count);
+    }
+    
+    [Fact]
+    public void Query_Named_CanBeChained()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo baz foo");
+        
+        // Named query with .First()
+        var firstFoo = Q.Ident("foo").First().Select(tree).ToList();
+        
+        Assert.Single(firstFoo);
+    }
+    
+    [Fact]
+    public void Query_Named_WorksInSequence()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("x = 42", options);
+        
+        // Sequence: Ident("x") followed by Operator("=") followed by Numeric
+        var query = Q.Sequence(Q.Ident("x"), Q.Operator("="), Q.AnyNumeric);
+        var firstNode = tree.Root.Children.First();
+        
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(3, consumed);
+    }
+    
+    [Fact]
+    public void Query_AnyIdent_VsNamedIdent_Coverage()
+    {
+        var tree = SyntaxTree.Parse("alpha beta gamma");
+        
+        // AnyIdent matches all
+        var all = Q.AnyIdent.Select(tree).ToList();
+        Assert.Equal(3, all.Count);
+        
+        // Named queries match specific
+        var alphas = Q.Ident("alpha").Select(tree).ToList();
+        var betas = Q.Ident("beta").Select(tree).ToList();
+        
+        Assert.Single(alphas);
+        Assert.Single(betas);
+    }
+    
+    [Fact]
+    public void Query_AnySymbol_VsNamedSymbol_Coverage()
+    {
+        var tree = SyntaxTree.Parse("a, b; c, d");
+        
+        // AnySymbol matches all
+        var allSymbols = Q.AnySymbol.Select(tree).ToList();
+        Assert.Equal(3, allSymbols.Count); // 2 commas, 1 semicolon
+        
+        // Named queries match specific
+        var commas = Q.Symbol(",").Select(tree).ToList();
+        var semicolons = Q.Symbol(";").Select(tree).ToList();
+        
+        Assert.Equal(2, commas.Count);
+        Assert.Single(semicolons);
+    }
+    
+    [Fact]
+    public void Query_AnyOperator_VsNamedOperator_Coverage()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("a + b - c + d", options);
+        
+        // AnyOperator matches all
+        var allOps = Q.AnyOperator.Select(tree).ToList();
+        Assert.Equal(3, allOps.Count);
+        
+        // Named queries match specific
+        var plusses = Q.Operator("+").Select(tree).ToList();
+        var minuses = Q.Operator("-").Select(tree).ToList();
+        
+        Assert.Equal(2, plusses.Count);
+        Assert.Single(minuses);
+    }
+    
+    [Fact]
+    public void Query_AnyNumeric_VsNamedNumeric_Coverage()
+    {
+        var tree = SyntaxTree.Parse("1 2 3 2 1");
+        
+        // AnyNumeric matches all
+        var allNums = Q.AnyNumeric.Select(tree).ToList();
+        Assert.Equal(5, allNums.Count);
+        
+        // Named queries match specific
+        var ones = Q.Numeric("1").Select(tree).ToList();
+        var twos = Q.Numeric("2").Select(tree).ToList();
+        var threes = Q.Numeric("3").Select(tree).ToList();
+        
+        Assert.Equal(2, ones.Count);
+        Assert.Equal(2, twos.Count);
+        Assert.Single(threes);
+    }
+    
+    [Fact]
+    public void Query_Named_EmptyStringMatchesNothing()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        var matches = Q.Ident("").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    [Fact]
+    public void Query_Named_WhitespaceDoesNotMatchIdent()
+    {
+        var tree = SyntaxTree.Parse("foo bar");
+        
+        var matches = Q.Ident(" ").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    #endregion
+    
     #region Query Composition
     
     [Fact]
@@ -579,7 +814,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("foo 42 bar");
         
-        var combined = (Q.Ident | Q.Numeric).Select(tree).ToList();
+        var combined = (Q.AnyIdent | Q.AnyNumeric).Select(tree).ToList();
         
         Assert.Equal(3, combined.Count); // foo, 42, bar
     }
@@ -590,7 +825,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("foo bar baz");
         
         // All idents that also match WithText("bar")
-        var intersection = (Q.Ident & Q.Ident.WithText("bar")).Select(tree).ToList();
+        var intersection = (Q.AnyIdent & Q.AnyIdent.WithText("bar")).Select(tree).ToList();
         
         Assert.Single(intersection);
         Assert.Equal("bar", ((RedLeaf)intersection[0]).Text);
@@ -605,7 +840,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("foobar foobaz other");
         
-        var matches = Q.Ident.WithTextContaining("foo").Select(tree).ToList();
+        var matches = Q.AnyIdent.WithTextContaining("foo").Select(tree).ToList();
         
         Assert.Equal(2, matches.Count);
     }
@@ -615,7 +850,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("prefixA prefixB other");
         
-        var matches = Q.Ident.WithTextStartingWith("prefix").Select(tree).ToList();
+        var matches = Q.AnyIdent.WithTextStartingWith("prefix").Select(tree).ToList();
         
         Assert.Equal(2, matches.Count);
     }
@@ -625,7 +860,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("testA testB other");
         
-        var matches = Q.Ident.WithTextEndingWith("B").Select(tree).ToList();
+        var matches = Q.AnyIdent.WithTextEndingWith("B").Select(tree).ToList();
         
         Assert.Single(matches);
         Assert.Equal("testB", ((RedLeaf)matches[0]).Text);
@@ -637,7 +872,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("a bb ccc");
         
         // Filter idents with width >= 2
-        var matches = Q.Ident.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2).Select(tree).ToList();
+        var matches = Q.AnyIdent.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2).Select(tree).ToList();
         
         Assert.Equal(2, matches.Count); // bb and ccc
     }
@@ -651,7 +886,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a b c d e");
         
-        var third = Q.Ident.Nth(2).Select(tree).ToList();
+        var third = Q.AnyIdent.Nth(2).Select(tree).ToList();
         
         Assert.Single(third);
         Assert.Equal("c", ((RedLeaf)third[0]).Text);
@@ -702,7 +937,7 @@ public class SyntaxTreeTests
     public void RedNode_Parent_NavigatesUp()
     {
         var tree = SyntaxTree.Parse("{nested}");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         
         Assert.NotNull(ident.Parent);
         Assert.IsType<RedBlock>(ident.Parent);
@@ -734,7 +969,7 @@ public class SyntaxTreeTests
     public void TreeWalker_Ancestors_NavigatesToRoot()
     {
         var tree = SyntaxTree.Parse("{{deep}}");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         var walker = new TreeWalker(ident);
         var ancestors = walker.Ancestors().ToList();
         
@@ -745,7 +980,7 @@ public class SyntaxTreeTests
     public void RedNode_Root_ReturnsTreeRoot()
     {
         var tree = SyntaxTree.Parse("{nested}");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         
         var root = ident.Root;
         
@@ -805,7 +1040,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("original");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), "changed")
+            .Replace(Q.AnyIdent.First(), "changed")
             .Commit();
         
         tree.Undo();
@@ -822,7 +1057,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("original");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), "changed")
+            .Replace(Q.AnyIdent.First(), "changed")
             .Commit();
         
         Assert.True(tree.CanUndo);
@@ -880,7 +1115,7 @@ public class SyntaxTreeTests
         // Unclosed block creates an error
         var tree = SyntaxTree.Parse("{unclosed");
         
-        var errors = Q.Error.Select(tree).ToList();
+        var errors = Q.AnyError.Select(tree).ToList();
         
         // May or may not have errors depending on parser behavior
         // Just ensure query doesn't throw
@@ -916,7 +1151,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a");
         
-        var all = Q.Ident.All().Select(tree).ToList();
+        var all = Q.AnyIdent.All().Select(tree).ToList();
         
         Assert.Single(all);
     }
@@ -925,10 +1160,10 @@ public class SyntaxTreeTests
     public void Query_Matches_ChecksSingleNode()
     {
         var tree = SyntaxTree.Parse("foo");
-        var node = Q.Ident.First().Select(tree).First();
+        var node = Q.AnyIdent.First().Select(tree).First();
         
-        Assert.True(Q.Ident.Matches(node));
-        Assert.False(Q.Numeric.Matches(node));
+        Assert.True(Q.AnyIdent.Matches(node));
+        Assert.False(Q.AnyNumeric.Matches(node));
     }
     
     #endregion
@@ -950,16 +1185,18 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("a b");
         var leaves = tree.Leaves.ToList();
         
-        // First ident at position 0, second at position 2
+        // Roslyn-style trivia: space after 'a' is trailing trivia for 'a'
+        // So 'b' starts at position 2 with no leading trivia
         var secondIdent = leaves.Where(l => l.Kind == NodeKind.Ident).Skip(1).First();
-        Assert.Equal(2, secondIdent.Position);
+        Assert.Equal(2, secondIdent.Position);  // Position (same as TextPosition when no leading trivia)
+        Assert.Equal(2, ((RedLeaf)secondIdent).TextPosition);  // TextPosition is where text starts
     }
     
     [Fact]
     public void RedLeaf_EndPosition_IsCorrect()
     {
         var tree = SyntaxTree.Parse("abc");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         
         Assert.Equal(0, ident.Position);
         Assert.Equal(3, ident.EndPosition);
@@ -1010,7 +1247,7 @@ public class SyntaxTreeTests
     public void NodePath_FromNode_CreatesValidPath()
     {
         var tree = SyntaxTree.Parse("{nested}");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         
         var path = NodePath.FromNode(ident);
         
@@ -1021,7 +1258,7 @@ public class SyntaxTreeTests
     public void NodePath_Navigate_ReturnsNode()
     {
         var tree = SyntaxTree.Parse("{nested}");
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         var path = NodePath.FromNode(ident);
         
         var navigated = path.Navigate(tree.Root);
@@ -1374,7 +1611,7 @@ public class SyntaxTreeTests
         var leafQuery = Q.Leaf;
         
         var block = Q.BraceBlock.First().Select(tree).First();
-        var ident = Q.Ident.First().Select(tree).First();
+        var ident = Q.AnyIdent.First().Select(tree).First();
         
         Assert.False(leafQuery.Matches(block));
         Assert.True(leafQuery.Matches(ident));
@@ -1384,10 +1621,10 @@ public class SyntaxTreeTests
     public void FirstNodeQuery_Matches_DelegatesToInner()
     {
         var tree = SyntaxTree.Parse("a 123");
-        var firstQuery = Q.Ident.First();
+        var firstQuery = Q.AnyIdent.First();
         
-        var identNode = Q.Ident.Select(tree).First();
-        var numNode = Q.Numeric.Select(tree).First();
+        var identNode = Q.AnyIdent.Select(tree).First();
+        var numNode = Q.AnyNumeric.Select(tree).First();
         
         Assert.True(firstQuery.Matches(identNode));
         Assert.False(firstQuery.Matches(numNode));
@@ -1397,9 +1634,9 @@ public class SyntaxTreeTests
     public void LastNodeQuery_Matches_DelegatesToInner()
     {
         var tree = SyntaxTree.Parse("a b c");
-        var lastQuery = Q.Ident.Last();
+        var lastQuery = Q.AnyIdent.Last();
         
-        var identNode = Q.Ident.Select(tree).First();
+        var identNode = Q.AnyIdent.Select(tree).First();
         Assert.True(lastQuery.Matches(identNode));
     }
     
@@ -1407,9 +1644,9 @@ public class SyntaxTreeTests
     public void NthNodeQuery_Matches_DelegatesToInner()
     {
         var tree = SyntaxTree.Parse("a b c");
-        var nthQuery = Q.Ident.Nth(1);
+        var nthQuery = Q.AnyIdent.Nth(1);
         
-        var identNode = Q.Ident.Select(tree).First();
+        var identNode = Q.AnyIdent.Select(tree).First();
         Assert.True(nthQuery.Matches(identNode));
     }
     
@@ -1417,10 +1654,10 @@ public class SyntaxTreeTests
     public void PredicateNodeQuery_Matches_CombinesInnerAndPredicate()
     {
         var tree = SyntaxTree.Parse("a bb ccc");
-        var query = Q.Ident.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2);
+        var query = Q.AnyIdent.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2);
         
-        var shortIdent = Q.Ident.Select(tree).First();
-        var longIdent = Q.Ident.Select(tree).Skip(1).First();
+        var shortIdent = Q.AnyIdent.Select(tree).First();
+        var longIdent = Q.AnyIdent.Select(tree).Skip(1).First();
         
         Assert.False(query.Matches(shortIdent)); // "a" is too short
         Assert.True(query.Matches(longIdent));   // "bb" is long enough
@@ -1430,10 +1667,10 @@ public class SyntaxTreeTests
     public void UnionNodeQuery_Matches_MatchesEither()
     {
         var tree = SyntaxTree.Parse("foo 123 {}");
-        var unionQuery = Q.Ident | Q.Numeric;
+        var unionQuery = Q.AnyIdent | Q.AnyNumeric;
         
-        var identNode = Q.Ident.Select(tree).First();
-        var numNode = Q.Numeric.Select(tree).First();
+        var identNode = Q.AnyIdent.Select(tree).First();
+        var numNode = Q.AnyNumeric.Select(tree).First();
         var blockNode = Q.BraceBlock.Select(tree).First();
         
         Assert.True(unionQuery.Matches(identNode));
@@ -1445,10 +1682,10 @@ public class SyntaxTreeTests
     public void IntersectionNodeQuery_Matches_MatchesBoth()
     {
         var tree = SyntaxTree.Parse("foo bar");
-        var intersectionQuery = Q.Ident & Q.Ident.WithText("foo");
+        var intersectionQuery = Q.AnyIdent & Q.AnyIdent.WithText("foo");
         
-        var fooNode = Q.Ident.WithText("foo").Select(tree).First();
-        var barNode = Q.Ident.WithText("bar").Select(tree).First();
+        var fooNode = Q.AnyIdent.WithText("foo").Select(tree).First();
+        var barNode = Q.AnyIdent.WithText("bar").Select(tree).First();
         
         Assert.True(intersectionQuery.Matches(fooNode));
         Assert.False(intersectionQuery.Matches(barNode));
@@ -1461,7 +1698,7 @@ public class SyntaxTreeTests
         var block = Q.BraceBlock.First().Select(tree).First();
         
         // Select idents from the block (not the whole tree)
-        var identsInBlock = Q.Ident.Select(block).ToList();
+        var identsInBlock = Q.AnyIdent.Select(block).ToList();
         
         Assert.Equal(3, identsInBlock.Count);
     }
@@ -1471,7 +1708,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("123");
         
-        var result = Q.Ident.Last().Select(tree).ToList();
+        var result = Q.AnyIdent.Last().Select(tree).ToList();
         
         Assert.Empty(result);
     }
@@ -1481,7 +1718,7 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("a b");
         
-        var result = Q.Ident.Nth(100).Select(tree).ToList();
+        var result = Q.AnyIdent.Nth(100).Select(tree).ToList();
         
         Assert.Empty(result);
     }

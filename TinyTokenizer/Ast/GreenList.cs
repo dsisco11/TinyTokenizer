@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -6,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Green node for the root token list (top-level sequence of nodes).
 /// Similar to GreenBlock but without delimiters.
 /// </summary>
-public sealed record GreenList : GreenNode
+public sealed record GreenList : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
@@ -19,7 +20,7 @@ public sealed record GreenList : GreenNode
     public override int Width => _width;
     
     /// <inheritdoc/>
-    public override int SlotCount => _children.Length;
+    public override ImmutableArray<GreenNode> Children => _children;
     
     /// <summary>
     /// Creates a new token list.
@@ -67,12 +68,17 @@ public sealed record GreenList : GreenNode
     public override RedNode CreateRed(RedNode? parent, int position)
         => new RedList(this, parent, position);
     
+    /// <inheritdoc/>
+    public override void WriteTo(StringBuilder builder)
+    {
+        foreach (var child in _children)
+            child.WriteTo(builder);
+    }
+    
     #region Structural Sharing Mutations
     
-    /// <summary>
-    /// Creates a new list with one child replaced.
-    /// </summary>
-    public GreenList WithSlot(int index, GreenNode newChild)
+    /// <inheritdoc/>
+    public override GreenList WithSlot(int index, GreenNode newChild)
     {
         if (index < 0 || index >= _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -80,10 +86,12 @@ public sealed record GreenList : GreenNode
         return new GreenList(_children.SetItem(index, newChild));
     }
     
-    /// <summary>
-    /// Creates a new list with children inserted.
-    /// </summary>
-    public GreenList WithInsert(int index, ImmutableArray<GreenNode> nodes)
+    /// <inheritdoc/>
+    public override GreenList WithChildren(ImmutableArray<GreenNode> newChildren)
+        => new(newChildren);
+    
+    /// <inheritdoc/>
+    public override GreenList WithInsert(int index, ImmutableArray<GreenNode> nodes)
     {
         if (index < 0 || index > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -93,10 +101,8 @@ public sealed record GreenList : GreenNode
         return new GreenList(builder.ToImmutable());
     }
     
-    /// <summary>
-    /// Creates a new list with children removed.
-    /// </summary>
-    public GreenList WithRemove(int index, int count)
+    /// <inheritdoc/>
+    public override GreenList WithRemove(int index, int count)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -106,10 +112,8 @@ public sealed record GreenList : GreenNode
         return new GreenList(builder.ToImmutable());
     }
     
-    /// <summary>
-    /// Creates a new list with a range replaced.
-    /// </summary>
-    public GreenList WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
+    /// <inheritdoc/>
+    public override GreenList WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));

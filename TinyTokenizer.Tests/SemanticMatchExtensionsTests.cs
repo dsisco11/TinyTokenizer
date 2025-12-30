@@ -190,7 +190,7 @@ public class SemanticMatchExtensionsTests
     {
         var schema = Schema.Default;
         
-        var query = schema.Semantic("FunctionName");
+        var query = schema.Syntax("FunctionName");
         
         Assert.NotNull(query);
     }
@@ -203,7 +203,7 @@ public class SemanticMatchExtensionsTests
         var kind = schema.GetKind("FunctionName");
         
         // The query should work even if no semantic nodes exist
-        var query = schema.Semantic("FunctionName");
+        var query = schema.Syntax("FunctionName");
         var results = query.Select(tree).ToList();
         
         // Results depend on whether tree has matching nodes
@@ -214,7 +214,7 @@ public class SemanticMatchExtensionsTests
     {
         var schema = Schema.Default;
         
-        var query = schema.Semantic("NonExistent");
+        var query = schema.Syntax("NonExistent");
         
         Assert.NotNull(query);
     }
@@ -240,7 +240,7 @@ public class SemanticMatchExtensionsTests
         var schema = Schema.Default;
         
         var genericQuery = schema.Semantic<FunctionNameNode>();
-        var stringQuery = schema.Semantic("FunctionName");
+        var stringQuery = schema.Syntax("FunctionName");
         
         // Both queries should select the same nodes (comparing behavior, not instances)
         var genericResults = genericQuery.Select(tree).ToList();
@@ -351,7 +351,7 @@ public class SemanticMatchExtensionsTests
         var schema = Schema.Default;
         
         // Both the extension method and direct method should work identically
-        var fromExtension = SemanticMatchExtensions.Semantic<FunctionNameNode>(schema);
+        var fromExtension = SemanticMatchExtensions.Syntax<FunctionNameNode>(schema);
         var fromDirect = schema.Semantic<FunctionNameNode>();
         
         // They should produce equivalent queries (same kind)
@@ -368,7 +368,7 @@ public class SemanticMatchExtensionsTests
     [Fact]
     public void Semantic_ByKind_CreatesQuery()
     {
-        var query = SemanticMatchExtensions.Semantic(NodeKind.Semantic);
+        var query = SemanticMatchExtensions.Syntax(NodeKind.Semantic);
         
         Assert.NotNull(query);
     }
@@ -377,7 +377,7 @@ public class SemanticMatchExtensionsTests
     public void Semantic_ByKind_MatchesCorrectKind()
     {
         var tree = SyntaxTree.Parse("{block}");
-        var query = SemanticMatchExtensions.Semantic(NodeKind.BraceBlock);
+        var query = SemanticMatchExtensions.Syntax(NodeKind.BraceBlock);
         
         var results = query.Select(tree).ToList();
         
@@ -393,7 +393,7 @@ public class SemanticMatchExtensionsTests
     public void SemanticNodeQuery_Select_FromTree()
     {
         var tree = SyntaxTree.Parse("test");
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(tree).ToList();
         
@@ -406,7 +406,7 @@ public class SemanticMatchExtensionsTests
     {
         var tree = SyntaxTree.Parse("{inner}");
         var block = tree.Root.Children.First();
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(block).ToList();
         
@@ -418,7 +418,7 @@ public class SemanticMatchExtensionsTests
     {
         var tree = SyntaxTree.Parse("abc");
         var node = tree.Root.Children.First();
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         Assert.True(query.Matches(node));
     }
@@ -428,7 +428,7 @@ public class SemanticMatchExtensionsTests
     {
         var tree = SyntaxTree.Parse("{block}");
         var node = tree.Root.Children.First();
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         Assert.False(query.Matches(node));
     }
@@ -437,7 +437,7 @@ public class SemanticMatchExtensionsTests
     public void SemanticNodeQuery_Select_FindsMultiple()
     {
         var tree = SyntaxTree.Parse("a b c");
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(tree).ToList();
         
@@ -448,7 +448,7 @@ public class SemanticMatchExtensionsTests
     public void SemanticNodeQuery_Select_FindsNested()
     {
         var tree = SyntaxTree.Parse("{a {b}}");
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(tree).ToList();
         
@@ -459,7 +459,7 @@ public class SemanticMatchExtensionsTests
     public void SemanticNodeQuery_Select_NoMatches_ReturnsEmpty()
     {
         var tree = SyntaxTree.Parse("{[()]}");
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(tree).ToList();
         
@@ -471,9 +471,9 @@ public class SemanticMatchExtensionsTests
     {
         var tree = SyntaxTree.Parse("{a} [b] (c)");
         
-        var braceQuery = new SemanticNodeQuery(NodeKind.BraceBlock);
-        var bracketQuery = new SemanticNodeQuery(NodeKind.BracketBlock);
-        var parenQuery = new SemanticNodeQuery(NodeKind.ParenBlock);
+        var braceQuery = new SyntaxNodeQuery(NodeKind.BraceBlock);
+        var bracketQuery = new SyntaxNodeQuery(NodeKind.BracketBlock);
+        var parenQuery = new SyntaxNodeQuery(NodeKind.ParenBlock);
         
         Assert.Single(braceQuery.Select(tree));
         Assert.Single(bracketQuery.Select(tree));
@@ -579,7 +579,7 @@ public class SemanticMatchExtensionsTests
     public void SemanticNodeQuery_EmptyTree()
     {
         var tree = SyntaxTree.Parse("");
-        var query = new SemanticNodeQuery(NodeKind.Ident);
+        var query = new SyntaxNodeQuery(NodeKind.Ident);
         
         var results = query.Select(tree).ToList();
         
@@ -609,28 +609,4 @@ public class SemanticMatchExtensionsTests
     }
 
     #endregion
-}
-
-/// <summary>
-/// Internal query class for testing - mirrors SemanticNodeQuery
-/// </summary>
-internal sealed record SemanticNodeQuery : NodeQuery
-{
-    private readonly NodeKind _kind;
-    
-    public SemanticNodeQuery(NodeKind kind) => _kind = kind;
-    
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
-    
-    public override IEnumerable<RedNode> Select(RedNode root)
-    {
-        var walker = new TreeWalker(root);
-        foreach (var node in walker.DescendantsAndSelf())
-        {
-            if (Matches(node))
-                yield return node;
-        }
-    }
-    
-    public override bool Matches(RedNode node) => node.Kind == _kind;
 }

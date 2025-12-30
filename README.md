@@ -61,7 +61,7 @@ var idents = tree.Leaves.Where(l => l.Kind == NodeKind.Ident);
 
 // Fluent mutations with undo support
 tree.CreateEditor()
-    .Replace(Query.Ident.WithText("foo"), "bar")
+    .Replace(Query.Ident("foo"), "bar")                                  // Concise named query
     .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
     .Commit();
 
@@ -77,11 +77,19 @@ The `Query` static class provides a fluent CSS-like selector API:
 ```csharp
 using TinyTokenizer.Ast;
 
-// By kind
-Query.Ident                    // All identifiers
-Query.Numeric                  // All numbers
-Query.String                   // All strings
-Query.Operator                 // All operators
+// Named queries (with specific text) - NEW concise API!
+Query.Ident("main")            // Identifier with text "main"
+Query.Symbol(".")              // Dot symbol
+Query.Operator("=>")           // Arrow operator
+Query.Numeric("42")            // Number literal "42"
+
+// Any-kind queries (match any of that kind)
+Query.AnyIdent                 // All identifiers
+Query.AnyNumeric               // All numbers
+Query.AnyString                // All strings
+Query.AnyOperator              // All operators
+Query.AnySymbol                // All symbols
+Query.AnyTaggedIdent           // All tagged identifiers
 
 // Blocks
 Query.BraceBlock               // All { } blocks
@@ -89,20 +97,36 @@ Query.BracketBlock             // All [ ] blocks
 Query.ParenBlock               // All ( ) blocks
 Query.AnyBlock                 // Any block type
 
-// Filters
-Query.Ident.WithText("foo")              // Exact match
-Query.Ident.WithTextContaining("test")   // Contains
-Query.Ident.WithTextStartingWith("_")    // Prefix
-Query.Ident.Where(n => n.Width > 5)      // Custom predicate
+// Filters on any-kind queries
+Query.AnyIdent.WithText("foo")              // Exact match (same as Query.Ident("foo"))
+Query.AnyIdent.WithTextContaining("test")   // Contains
+Query.AnyIdent.WithTextStartingWith("_")    // Prefix
+Query.AnyIdent.Where(n => n.Width > 5)      // Custom predicate
 
 // Pseudo-selectors
-Query.Ident.First()            // First match only
-Query.Ident.Last()             // Last match only
-Query.Ident.Nth(2)             // Third match (0-indexed)
+Query.AnyIdent.First()         // First match only
+Query.AnyIdent.Last()          // Last match only
+Query.AnyIdent.Nth(2)          // Third match (0-indexed)
 
 // Composition
-Query.Ident | Query.Numeric    // Union (OR)
-Query.Ident & Query.Leaf       // Intersection (AND)
+Query.AnyIdent | Query.AnyNumeric    // Union (OR)
+Query.AnyIdent & Query.Leaf          // Intersection (AND)
+
+// Sequence combinators
+Query.Sequence(Query.AnyIdent, Query.ParenBlock)  // Match ident then paren block
+Query.AnyIdent.Then(Query.ParenBlock)             // Fluent chaining
+
+// Repetition combinators
+Query.AnyIdent.Optional()        // Match 0 or 1
+Query.AnyIdent.ZeroOrMore()      // Match 0+
+Query.AnyIdent.OneOrMore()       // Match 1+
+Query.AnyIdent.Exactly(3)        // Match exactly 3
+Query.AnyIdent.Repeat(2, 5)      // Match 2 to 5
+Query.Any.Until(Query.Newline)   // Repeat until terminator (not consumed)
+
+// Lookahead assertions
+Query.AnyIdent.FollowedBy(Query.ParenBlock)     // Positive lookahead
+Query.Ident.NotFollowedBy(Query.ParenBlock)  // Negative lookahead
 ```
 
 ### Insertion Positions
@@ -117,6 +141,36 @@ Query.Ident.First().After()    // Insert after first ident
 // Inside blocks
 Query.BraceBlock.First().InnerStart()  // After opening {
 Query.BraceBlock.First().InnerEnd()    // Before closing }
+```
+
+### Named Node Queries (INamedNode)
+
+Syntax nodes that implement `INamedNode` can be queried by name:
+
+```csharp
+// Find functions by name
+Query.Syntax<GlslFunctionSyntax>().Named("main")
+Query.Syntax<GlslDirectiveSyntax>().Named("version")
+
+// Use with insertion positions
+tree.CreateEditor()
+    .Insert(Query.Syntax<MyFunctionSyntax>().Named("foo").Before(), "// comment\n")
+    .Commit();
+```
+
+### Block Container Queries (IBlockContainerNode)
+
+Syntax nodes that implement `IBlockContainerNode` expose named blocks for injection:
+
+```csharp
+// Insert into a named block of a syntax node
+var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+
+tree.CreateEditor()
+    .Insert(mainQuery.InnerStart("body"), "\n    // entry")   // Start of body block
+    .Insert(mainQuery.InnerEnd("body"), "\n    // exit")     // End of body block
+    .Insert(mainQuery.InnerStart("params"), "int x")        // Start of params block
+    .Commit();
 ```
 
 ### SyntaxEditor
@@ -349,12 +403,12 @@ var props = tree.Match<PropertyAccessNode>().ToList();
 
 ### Built-in Semantic Nodes
 
-| Type                 | Pattern                            | Example           |
-| -------------------- | ---------------------------------- | ----------------- |
-| `FunctionNameNode`   | `Ident(?=ParenBlock)`              | `foo` in `foo(x)` |
-| `ArrayAccessNode`    | `Ident + BracketBlock`             | `arr[0]`          |
-| `PropertyAccessNode` | `Ident + "." + Ident`              | `obj.prop`        |
-| `MethodCallNode`     | `Ident + "." + Ident + ParenBlock` | `obj.method(x)`   |
+| Type                 | Query Pattern                                                              | Example           |
+| -------------------- | -------------------------------------------------------------------------- | ----------------- |
+| `FunctionNameNode`   | `Query.Ident.FollowedBy(Query.ParenBlock)`                                 | `foo` in `foo(x)` |
+| `ArrayAccessNode`    | `Query.Sequence(Query.Ident, Query.BracketBlock)`                          | `arr[0]`          |
+| `PropertyAccessNode` | `Query.Sequence(Query.Ident, Query.Symbol, Query.Ident)`                   | `obj.prop`        |
+| `MethodCallNode`     | `Query.Sequence(Query.Ident, Query.Symbol, Query.Ident, Query.ParenBlock)` | `obj.method(x)`   |
 
 ### Custom Semantic Nodes
 
@@ -370,9 +424,9 @@ public sealed class LambdaNode : SemanticNode
     public RedBlock Body => Part<RedBlock>(2);
 }
 
-// 2. Create a definition with pattern
+// 2. Create a definition with pattern using Query combinators
 var lambdaDef = Semantic.Define<LambdaNode>("Lambda")
-    .Match(p => p.ParenBlock().Operator("=>").BraceBlock())
+    .Match(Query.Sequence(Query.ParenBlock, Query.Operator.WithText("=>"), Query.BraceBlock))
     .Create((match, kind) => new LambdaNode(match, kind))
     .WithPriority(15)
     .Build();
@@ -388,26 +442,36 @@ var tree = SyntaxTree.Parse("(x) => { return x; }", schema);
 var lambdas = tree.Match<LambdaNode>().ToList();
 ```
 
-### Pattern Builder Matchers
+### Query Combinators Reference
 
-| Matcher            | Description                   |
-| ------------------ | ----------------------------- |
-| `Ident()`          | Any identifier                |
-| `Ident("name")`    | Specific identifier           |
-| `Operator("==")`   | Specific operator             |
-| `Symbol(".")`      | Specific symbol               |
-| `ParenBlock()`     | `( )` block                   |
-| `BraceBlock()`     | `{ }` block                   |
-| `BracketBlock()`   | `[ ]` block                   |
-| `Numeric()`        | Number literal                |
-| `String()`         | String literal                |
-| `Any()`            | Any single node               |
-| `Sequence(...)`    | Match A then B then C         |
-| `OneOf(...)`       | Match A or B                  |
-| `Optional(...)`    | Match zero or one             |
-| `ZeroOrMore(...)`  | Match zero or more            |
-| `OneOrMore(...)`   | Match one or more             |
-| `LookaheadPattern` | Match A only if followed by B |
+| Combinator                      | Description                 | Example                                                 |
+| ------------------------------- | --------------------------- | ------------------------------------------------------- |
+| `Query.Ident("x")`              | Specific identifier         | `Query.Ident("main")`                                   |
+| `Query.Symbol(".")`             | Specific symbol             | `Query.Symbol(".")`                                     |
+| `Query.Operator("=>")`          | Specific operator           | `Query.Operator("=>")`                                  |
+| `Query.Numeric("42")`           | Specific number             | `Query.Numeric("3.14")`                                 |
+| `Query.AnyIdent`                | Any identifier              | `Query.AnyIdent`                                        |
+| `Query.AnySymbol`               | Any symbol                  | `Query.AnySymbol`                                       |
+| `Query.AnyOperator`             | Any operator                | `Query.AnyOperator`                                     |
+| `Query.AnyNumeric`              | Any number literal          | `Query.AnyNumeric`                                      |
+| `Query.AnyString`               | Any string literal          | `Query.AnyString`                                       |
+| `Query.AnyTaggedIdent`          | Any tagged identifier       | `Query.AnyTaggedIdent`                                  |
+| `Query.ParenBlock`              | `( )` block                 | `Query.ParenBlock`                                      |
+| `Query.BraceBlock`              | `{ }` block                 | `Query.BraceBlock`                                      |
+| `Query.BracketBlock`            | `[ ]` block                 | `Query.BracketBlock`                                    |
+| `Query.Any`                     | Any single node             | `Query.Any`                                             |
+| `Query.Newline`                 | Node preceded by newline    | `Query.Newline`                                         |
+| `Query.Sequence(...)`           | Match A then B then C       | `Query.Sequence(Query.AnyIdent, Query.ParenBlock)`      |
+| `a \| b`                        | Match A or B (union)        | `Query.AnyIdent \| Query.AnyNumeric`                    |
+| `.Optional()`                   | Match zero or one           | `Query.AnyOperator.Optional()`                          |
+| `.ZeroOrMore()`                 | Match zero or more          | `Query.AnyIdent.ZeroOrMore()`                           |
+| `.OneOrMore()`                  | Match one or more           | `Query.AnyIdent.OneOrMore()`                            |
+| `.Exactly(n)`                   | Match exactly n             | `Query.AnyIdent.Exactly(3)`                             |
+| `.Repeat(min, max)`             | Match min to max            | `Query.AnyIdent.Repeat(2, 5)`                           |
+| `.Until(terminator)`            | Repeat until terminator     | `Query.Any.Until(Query.Newline)`                        |
+| `.FollowedBy(q)`                | Positive lookahead          | `Query.AnyIdent.FollowedBy(Query.ParenBlock)`           |
+| `.NotFollowedBy(q)`             | Negative lookahead          | `Query.AnyIdent.NotFollowedBy(Query.ParenBlock)`        |
+| `.Then(q)`                      | Fluent sequence             | `Query.AnyIdent.Then(Query.ParenBlock)`                 |
 
 ## Async Tokenization
 

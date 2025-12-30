@@ -127,6 +127,7 @@ public class SyntaxTree
     /// <summary>
     /// Creates a syntax tree by parsing source text with a schema.
     /// The schema provides both tokenization settings and semantic definitions.
+    /// If the schema has syntax definitions, binding is automatically applied.
     /// </summary>
     /// <param name="source">The source text to parse.</param>
     /// <param name="schema">The schema for tokenization and semantic matching.</param>
@@ -135,18 +136,37 @@ public class SyntaxTree
         var opts = schema.ToTokenizerOptions();
         var lexer = new GreenLexer(opts);
         var tree = lexer.Parse(source);
-        return new SyntaxTree(tree.GreenRoot, schema);
+        var root = tree.GreenRoot;
+        
+        // Auto-bind if schema has syntax definitions
+        if (!schema.SyntaxDefinitions.IsEmpty)
+        {
+            var binder = new SyntaxBinder(schema);
+            root = binder.Bind(root);
+        }
+        
+        return new SyntaxTree(root, schema);
     }
     
     /// <summary>
     /// Creates a syntax tree by parsing source text with a schema.
+    /// If the schema has syntax definitions, binding is automatically applied.
     /// </summary>
     public static SyntaxTree Parse(ReadOnlyMemory<char> source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
         var lexer = new GreenLexer(opts);
         var tree = lexer.Parse(source);
-        return new SyntaxTree(tree.GreenRoot, schema);
+        var root = tree.GreenRoot;
+        
+        // Auto-bind if schema has syntax definitions
+        if (!schema.SyntaxDefinitions.IsEmpty)
+        {
+            var binder = new SyntaxBinder(schema);
+            root = binder.Bind(root);
+        }
+        
+        return new SyntaxTree(root, schema);
     }
     
     /// <summary>
@@ -173,6 +193,74 @@ public class SyntaxTree
     /// Creates an empty syntax tree.
     /// </summary>
     public static SyntaxTree Empty => new(new GreenList(ImmutableArray<GreenNode>.Empty));
+    
+    /// <summary>
+    /// Creates a syntax tree by parsing source text and applying syntax binding.
+    /// This parses the source, then transforms the tree to recognize syntax patterns
+    /// defined in the schema (e.g., function calls, property access).
+    /// </summary>
+    /// <param name="source">The source text to parse.</param>
+    /// <param name="schema">The schema for tokenization and syntax definitions.</param>
+    public static SyntaxTree ParseAndBind(string source, Schema schema)
+    {
+        var opts = schema.ToTokenizerOptions();
+        var lexer = new GreenLexer(opts);
+        var tree = lexer.Parse(source);
+        
+        // Apply syntax binding
+        var binder = new SyntaxBinder(schema);
+        var boundRoot = binder.Bind(tree.GreenRoot);
+        
+        return new SyntaxTree(boundRoot, schema);
+    }
+    
+    /// <summary>
+    /// Creates a syntax tree by parsing source text and applying syntax binding.
+    /// </summary>
+    public static SyntaxTree ParseAndBind(ReadOnlyMemory<char> source, Schema schema)
+    {
+        var opts = schema.ToTokenizerOptions();
+        var lexer = new GreenLexer(opts);
+        var tree = lexer.Parse(source);
+        
+        // Apply syntax binding
+        var binder = new SyntaxBinder(schema);
+        var boundRoot = binder.Bind(tree.GreenRoot);
+        
+        return new SyntaxTree(boundRoot, schema);
+    }
+    
+    #endregion
+    
+    #region Syntax Binding
+    
+    /// <summary>
+    /// Applies syntax binding to this tree, recognizing syntax patterns and
+    /// wrapping matched subtrees in typed syntax nodes.
+    /// Requires a schema with syntax definitions to be attached.
+    /// </summary>
+    /// <returns>A new syntax tree with syntax bindings applied.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no schema is attached.</exception>
+    public SyntaxTree Bind()
+    {
+        if (Schema == null)
+            throw new InvalidOperationException(
+                "No schema attached. Use SyntaxTree.Parse(source, schema) or provide schema parameter.");
+        
+        return Bind(Schema);
+    }
+    
+    /// <summary>
+    /// Applies syntax binding to this tree using the specified schema.
+    /// </summary>
+    /// <param name="schema">The schema containing syntax definitions.</param>
+    /// <returns>A new syntax tree with syntax bindings applied.</returns>
+    public SyntaxTree Bind(Schema schema)
+    {
+        var binder = new SyntaxBinder(schema);
+        var boundRoot = binder.Bind(_greenRoot);
+        return new SyntaxTree(boundRoot, schema);
+    }
     
     #endregion
     
@@ -276,6 +364,13 @@ public class SyntaxTree
     #endregion
     
     #region Query
+    
+    /// <summary>
+    /// Selects all nodes matching the query from this tree.
+    /// </summary>
+    /// <param name="query">The query to execute.</param>
+    /// <returns>All matching nodes in document order.</returns>
+    public IEnumerable<RedNode> Select(INodeQuery query) => query.Select(this);
     
     /// <summary>
     /// Finds the deepest node containing the specified position.

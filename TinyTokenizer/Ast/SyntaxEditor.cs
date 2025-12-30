@@ -13,8 +13,8 @@ namespace TinyTokenizer.Ast;
 /// 
 /// tree.CreateEditor()
 ///     .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
-///     .Replace(Query.Numeric.First(), "42")
-///     .Remove(Query.Ident.WithText("unused"))
+///     .Replace(Query.AnyNumeric.First(), "42")
+///     .Remove(Query.AnyIdent.WithText("unused"))
 ///     .Commit();
 /// </code>
 /// </example>
@@ -55,9 +55,9 @@ public sealed class SyntaxEditor
     {
         var positions = query.ResolvePositions(_tree).ToList();
         
-        foreach (var (parentPath, childIndex, position) in positions)
+        foreach (var pos in positions)
         {
-            _edits.Add(new InsertEdit(parentPath, childIndex, text, position) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -70,9 +70,9 @@ public sealed class SyntaxEditor
     {
         var positions = query.ResolvePositions(_tree).ToList();
         
-        foreach (var (parentPath, childIndex, position) in positions)
+        foreach (var pos in positions)
         {
-            _edits.Add(new InsertNodesEdit(parentPath, childIndex, nodes, position) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -85,7 +85,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues removal of all nodes matching the query.
     /// </summary>
-    public SyntaxEditor Remove(NodeQuery query)
+    public SyntaxEditor Remove(INodeQuery query)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -105,7 +105,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query with new text.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, string text)
+    public SyntaxEditor Replace(INodeQuery query, string text)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -122,7 +122,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query using a transformer function.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(INodeQuery query, Func<RedNode, string> replacer)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -140,7 +140,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query with pre-built nodes.
     /// </summary>
-    public SyntaxEditor Replace(NodeQuery query, ImmutableArray<GreenNode> nodes)
+    public SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
     {
         var matchedNodes = query.Select(_tree).ToList();
         
@@ -240,49 +240,45 @@ internal abstract class PendingEdit
 
 internal sealed class InsertEdit : PendingEdit
 {
-    private readonly NodePath _parentPath;
-    private readonly int _childIndex;
+    private readonly InsertionPosition _insertPos;
     private readonly string _text;
-    private readonly int _position;
     
-    public InsertEdit(NodePath parentPath, int childIndex, string text, int position)
+    public InsertEdit(InsertionPosition insertPos, string text)
     {
-        _parentPath = parentPath;
-        _childIndex = childIndex;
+        _insertPos = insertPos;
         _text = text;
-        _position = position;
     }
     
-    public override int Position => _position;
+    public override int Position => _insertPos.Position;
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
         var lexer = new GreenLexer(options);
         var nodes = lexer.ParseToGreenNodes(_text);
-        return builder.InsertAt(_parentPath.ToArray(), _childIndex, nodes);
+        
+        // Roslyn-style insertion: insert content before the target node's leading trivia.
+        // Both inserted content and target keep their own trivia - no transfer occurs.
+        // This means "insert X before Y" places X before Y's leading whitespace/comments.
+        return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, nodes);
     }
 }
 
 internal sealed class InsertNodesEdit : PendingEdit
 {
-    private readonly NodePath _parentPath;
-    private readonly int _childIndex;
+    private readonly InsertionPosition _insertPos;
     private readonly ImmutableArray<GreenNode> _nodes;
-    private readonly int _position;
     
-    public InsertNodesEdit(NodePath parentPath, int childIndex, ImmutableArray<GreenNode> nodes, int position)
+    public InsertNodesEdit(InsertionPosition insertPos, ImmutableArray<GreenNode> nodes)
     {
-        _parentPath = parentPath;
-        _childIndex = childIndex;
+        _insertPos = insertPos;
         _nodes = nodes;
-        _position = position;
     }
     
-    public override int Position => _position;
+    public override int Position => _insertPos.Position;
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
-        return builder.InsertAt(_parentPath.ToArray(), _childIndex, _nodes);
+        return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, _nodes);
     }
 }
 

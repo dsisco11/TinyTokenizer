@@ -71,7 +71,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("hello");
         var node = tree.Root.Children.First();
-        var pattern = new QueryPattern(Q.Ident);
+        var pattern = new QueryPattern(Q.AnyIdent);
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.True(match.IsSuccess);
@@ -84,7 +84,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("{block}");
         var block = tree.Root.Children.First();
-        var pattern = new QueryPattern(Q.Ident);
+        var pattern = new QueryPattern(Q.AnyIdent);
         
         Assert.False(pattern.TryMatch(block, out var match));
         Assert.False(match.IsSuccess);
@@ -93,7 +93,7 @@ public class NodePatternTests
     [Fact]
     public void QueryPattern_Description_ReturnsQueryString()
     {
-        var pattern = new QueryPattern(Q.Ident);
+        var pattern = new QueryPattern(Q.AnyIdent);
         
         Assert.NotNull(pattern.Description);
         Assert.NotEmpty(pattern.Description);
@@ -104,7 +104,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("foo bar");
         var foo = tree.Root.Children.First();
-        var pattern = new QueryPattern(Q.Ident.WithText("foo"));
+        var pattern = new QueryPattern(Q.AnyIdent.WithText("foo"));
         
         Assert.True(pattern.TryMatch(foo, out _));
     }
@@ -114,7 +114,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("foo");
         var node = tree.Root.Children.First();
-        var pattern = new QueryPattern(Q.Ident.WithText("bar"));
+        var pattern = new QueryPattern(Q.AnyIdent.WithText("bar"));
         
         Assert.False(pattern.TryMatch(node, out _));
     }
@@ -128,7 +128,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a.b");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.Sequence(Q.Ident, Q.Symbol, Q.Ident);
+        var pattern = NodePattern.Sequence(Q.AnyIdent, Q.AnySymbol, Q.AnyIdent);
         
         Assert.True(pattern.TryMatch(first, out var match));
         Assert.True(match.IsSuccess);
@@ -142,7 +142,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("a b");
         var first = tree.Root.Children.First();
         // Looking for Ident + Symbol + Ident, but we have Ident + Ident
-        var pattern = NodePattern.Sequence(Q.Ident, Q.Symbol, Q.Ident);
+        var pattern = NodePattern.Sequence(Q.AnyIdent, Q.AnySymbol, Q.AnyIdent);
         
         Assert.False(pattern.TryMatch(first, out var match));
         Assert.False(match.IsSuccess);
@@ -153,7 +153,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.Sequence(Q.Ident, Q.Ident);
+        var pattern = NodePattern.Sequence(Q.AnyIdent, Q.AnyIdent);
         
         Assert.False(pattern.TryMatch(first, out _));
     }
@@ -164,9 +164,9 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("a + b");
         var first = tree.Root.Children.First();
         var pattern = NodePattern.Sequence(
-            new QueryPattern(Q.Ident),
-            new QueryPattern(Q.Operator),
-            new QueryPattern(Q.Ident));
+            new QueryPattern(Q.AnyIdent),
+            new QueryPattern(Q.AnyOperator),
+            new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(first, out var match));
         Assert.Equal(3, match.Parts.Length);
@@ -175,7 +175,7 @@ public class NodePatternTests
     [Fact]
     public void SequencePattern_Description_JoinsParts()
     {
-        var pattern = NodePattern.Sequence(Q.Ident, Q.Operator);
+        var pattern = NodePattern.Sequence(Q.AnyIdent, Q.AnyOperator);
         
         Assert.Contains(" ", pattern.Description);
     }
@@ -190,8 +190,8 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("123");
         var node = tree.Root.Children.First();
         var pattern = NodePattern.OneOf(
-            new QueryPattern(Q.Numeric),
-            new QueryPattern(Q.Ident));
+            new QueryPattern(Q.AnyNumeric),
+            new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.True(match.IsSuccess);
@@ -203,8 +203,8 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("abc");
         var node = tree.Root.Children.First();
         var pattern = NodePattern.OneOf(
-            new QueryPattern(Q.Numeric),
-            new QueryPattern(Q.Ident));
+            new QueryPattern(Q.AnyNumeric),
+            new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.True(match.IsSuccess);
@@ -216,8 +216,8 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("{block}");
         var node = tree.Root.Children.First();
         var pattern = NodePattern.OneOf(
-            new QueryPattern(Q.Numeric),
-            new QueryPattern(Q.Ident));
+            new QueryPattern(Q.AnyNumeric),
+            new QueryPattern(Q.AnyIdent));
         
         Assert.False(pattern.TryMatch(node, out _));
     }
@@ -226,8 +226,8 @@ public class NodePatternTests
     public void AlternativePattern_Description_ShowsAlternatives()
     {
         var pattern = NodePattern.OneOf(
-            new QueryPattern(Q.Ident),
-            new QueryPattern(Q.Numeric));
+            new QueryPattern(Q.AnyIdent),
+            new QueryPattern(Q.AnyNumeric));
         
         Assert.Contains("|", pattern.Description);
         Assert.Contains("(", pattern.Description);
@@ -242,7 +242,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("abc");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.Optional(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.Optional(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.True(match.IsSuccess);
@@ -255,7 +255,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("{block}");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.Optional(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.Optional(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Empty(match.Parts);
@@ -267,7 +267,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.Optional(Q.Ident);
+        var pattern = NodePattern.Optional(Q.AnyIdent);
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Single(match.Parts);
@@ -276,7 +276,7 @@ public class NodePatternTests
     [Fact]
     public void OptionalPattern_Description_ShowsQuestionMark()
     {
-        var pattern = NodePattern.Optional(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.Optional(new QueryPattern(Q.AnyIdent));
         
         Assert.Contains("?", pattern.Description);
     }
@@ -290,7 +290,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("{block}");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Empty(match.Parts);
@@ -302,7 +302,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a b c");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(first, out var match));
         Assert.True(match.Parts.Length >= 3);
@@ -313,7 +313,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("{block}");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.False(pattern.TryMatch(node, out _));
     }
@@ -323,7 +323,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("single");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Single(match.Parts);
@@ -334,7 +334,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a b c d");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(first, out var match));
         Assert.True(match.Parts.Length >= 4);
@@ -345,7 +345,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.Repeat(new QueryPattern(Q.Ident), 2, 5);
+        var pattern = NodePattern.Repeat(new QueryPattern(Q.AnyIdent), 2, 5);
         
         Assert.False(pattern.TryMatch(node, out _));
     }
@@ -355,7 +355,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a b c d e f g");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.Repeat(new QueryPattern(Q.Ident), 1, 3);
+        var pattern = NodePattern.Repeat(new QueryPattern(Q.AnyIdent), 1, 3);
         
         Assert.True(pattern.TryMatch(first, out var match));
         Assert.True(match.Parts.Length <= 3);
@@ -364,7 +364,7 @@ public class NodePatternTests
     [Fact]
     public void RepeatPattern_Description_ZeroOrMore_ShowsStar()
     {
-        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.Contains("*", pattern.Description);
     }
@@ -372,7 +372,7 @@ public class NodePatternTests
     [Fact]
     public void RepeatPattern_Description_OneOrMore_ShowsPlus()
     {
-        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.OneOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.Contains("+", pattern.Description);
     }
@@ -380,7 +380,7 @@ public class NodePatternTests
     [Fact]
     public void RepeatPattern_Description_WithBounds_ShowsBraces()
     {
-        var pattern = NodePattern.Repeat(new QueryPattern(Q.Ident), 2, 5);
+        var pattern = NodePattern.Repeat(new QueryPattern(Q.AnyIdent), 2, 5);
         
         Assert.Contains("{2,5}", pattern.Description);
     }
@@ -395,7 +395,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("func(x)");
         var first = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock));
         
         Assert.True(pattern.TryMatch(first, out var match));
@@ -410,7 +410,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("foo bar");
         var first = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock));
         
         Assert.False(pattern.TryMatch(first, out _));
@@ -422,7 +422,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("foo bar");
         var first = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock),
             positive: false);
         
@@ -436,7 +436,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("func(x)");
         var first = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock),
             positive: false);
         
@@ -449,7 +449,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("{block}(x)");
         var first = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock));
         
         Assert.False(pattern.TryMatch(first, out _));
@@ -459,7 +459,7 @@ public class NodePatternTests
     public void LookaheadPattern_PositiveDescription_ShowsLookahead()
     {
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock));
         
         Assert.Contains("(?=", pattern.Description);
@@ -469,7 +469,7 @@ public class NodePatternTests
     public void LookaheadPattern_NegativeDescription_ShowsNegativeLookahead()
     {
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock),
             positive: false);
         
@@ -482,7 +482,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("alone");
         var node = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock));
         
         Assert.False(pattern.TryMatch(node, out _));
@@ -494,7 +494,7 @@ public class NodePatternTests
         var tree = SyntaxTree.Parse("alone");
         var node = tree.Root.Children.First();
         var pattern = new LookaheadPattern(
-            new QueryPattern(Q.Ident),
+            new QueryPattern(Q.AnyIdent),
             new QueryPattern(Q.ParenBlock),
             positive: false);
         
@@ -633,7 +633,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var pattern = new PatternBuilder().MatchQuery(Q.Ident).Build();
+        var pattern = new PatternBuilder().MatchQuery(Q.AnyIdent).Build();
         
         Assert.True(pattern.TryMatch(node, out _));
     }
@@ -643,7 +643,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var customPattern = new QueryPattern(Q.Ident);
+        var customPattern = new QueryPattern(Q.AnyIdent);
         var pattern = new PatternBuilder().Pattern(customPattern).Build();
         
         Assert.True(pattern.TryMatch(node, out _));
@@ -819,7 +819,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var pattern = new SequencePattern(Array.Empty<NodeQuery>());
+        var pattern = new SequencePattern(Array.Empty<INodeQuery>());
         
         Assert.True(pattern.TryMatch(node, out var match));
         Assert.Empty(match.Parts);
@@ -830,7 +830,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("test");
         var node = tree.Root.Children.First();
-        var pattern = NodePattern.OneOf(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.OneOf(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(node, out _));
     }
@@ -840,7 +840,7 @@ public class NodePatternTests
     {
         var tree = SyntaxTree.Parse("a b {c}");
         var first = tree.Root.Children.First();
-        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.Ident));
+        var pattern = NodePattern.ZeroOrMore(new QueryPattern(Q.AnyIdent));
         
         Assert.True(pattern.TryMatch(first, out var match));
         // Should stop before the block

@@ -8,6 +8,7 @@ namespace TinyTokenizer.Ast;
 /// <summary>
 /// Result of a successful pattern match, capturing matched nodes.
 /// </summary>
+[Obsolete("Use INodeQuery.TryMatch with out int consumedCount instead")]
 public readonly struct NodeMatch
 {
     /// <summary>The starting position of the match in source text.</summary>
@@ -37,6 +38,10 @@ public readonly struct NodeMatch
 /// Base class for patterns that match sequences of sibling nodes in the AST.
 /// Patterns are tree-aware and operate on RedNode siblings within a parent.
 /// </summary>
+/// <remarks>
+/// DEPRECATED: Use Query combinators instead (Query.Sequence, .Optional(), .Until(), etc.)
+/// </remarks>
+[Obsolete("Use Query combinators instead: Query.Sequence(), .Optional(), .Until(), .Repeat(), .FollowedBy()")]
 public abstract record NodePattern
 {
     /// <summary>
@@ -48,6 +53,16 @@ public abstract record NodePattern
     public abstract bool TryMatch(RedNode node, out NodeMatch match);
     
     /// <summary>
+    /// Attempts to match this pattern against green nodes starting at the given index.
+    /// Used for efficient pattern matching without creating red trees.
+    /// </summary>
+    /// <param name="siblings">The sibling green nodes to match against.</param>
+    /// <param name="startIndex">Index of the first sibling to try matching.</param>
+    /// <param name="consumedCount">Number of siblings consumed if matched.</param>
+    /// <returns>True if the pattern matched.</returns>
+    public abstract bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount);
+    
+    /// <summary>
     /// Gets a description of this pattern for diagnostics.
     /// </summary>
     public abstract string Description { get; }
@@ -55,7 +70,7 @@ public abstract record NodePattern
     #region Combinators
     
     /// <summary>Creates a sequence pattern from multiple queries.</summary>
-    public static SequencePattern Sequence(params NodeQuery[] parts) => new(parts);
+    public static SequencePattern Sequence(params INodeQuery[] parts) => new(parts);
     
     /// <summary>Creates a sequence pattern from multiple patterns.</summary>
     public static SequencePattern Sequence(params NodePattern[] parts) => new(parts);
@@ -67,7 +82,7 @@ public abstract record NodePattern
     public static OptionalPattern Optional(NodePattern inner) => new(inner);
     
     /// <summary>Creates an optional pattern from a query.</summary>
-    public static OptionalPattern Optional(NodeQuery query) => new(new QueryPattern(query));
+    public static OptionalPattern Optional(INodeQuery query) => new(new QueryPattern(query));
     
     /// <summary>Creates a repetition pattern (matches 0 or more times).</summary>
     public static RepeatPattern ZeroOrMore(NodePattern inner) => new(inner, 0, int.MaxValue);
@@ -77,6 +92,22 @@ public abstract record NodePattern
     
     /// <summary>Creates a repetition pattern with bounds.</summary>
     public static RepeatPattern Repeat(NodePattern inner, int min, int max) => new(inner, min, max);
+    
+    /// <summary>
+    /// Creates a repetition pattern that repeats until a terminator is encountered.
+    /// The terminator is not consumed (lookahead-style matching).
+    /// </summary>
+    /// <param name="inner">The pattern to repeat.</param>
+    /// <param name="terminator">The pattern that stops repetition (not consumed).</param>
+    /// <returns>A pattern that matches zero or more occurrences of inner, stopping before terminator.</returns>
+    public static RepeatUntilPattern RepeatUntil(NodePattern inner, NodePattern terminator) => 
+        new(inner, terminator);
+    
+    /// <summary>
+    /// Creates a repetition pattern from a query that repeats until a terminator.
+    /// </summary>
+    public static RepeatUntilPattern RepeatUntil(INodeQuery inner, INodeQuery terminator) => 
+        new(new QueryPattern(inner), new QueryPattern(terminator));
     
     #endregion
 }
@@ -90,9 +121,12 @@ public abstract record NodePattern
 /// </summary>
 public sealed record QueryPattern : NodePattern
 {
-    private readonly NodeQuery _query;
+    private readonly INodeQuery _query;
     
-    public QueryPattern(NodeQuery query) => _query = query;
+    /// <summary>Gets the inner query.</summary>
+    internal INodeQuery InnerQuery => _query;
+    
+    public QueryPattern(INodeQuery query) => _query = query;
     
     public override bool TryMatch(RedNode node, out NodeMatch match)
     {
@@ -111,6 +145,70 @@ public sealed record QueryPattern : NodePattern
         return false;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (startIndex < siblings.Count && _query.MatchesGreen(siblings[startIndex]))
+        {
+            consumedCount = 1;
+            return true;
+        }
+        
+        consumedCount = 0;
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if the query matches the trivia of a red node.
+    /// Used by RepeatUntilPattern for newline detection.
+    /// </summary>
+    internal bool MatchesTrivia(RedNode node)
+    {
+        if (_query is not NewlineNodeQuery)
+            return false;
+        
+        // Check leading trivia for newlines
+        var trivia = node.Green switch
+        {
+            GreenLeaf leaf => leaf.LeadingTrivia,
+            GreenBlock block => block.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in trivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if the query matches the trivia of a green node.
+    /// Used by RepeatUntilPattern for newline detection.
+    /// </summary>
+    internal bool MatchesTriviaGreen(GreenNode node)
+    {
+        if (_query is not NewlineNodeQuery)
+            return false;
+        
+        // Check leading trivia for newlines
+        var trivia = node switch
+        {
+            GreenLeaf leaf => leaf.LeadingTrivia,
+            GreenBlock block => block.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in trivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        return false;
+    }
+    
     public override string Description => _query.ToString() ?? "Query";
 }
 
@@ -126,7 +224,10 @@ public sealed record SequencePattern : NodePattern
 {
     private readonly ImmutableArray<NodePattern> _parts;
     
-    public SequencePattern(IEnumerable<NodeQuery> queries)
+    /// <summary>Gets the parts of this sequence.</summary>
+    internal ImmutableArray<NodePattern> Parts => _parts;
+    
+    public SequencePattern(IEnumerable<INodeQuery> queries)
     {
         _parts = queries.Select(q => (NodePattern)new QueryPattern(q)).ToImmutableArray();
     }
@@ -175,6 +276,33 @@ public sealed record SequencePattern : NodePattern
         return true;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int totalConsumed = 0;
+        
+        foreach (var pattern in _parts)
+        {
+            if (currentIndex >= siblings.Count)
+            {
+                consumedCount = 0;
+                return false;
+            }
+            
+            if (!pattern.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+            {
+                consumedCount = 0;
+                return false;
+            }
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+        }
+        
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
     public override string Description => 
         string.Join(" ", _parts.Select(p => p.Description));
 }
@@ -190,6 +318,9 @@ public sealed record AlternativePattern : NodePattern
 {
     private readonly ImmutableArray<NodePattern> _alternatives;
     
+    /// <summary>Gets the alternative patterns.</summary>
+    internal ImmutableArray<NodePattern> Alternatives => _alternatives;
+    
     public AlternativePattern(IEnumerable<NodePattern> alternatives)
     {
         _alternatives = alternatives.ToImmutableArray();
@@ -204,6 +335,18 @@ public sealed record AlternativePattern : NodePattern
         }
         
         match = NodeMatch.Empty;
+        return false;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        foreach (var alt in _alternatives)
+        {
+            if (alt.TryMatchGreen(siblings, startIndex, out consumedCount))
+                return true;
+        }
+        
+        consumedCount = 0;
         return false;
     }
     
@@ -223,6 +366,9 @@ public sealed record OptionalPattern : NodePattern
 {
     private readonly NodePattern _inner;
     
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
     public OptionalPattern(NodePattern inner) => _inner = inner;
     
     public override bool TryMatch(RedNode node, out NodeMatch match)
@@ -237,6 +383,17 @@ public sealed record OptionalPattern : NodePattern
             Parts = ImmutableArray<RedNode>.Empty,
             ConsumedCount = 0
         };
+        return true;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        // Try to match inner pattern
+        if (_inner.TryMatchGreen(siblings, startIndex, out consumedCount))
+            return true;
+        
+        // Optional always succeeds with 0 consumed
+        consumedCount = 0;
         return true;
     }
     
@@ -255,6 +412,15 @@ public sealed record RepeatPattern : NodePattern
     private readonly NodePattern _inner;
     private readonly int _min;
     private readonly int _max;
+    
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
+    /// <summary>Gets the minimum repetitions.</summary>
+    internal int Min => _min;
+    
+    /// <summary>Gets the maximum repetitions.</summary>
+    internal int Max => _max;
     
     public RepeatPattern(NodePattern inner, int min, int max)
     {
@@ -301,11 +467,174 @@ public sealed record RepeatPattern : NodePattern
         return true;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int count = 0;
+        int totalConsumed = 0;
+        
+        while (currentIndex < siblings.Count && count < _max)
+        {
+            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+                break;
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+            count++;
+        }
+        
+        if (count < _min)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
     public override string Description => _min == 0 && _max == int.MaxValue
         ? $"{_inner.Description}*"
         : _min == 1 && _max == int.MaxValue
             ? $"{_inner.Description}+"
             : $"{_inner.Description}{{{_min},{_max}}}";
+}
+
+#endregion
+
+#region RepeatUntil Pattern
+
+/// <summary>
+/// Pattern that repeats the inner pattern until a terminator pattern is encountered.
+/// The terminator is NOT consumed (lookahead-style matching).
+/// Matches zero or more occurrences of the inner pattern.
+/// </summary>
+/// <remarks>
+/// This is useful for patterns like "match everything until newline" where you want to
+/// stop before the terminator without consuming it:
+/// <code>
+/// NodePattern.RepeatUntil(Query.Any, Query.Newline)
+/// </code>
+/// </remarks>
+public sealed record RepeatUntilPattern : NodePattern
+{
+    private readonly NodePattern _inner;
+    private readonly NodePattern _terminator;
+    
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
+    /// <summary>Gets the terminator pattern.</summary>
+    internal NodePattern Terminator => _terminator;
+    
+    /// <summary>
+    /// Creates a repeat-until pattern.
+    /// </summary>
+    /// <param name="inner">The pattern to repeat.</param>
+    /// <param name="terminator">The pattern that stops repetition (not consumed).</param>
+    public RepeatUntilPattern(NodePattern inner, NodePattern terminator)
+    {
+        _inner = inner;
+        _terminator = terminator;
+    }
+    
+    public override bool TryMatch(RedNode node, out NodeMatch match)
+    {
+        var parts = ImmutableArray.CreateBuilder<RedNode>();
+        var current = node;
+        int totalConsumed = 0;
+        
+        while (current != null)
+        {
+            // First, check if terminator matches (lookahead - don't consume)
+            if (TerminatorMatches(current))
+                break;
+            
+            // Try to match inner pattern
+            if (!_inner.TryMatch(current, out var partMatch))
+                break;
+            
+            parts.AddRange(partMatch.Parts);
+            totalConsumed += partMatch.ConsumedCount;
+            
+            // Advance to next sibling
+            for (int i = 0; i < partMatch.ConsumedCount; i++)
+            {
+                current = current?.NextSibling();
+            }
+        }
+        
+        // RepeatUntil always succeeds (can match zero items)
+        match = new NodeMatch
+        {
+            Position = node?.Position ?? 0,
+            Parts = parts.ToImmutable(),
+            ConsumedCount = totalConsumed
+        };
+        return true;
+    }
+    
+    /// <summary>
+    /// Checks if the terminator matches, including checking trivia for newlines.
+    /// </summary>
+    private bool TerminatorMatches(RedNode node)
+    {
+        // Direct match on the node
+        if (_terminator.TryMatch(node, out _))
+            return true;
+        
+        // For newline terminators, also check leading trivia
+        if (_terminator is QueryPattern qp && qp.MatchesTrivia(node))
+            return true;
+        
+        return false;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int totalConsumed = 0;
+        
+        while (currentIndex < siblings.Count)
+        {
+            // First, check if terminator matches (lookahead - don't consume)
+            if (TerminatorMatchesGreen(siblings, currentIndex))
+                break;
+            
+            // Try to match inner pattern
+            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+                break;
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+        }
+        
+        // RepeatUntil always succeeds (can match zero items)
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
+    /// <summary>
+    /// Checks if the terminator matches at the green node level, including trivia.
+    /// </summary>
+    private bool TerminatorMatchesGreen(IReadOnlyList<GreenNode> siblings, int index)
+    {
+        // Direct match
+        if (_terminator.TryMatchGreen(siblings, index, out _))
+            return true;
+        
+        // For newline terminators, check leading trivia of the current node
+        if (_terminator is QueryPattern qp)
+        {
+            var greenNode = siblings[index];
+            if (qp.MatchesTriviaGreen(greenNode))
+                return true;
+        }
+        
+        return false;
+    }
+    
+    public override string Description => $"{_inner.Description}*(?={_terminator.Description})";
 }
 
 #endregion
@@ -321,6 +650,15 @@ public sealed record LookaheadPattern : NodePattern
     private readonly NodePattern _match;
     private readonly NodePattern _lookahead;
     private readonly bool _positive;
+    
+    /// <summary>Gets the match pattern.</summary>
+    internal NodePattern Match => _match;
+    
+    /// <summary>Gets the lookahead pattern.</summary>
+    internal NodePattern Lookahead => _lookahead;
+    
+    /// <summary>Gets whether this is positive lookahead.</summary>
+    internal bool IsPositive => _positive;
     
     /// <summary>
     /// Creates a positive lookahead pattern.
@@ -364,6 +702,31 @@ public sealed record LookaheadPattern : NodePattern
         return true;
     }
     
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        // First, try to match the primary pattern
+        if (!_match.TryMatchGreen(siblings, startIndex, out var primaryConsumed))
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        // Check lookahead at the position after primary match
+        int lookaheadIndex = startIndex + primaryConsumed;
+        bool lookaheadMatches = lookaheadIndex < siblings.Count && 
+            _lookahead.TryMatchGreen(siblings, lookaheadIndex, out _);
+        
+        if (lookaheadMatches != _positive)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        // Return only the primary consumed count (lookahead not consumed)
+        consumedCount = primaryConsumed;
+        return true;
+    }
+    
     public override string Description => _positive
         ? $"{_match.Description}(?={_lookahead.Description})"
         : $"{_match.Description}(?!{_lookahead.Description})";
@@ -383,56 +746,56 @@ public sealed class PatternBuilder
     /// <summary>Adds a pattern that matches any identifier.</summary>
     public PatternBuilder Ident()
     {
-        _parts.Add(new QueryPattern(Q.Ident));
+        _parts.Add(new QueryPattern(Q.AnyIdent));
         return this;
     }
     
     /// <summary>Adds a pattern that matches an identifier with exact text.</summary>
     public PatternBuilder Ident(string text)
     {
-        _parts.Add(new QueryPattern(Q.Ident.WithText(text)));
+        _parts.Add(new QueryPattern(Q.Ident(text)));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any numeric literal.</summary>
     public PatternBuilder Numeric()
     {
-        _parts.Add(new QueryPattern(Q.Numeric));
+        _parts.Add(new QueryPattern(Q.AnyNumeric));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any string literal.</summary>
     public PatternBuilder String()
     {
-        _parts.Add(new QueryPattern(Q.String));
+        _parts.Add(new QueryPattern(Q.AnyString));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any operator.</summary>
     public PatternBuilder Operator()
     {
-        _parts.Add(new QueryPattern(Q.Operator));
+        _parts.Add(new QueryPattern(Q.AnyOperator));
         return this;
     }
     
     /// <summary>Adds a pattern that matches a specific operator.</summary>
     public PatternBuilder Operator(string op)
     {
-        _parts.Add(new QueryPattern(Q.Operator.WithText(op)));
+        _parts.Add(new QueryPattern(Q.Operator(op)));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any symbol.</summary>
     public PatternBuilder Symbol()
     {
-        _parts.Add(new QueryPattern(Q.Symbol));
+        _parts.Add(new QueryPattern(Q.AnySymbol));
         return this;
     }
     
     /// <summary>Adds a pattern that matches a specific symbol.</summary>
     public PatternBuilder Symbol(string sym)
     {
-        _parts.Add(new QueryPattern(Q.Symbol.WithText(sym)));
+        _parts.Add(new QueryPattern(Q.Symbol(sym)));
         return this;
     }
     
@@ -465,7 +828,7 @@ public sealed class PatternBuilder
     }
     
     /// <summary>Adds a custom query pattern.</summary>
-    public PatternBuilder MatchQuery(NodeQuery query)
+    public PatternBuilder MatchQuery(INodeQuery query)
     {
         _parts.Add(new QueryPattern(query));
         return this;
@@ -500,12 +863,136 @@ public sealed class PatternBuilder
         return this;
     }
     
+    /// <summary>
+    /// Wraps all current patterns in a RepeatUntil pattern that stops before the terminator.
+    /// The terminator is not consumed.
+    /// </summary>
+    /// <param name="terminator">Builder for the terminator pattern.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// // Match tokens until newline (for directive-style lines)
+    /// .Any().RepeatUntil(t => t.Newline())
+    /// </code>
+    /// </example>
+    public PatternBuilder RepeatUntil(Action<PatternBuilder> terminator)
+    {
+        if (_parts.Count == 0)
+            throw new InvalidOperationException("RepeatUntil requires at least one pattern to repeat.");
+        
+        // Build the inner pattern from accumulated parts
+        var innerPattern = _parts.Count == 1 ? _parts[0] : new SequencePattern(_parts);
+        _parts.Clear();
+        
+        // Build terminator pattern
+        var terminatorBuilder = new PatternBuilder();
+        terminator(terminatorBuilder);
+        var terminatorPattern = terminatorBuilder.Build();
+        
+        // Add the repeat-until pattern
+        _parts.Add(new RepeatUntilPattern(innerPattern, terminatorPattern));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a RepeatUntil pattern that repeats a specified inner pattern until a terminator.
+    /// Unlike the other RepeatUntil overload, this adds a NEW pattern without affecting accumulated patterns.
+    /// </summary>
+    /// <param name="inner">Builder for the pattern to repeat.</param>
+    /// <param name="terminator">Builder for the terminator pattern.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// // Match tagged identifier followed by any tokens until newline
+    /// .TaggedIdent().AnyUntil(t => t.Newline())
+    /// </code>
+    /// </example>
+    public PatternBuilder AnyUntil(Action<PatternBuilder> terminator)
+    {
+        var terminatorBuilder = new PatternBuilder();
+        terminator(terminatorBuilder);
+        var terminatorPattern = terminatorBuilder.Build();
+        
+        _parts.Add(new RepeatUntilPattern(new QueryPattern(Q.Any), terminatorPattern));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches any node, useful with RepeatUntil.
+    /// </summary>
+    public PatternBuilder Any()
+    {
+        _parts.Add(new QueryPattern(Q.Any));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches a newline (via trivia or whitespace token).
+    /// </summary>
+    public PatternBuilder Newline()
+    {
+        _parts.Add(new QueryPattern(Q.Newline));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches tagged identifiers (e.g., #define, @attribute).
+    /// </summary>
+    public PatternBuilder TaggedIdent()
+    {
+        _parts.Add(new QueryPattern(Q.AnyTaggedIdent));
+        return this;
+    }
+    
     /// <summary>Builds the sequence pattern.</summary>
+    [Obsolete("Use BuildQuery() instead for the unified Query API")]
     public NodePattern Build()
     {
         if (_parts.Count == 1)
             return _parts[0];
         return new SequencePattern(_parts);
+    }
+    
+    /// <summary>
+    /// Builds an INodeQuery from the accumulated patterns.
+    /// Converts internal NodePattern representation to unified Query API.
+    /// </summary>
+    public INodeQuery BuildQuery()
+    {
+        if (_parts.Count == 0)
+            return Q.Any; // Empty pattern matches anything
+        
+        // Convert NodePatterns to INodeQueries
+        var queries = _parts.Select(ConvertPatternToQuery).ToArray();
+        
+        if (queries.Length == 1)
+            return queries[0];
+        return Query.Sequence(queries);
+    }
+    
+    /// <summary>
+    /// Converts a NodePattern to an INodeQuery.
+    /// </summary>
+    private static INodeQuery ConvertPatternToQuery(NodePattern pattern)
+    {
+        return pattern switch
+        {
+            QueryPattern qp => qp.InnerQuery,
+            SequencePattern sp => Query.Sequence(sp.Parts.Select(ConvertPatternToQuery)),
+            OptionalPattern op => ConvertPatternToQuery(op.Inner).Optional(),
+            RepeatPattern rp => new RepeatQuery(ConvertPatternToQuery(rp.Inner), rp.Min, rp.Max),
+            RepeatUntilPattern rup => new RepeatUntilQuery(
+                ConvertPatternToQuery(rup.Inner), 
+                ConvertPatternToQuery(rup.Terminator)),
+            AlternativePattern ap => ap.Alternatives
+                .Select(ConvertPatternToQuery)
+                .Aggregate((a, b) => new UnionNodeQuery(a, b)),
+            LookaheadPattern lp => new LookaheadQuery(
+                ConvertPatternToQuery(lp.Match),
+                ConvertPatternToQuery(lp.Lookahead),
+                lp.IsPositive),
+            _ => throw new NotSupportedException($"Cannot convert pattern type: {pattern.GetType().Name}")
+        };
     }
 }
 
