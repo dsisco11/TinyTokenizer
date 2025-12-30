@@ -746,56 +746,56 @@ public sealed class PatternBuilder
     /// <summary>Adds a pattern that matches any identifier.</summary>
     public PatternBuilder Ident()
     {
-        _parts.Add(new QueryPattern(Q.Ident));
+        _parts.Add(new QueryPattern(Q.AnyIdent));
         return this;
     }
     
     /// <summary>Adds a pattern that matches an identifier with exact text.</summary>
     public PatternBuilder Ident(string text)
     {
-        _parts.Add(new QueryPattern(Q.Ident.WithText(text)));
+        _parts.Add(new QueryPattern(Q.Ident(text)));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any numeric literal.</summary>
     public PatternBuilder Numeric()
     {
-        _parts.Add(new QueryPattern(Q.Numeric));
+        _parts.Add(new QueryPattern(Q.AnyNumeric));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any string literal.</summary>
     public PatternBuilder String()
     {
-        _parts.Add(new QueryPattern(Q.String));
+        _parts.Add(new QueryPattern(Q.AnyString));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any operator.</summary>
     public PatternBuilder Operator()
     {
-        _parts.Add(new QueryPattern(Q.Operator));
+        _parts.Add(new QueryPattern(Q.AnyOperator));
         return this;
     }
     
     /// <summary>Adds a pattern that matches a specific operator.</summary>
     public PatternBuilder Operator(string op)
     {
-        _parts.Add(new QueryPattern(Q.Operator.WithText(op)));
+        _parts.Add(new QueryPattern(Q.Operator(op)));
         return this;
     }
     
     /// <summary>Adds a pattern that matches any symbol.</summary>
     public PatternBuilder Symbol()
     {
-        _parts.Add(new QueryPattern(Q.Symbol));
+        _parts.Add(new QueryPattern(Q.AnySymbol));
         return this;
     }
     
     /// <summary>Adds a pattern that matches a specific symbol.</summary>
     public PatternBuilder Symbol(string sym)
     {
-        _parts.Add(new QueryPattern(Q.Symbol.WithText(sym)));
+        _parts.Add(new QueryPattern(Q.Symbol(sym)));
         return this;
     }
     
@@ -940,7 +940,7 @@ public sealed class PatternBuilder
     /// </summary>
     public PatternBuilder TaggedIdent()
     {
-        _parts.Add(new QueryPattern(Q.TaggedIdent));
+        _parts.Add(new QueryPattern(Q.AnyTaggedIdent));
         return this;
     }
     

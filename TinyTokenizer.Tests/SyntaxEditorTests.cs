@@ -18,7 +18,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("foo");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), "bar")
+            .Replace(Q.AnyIdent.First(), "bar")
             .Commit();
         
         Assert.Equal("bar", tree.ToFullString());
@@ -30,7 +30,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("hello");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), n => ((RedLeaf)n).Text.ToUpper())
+            .Replace(Q.AnyIdent.First(), n => ((RedLeaf)n).Text.ToUpper())
             .Commit();
         
         Assert.Equal("HELLO", tree.ToFullString());
@@ -42,7 +42,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b a");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("a"), "X")
+            .Replace(Q.AnyIdent.WithText("a"), "X")
             .Commit();
         
         Assert.Equal("X b X", tree.ToFullString());
@@ -56,7 +56,7 @@ public class SyntaxEditorTests
         var newNodes = lexer.ParseToGreenNodes("new");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), newNodes)
+            .Replace(Q.AnyIdent.First(), newNodes)
             .Commit();
         
         Assert.Equal("new", tree.ToFullString());
@@ -68,7 +68,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("foo bar");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("nonexistent"), "replacement")
+            .Replace(Q.AnyIdent.WithText("nonexistent"), "replacement")
             .Commit();
         
         Assert.Equal("foo bar", tree.ToFullString());
@@ -81,7 +81,7 @@ public class SyntaxEditorTests
         string? capturedText = null;
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), n =>
+            .Replace(Q.AnyIdent.First(), n =>
             {
                 capturedText = ((RedLeaf)n).Text;
                 return "replaced";
@@ -114,7 +114,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.WithText("b"))
+            .Remove(Q.AnyIdent.WithText("b"))
             .Commit();
         
         var text = tree.ToFullString();
@@ -127,7 +127,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b a c a");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.WithText("a"))
+            .Remove(Q.AnyIdent.WithText("a"))
             .Commit();
         
         var text = tree.ToFullString();
@@ -142,7 +142,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("foo bar");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.WithText("nonexistent"))
+            .Remove(Q.AnyIdent.WithText("nonexistent"))
             .Commit();
         
         Assert.Equal("foo bar", tree.ToFullString());
@@ -168,7 +168,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.First())
+            .Remove(Q.AnyIdent.First())
             .Commit();
         
         var text = tree.ToFullString();
@@ -187,7 +187,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("world");
         
         tree.CreateEditor()
-            .Insert(Q.Ident.First().Before(), "hello ")
+            .Insert(Q.AnyIdent.First().Before(), "hello ")
             .Commit();
         
         Assert.Equal("hello world", tree.ToFullString());
@@ -199,7 +199,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("hello");
         
         tree.CreateEditor()
-            .Insert(Q.Ident.First().After(), " world")
+            .Insert(Q.AnyIdent.First().After(), " world")
             .Commit();
         
         Assert.Equal("hello world", tree.ToFullString());
@@ -237,7 +237,7 @@ public class SyntaxEditorTests
         var nodes = lexer.ParseToGreenNodes(" inserted");
         
         tree.CreateEditor()
-            .Insert(Q.Ident.First().After(), nodes)
+            .Insert(Q.AnyIdent.First().After(), nodes)
             .Commit();
         
         Assert.Equal("x inserted", tree.ToFullString());
@@ -249,7 +249,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Insert(Q.Ident.Before(), "_")
+            .Insert(Q.AnyIdent.Before(), "_")
             .Commit();
         
         // With leading trivia transfer: inserted content takes target's leading trivia
@@ -293,11 +293,11 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         var editor = tree.CreateEditor();
         
-        editor.Remove(Q.Ident.First());
+        editor.Remove(Q.AnyIdent.First());
         Assert.Equal(1, editor.PendingEditCount);
         Assert.True(editor.HasPendingEdits);
         
-        editor.Remove(Q.Ident.First());
+        editor.Remove(Q.AnyIdent.First());
         Assert.Equal(2, editor.PendingEditCount);
     }
 
@@ -307,7 +307,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b");
         var editor = tree.CreateEditor();
         
-        editor.Remove(Q.Ident.First());
+        editor.Remove(Q.AnyIdent.First());
         Assert.True(editor.HasPendingEdits);
         
         editor.Commit();
@@ -321,7 +321,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b");
         var editor = tree.CreateEditor();
         
-        editor.Remove(Q.Ident.First());
+        editor.Remove(Q.AnyIdent.First());
         Assert.True(editor.HasPendingEdits);
         
         editor.Rollback();
@@ -339,7 +339,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("original");
         
         var editor = tree.CreateEditor();
-        editor.Replace(Q.Ident.First(), "changed");
+        editor.Replace(Q.AnyIdent.First(), "changed");
         editor.Rollback();
         
         Assert.Equal("original", tree.ToFullString());
@@ -351,10 +351,10 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("original");
         
         var editor = tree.CreateEditor();
-        editor.Replace(Q.Ident.First(), "discarded");
+        editor.Replace(Q.AnyIdent.First(), "discarded");
         editor.Rollback();
         
-        editor.Replace(Q.Ident.First(), "new");
+        editor.Replace(Q.AnyIdent.First(), "new");
         editor.Commit();
         
         Assert.Equal("new", tree.ToFullString());
@@ -370,7 +370,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("original");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), "changed")
+            .Replace(Q.AnyIdent.First(), "changed")
             .Commit();
         
         Assert.Equal("changed", tree.ToFullString());
@@ -397,7 +397,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("original");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.First(), "changed")
+            .Replace(Q.AnyIdent.First(), "changed")
             .Commit();
         
         tree.Undo();
@@ -413,8 +413,8 @@ public class SyntaxEditorTests
     {
         var tree = SyntaxTree.Parse("a");
         
-        tree.CreateEditor().Replace(Q.Ident.First(), "b").Commit();
-        tree.CreateEditor().Replace(Q.Ident.First(), "c").Commit();
+        tree.CreateEditor().Replace(Q.AnyIdent.First(), "b").Commit();
+        tree.CreateEditor().Replace(Q.AnyIdent.First(), "c").Commit();
         
         Assert.Equal("c", tree.ToFullString());
         
@@ -435,9 +435,9 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("a"), "X")
-            .Replace(Q.Ident.WithText("b"), "Y")
-            .Replace(Q.Ident.WithText("c"), "Z")
+            .Replace(Q.AnyIdent.WithText("a"), "X")
+            .Replace(Q.AnyIdent.WithText("b"), "Y")
+            .Replace(Q.AnyIdent.WithText("c"), "Z")
             .Commit();
         
         Assert.Equal("X Y Z", tree.ToFullString());
@@ -449,9 +449,9 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("a"), "X")
-            .Replace(Q.Ident.WithText("b"), "Y")
-            .Replace(Q.Ident.WithText("c"), "Z")
+            .Replace(Q.AnyIdent.WithText("a"), "X")
+            .Replace(Q.AnyIdent.WithText("b"), "Y")
+            .Replace(Q.AnyIdent.WithText("c"), "Z")
             .Commit();
         
         // All three changes should undo in one step
@@ -465,9 +465,9 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a {b} c");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.WithText("a"))
+            .Remove(Q.AnyIdent.WithText("a"))
             .Insert(Q.BraceBlock.First().InnerEnd(), " extra")
-            .Replace(Q.Ident.WithText("c"), "z")
+            .Replace(Q.AnyIdent.WithText("c"), "z")
             .Commit();
         
         var text = tree.ToFullString();
@@ -486,9 +486,9 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("test");
         var editor = tree.CreateEditor();
         
-        var result1 = editor.Replace(Q.Ident.First(), "a");
-        var result2 = result1.Remove(Q.Ident.Last());
-        var result3 = result2.Insert(Q.Ident.First().Before(), "b");
+        var result1 = editor.Replace(Q.AnyIdent.First(), "a");
+        var result2 = result1.Remove(Q.AnyIdent.Last());
+        var result3 = result2.Insert(Q.AnyIdent.First().Before(), "b");
         
         Assert.Same(editor, result1);
         Assert.Same(editor, result2);
@@ -503,7 +503,7 @@ public class SyntaxEditorTests
         tree.CreateEditor()
             .Insert(Q.BraceBlock.First().InnerStart(), "start ")
             .Insert(Q.BraceBlock.First().InnerEnd(), " end")
-            .Replace(Q.Ident.WithText("x"), "middle")
+            .Replace(Q.AnyIdent.WithText("x"), "middle")
             .Commit();
         
         // Note: The order of operations may affect result
@@ -522,7 +522,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.First())
+            .Remove(Q.AnyIdent.First())
             .Commit();
         
         Assert.Equal("", tree.ToFullString());
@@ -534,7 +534,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{{{deep}}}");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("deep"), "replaced")
+            .Replace(Q.AnyIdent.WithText("deep"), "replaced")
             .Commit();
         
         Assert.Equal("{{{replaced}}}", tree.ToFullString());
@@ -547,7 +547,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a + b", options);
         
         tree.CreateEditor(options)
-            .Replace(Q.Operator.First(), "-")
+            .Replace(Q.AnyOperator.First(), "-")
             .Commit();
         
         Assert.Equal("a - b", tree.ToFullString());
@@ -559,8 +559,8 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("x");
         
         tree.CreateEditor()
-            .Insert(Q.Ident.First().Before(), "A")
-            .Insert(Q.Ident.First().After(), "B")
+            .Insert(Q.AnyIdent.First().Before(), "A")
+            .Insert(Q.AnyIdent.First().After(), "B")
             .Commit();
         
         Assert.Equal("AxB", tree.ToFullString());
@@ -572,7 +572,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a");
         
         tree.CreateEditor()
-            .Remove(Q.Ident.First())
+            .Remove(Q.AnyIdent.First())
             .Commit();
         
         Assert.Equal("", tree.ToFullString());
@@ -588,7 +588,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("foo 42 bar");
         
         tree.CreateEditor()
-            .Remove(Q.Ident | Q.Numeric)
+            .Remove(Q.AnyIdent | Q.AnyNumeric)
             .Commit();
         
         // All idents and numbers removed, only whitespace remains
@@ -604,7 +604,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("short verylongword tiny");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.Where(n => n is RedLeaf l && l.Text.Length > 5), "X")
+            .Replace(Q.AnyIdent.Where(n => n is RedLeaf l && l.Text.Length > 5), "X")
             .Commit();
         
         var text = tree.ToFullString();
@@ -620,7 +620,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c d e");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.Nth(2), "X")
+            .Replace(Q.AnyIdent.Nth(2), "X")
             .Commit();
         
         Assert.Equal("a b X d e", tree.ToFullString());
@@ -848,7 +848,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{a}");
         
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("a"), "replaced")
+            .Replace(Q.AnyIdent.WithText("a"), "replaced")
             .Commit();
         
         Assert.Equal("{replaced}", tree.ToFullString());
@@ -865,7 +865,7 @@ public class SyntaxEditorTests
         
         // Replace just the identifier inside the inner block
         tree.CreateEditor()
-            .Replace(Q.Ident.WithText("inner"), "replaced")
+            .Replace(Q.AnyIdent.WithText("inner"), "replaced")
             .Commit();
         
         var text = tree.ToFullString();
@@ -906,7 +906,7 @@ public class SyntaxEditorTests
         var editor1 = tree.CreateEditor();
         var editor2 = tree.CreateEditor();
         
-        editor1.Replace(Q.Ident.First(), "a");
+        editor1.Replace(Q.AnyIdent.First(), "a");
         
         Assert.Equal(1, editor1.PendingEditCount);
         Assert.Equal(0, editor2.PendingEditCount);

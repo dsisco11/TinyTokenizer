@@ -100,12 +100,12 @@ public class GlslEditorTests
             .WithTagPrefixes('#', '@')
             // Function definition: type name(params) { body }
             .DefineSyntax(Syntax.Define<GlslFunctionSyntax>("GlslFunction")
-                .Match(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock)
+                .Match(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock)
                 .WithPriority(10)
                 .Build())
             // Directive: #tag followed by tokens until newline
             .DefineSyntax(Syntax.Define<GlslDirectiveSyntax>("GlslDirective")
-                .Match(Query.TaggedIdent, Query.Any.Until(Query.Newline))
+                .Match(Query.AnyTaggedIdent, Query.Any.Until(Query.Newline))
                 .Build())
             .Build();
     }

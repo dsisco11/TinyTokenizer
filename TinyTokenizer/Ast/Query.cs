@@ -6,43 +6,76 @@ namespace TinyTokenizer.Ast;
 /// </summary>
 /// <example>
 /// <code>
-/// // Select by kind - Where() preserves type
-/// Query.Ident.Where(n => ...).WithText("foo").First()
+/// // Select by kind with specific text
+/// Query.Ident("foo")
+/// Query.Symbol(".")
+/// Query.Operator("=>")
 /// 
-/// // Select blocks and get inner positions - InnerStart() available after Where()
+/// // Select any of a kind
+/// Query.AnyIdent.Where(n => n.Width > 3)
+/// 
+/// // Select blocks and get inner positions
 /// Query.BraceBlock.Where(n => ...).First().InnerStart()
 /// 
 /// // Combine queries
-/// Query.Ident | Query.Numeric
+/// Query.AnyIdent | Query.AnyNumeric
 /// </code>
 /// </example>
 public static class Query
 {
-    #region Kind Queries
+    #region Kind Queries - Named (specific text)
     
     /// <summary>Creates a query matching nodes of the specified kind.</summary>
     public static KindNodeQuery Kind(NodeKind kind) => new KindNodeQuery(kind);
     
-    /// <summary>Matches identifier nodes.</summary>
-    public static KindNodeQuery Ident => new KindNodeQuery(NodeKind.Ident);
+    /// <summary>Matches identifier nodes with the specified text.</summary>
+    /// <param name="text">The exact text to match.</param>
+    public static KindNodeQuery Ident(string text) => new KindNodeQuery(NodeKind.Ident).WithText(text);
     
-    /// <summary>Matches numeric literal nodes.</summary>
-    public static KindNodeQuery Numeric => new KindNodeQuery(NodeKind.Numeric);
+    /// <summary>Matches numeric literal nodes with the specified text.</summary>
+    /// <param name="text">The exact text to match.</param>
+    public static KindNodeQuery Numeric(string text) => new KindNodeQuery(NodeKind.Numeric).WithText(text);
     
-    /// <summary>Matches string literal nodes.</summary>
-    public static KindNodeQuery String => new KindNodeQuery(NodeKind.String);
+    /// <summary>Matches string literal nodes with the specified text.</summary>
+    /// <param name="text">The exact text to match (including quotes).</param>
+    public static KindNodeQuery String(string text) => new KindNodeQuery(NodeKind.String).WithText(text);
     
-    /// <summary>Matches operator nodes.</summary>
-    public static KindNodeQuery Operator => new KindNodeQuery(NodeKind.Operator);
+    /// <summary>Matches operator nodes with the specified text.</summary>
+    /// <param name="text">The exact operator to match (e.g., "=>", "==").</param>
+    public static KindNodeQuery Operator(string text) => new KindNodeQuery(NodeKind.Operator).WithText(text);
     
-    /// <summary>Matches symbol nodes.</summary>
-    public static KindNodeQuery Symbol => new KindNodeQuery(NodeKind.Symbol);
+    /// <summary>Matches symbol nodes with the specified text.</summary>
+    /// <param name="text">The exact symbol to match (e.g., ".", ",", ";").</param>
+    public static KindNodeQuery Symbol(string text) => new KindNodeQuery(NodeKind.Symbol).WithText(text);
     
-    /// <summary>Matches tagged identifier nodes (e.g., #define, @attribute).</summary>
-    public static KindNodeQuery TaggedIdent => new KindNodeQuery(NodeKind.TaggedIdent);
+    /// <summary>Matches tagged identifier nodes with the specified text.</summary>
+    /// <param name="text">The exact text to match (e.g., "#define", "@attribute").</param>
+    public static KindNodeQuery TaggedIdent(string text) => new KindNodeQuery(NodeKind.TaggedIdent).WithText(text);
     
-    /// <summary>Matches error nodes.</summary>
-    public static KindNodeQuery Error => new KindNodeQuery(NodeKind.Error);
+    #endregion
+    
+    #region Kind Queries - Any (no text filter)
+    
+    /// <summary>Matches any identifier node.</summary>
+    public static KindNodeQuery AnyIdent => new KindNodeQuery(NodeKind.Ident);
+    
+    /// <summary>Matches any numeric literal node.</summary>
+    public static KindNodeQuery AnyNumeric => new KindNodeQuery(NodeKind.Numeric);
+    
+    /// <summary>Matches any string literal node.</summary>
+    public static KindNodeQuery AnyString => new KindNodeQuery(NodeKind.String);
+    
+    /// <summary>Matches any operator node.</summary>
+    public static KindNodeQuery AnyOperator => new KindNodeQuery(NodeKind.Operator);
+    
+    /// <summary>Matches any symbol node.</summary>
+    public static KindNodeQuery AnySymbol => new KindNodeQuery(NodeKind.Symbol);
+    
+    /// <summary>Matches any tagged identifier node (e.g., #define, @attribute).</summary>
+    public static KindNodeQuery AnyTaggedIdent => new KindNodeQuery(NodeKind.TaggedIdent);
+    
+    /// <summary>Matches any error node.</summary>
+    public static KindNodeQuery AnyError => new KindNodeQuery(NodeKind.Error);
     
     #endregion
     
@@ -111,10 +144,10 @@ public static class Query
     /// <example>
     /// <code>
     /// // Function call: identifier followed by parenthesis block
-    /// Query.Sequence(Query.Ident, Query.ParenBlock)
+    /// Query.Sequence(Query.AnyIdent, Query.ParenBlock)
     /// 
     /// // Function definition: type name(params) { body }
-    /// Query.Sequence(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock)
+    /// Query.Sequence(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock)
     /// </code>
     /// </example>
     public static SequenceQuery Sequence(params INodeQuery[] parts) => new(parts);

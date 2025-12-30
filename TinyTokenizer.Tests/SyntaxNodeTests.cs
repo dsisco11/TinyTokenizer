@@ -212,7 +212,7 @@ public class SyntaxNodeTests
     public void SyntaxNodeDefinitionBuilder_CreatesDefinition()
     {
         var definition = Syntax.Define<FunctionCallSyntax>("FunctionCall")
-            .Match(Query.Ident, Query.ParenBlock)
+            .Match(Query.AnyIdent, Query.ParenBlock)
             .WithPriority(10)
             .Build();
         
@@ -275,7 +275,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -289,10 +289,10 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .DefineSyntax(Syntax.Define<ArrayAccessSyntax>("ArrayAccess")
-                .Match(Query.Ident, Query.BracketBlock)
+                .Match(Query.AnyIdent, Query.BracketBlock)
                 .Build())
             .Build();
         
@@ -310,10 +310,10 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .DefineSyntax(Syntax.Define<ArrayAccessSyntax>("ArrayAccess")
-                .Match(Query.Ident, Query.BracketBlock)
+                .Match(Query.AnyIdent, Query.BracketBlock)
                 .Build())
             .Build();
         
@@ -331,7 +331,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -346,7 +346,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax<FunctionCallSyntax>("FunctionCall", builder => builder
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .WithPriority(10))
             .Build();
         
@@ -360,7 +360,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -379,7 +379,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -401,7 +401,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -429,7 +429,7 @@ public class SyntaxNodeTests
     {
         var schema = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         
@@ -458,7 +458,7 @@ public class SyntaxNodeTests
         var schemaWithoutDefs = Schema.Create().Build();
         var schemaWithDefs = Schema.Create()
             .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
-                .Match(Query.Ident, Query.ParenBlock)
+                .Match(Query.AnyIdent, Query.ParenBlock)
                 .Build())
             .Build();
         

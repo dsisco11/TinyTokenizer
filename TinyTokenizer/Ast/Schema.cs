@@ -409,7 +409,7 @@ public static class BuiltInDefinitions
     public static SemanticNodeDefinition<FunctionNameNode> FunctionName { get; } =
         Semantic.Define<FunctionNameNode>("FunctionName")
             .Match(new LookaheadPattern(
-                new QueryPattern(Query.Ident),
+                new QueryPattern(Query.AnyIdent),
                 new QueryPattern(Query.ParenBlock)))
             .Create((match, kind) => new FunctionNameNode(match, kind))
             .Build();

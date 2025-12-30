@@ -25,7 +25,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.Ident);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -37,7 +37,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.Ident);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent);
         Assert.False(query.TryMatch(firstIdent, out _));
     }
 
@@ -48,7 +48,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.ParenBlock);
+        var query = Query.Sequence(Query.AnyIdent, Query.ParenBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -61,7 +61,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(4, consumed);
     }
@@ -75,7 +75,7 @@ public class QueryCombinatorTests
         var greenRoot = (GreenContainer)root.Green;
         var greenChildren = greenRoot.Children;
         
-        var query = Query.Sequence(Query.Ident, Query.Ident);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent);
         Assert.True(query.TryMatchGreen(greenChildren, 0, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -91,7 +91,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Optional();
+        var query = Query.AnyIdent.Optional();
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(1, consumed);
     }
@@ -103,7 +103,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstNode = root.Children.First();
         
-        var query = Query.Ident.Optional();
+        var query = Query.AnyIdent.Optional();
         Assert.True(query.TryMatch(firstNode, out var consumed));
         Assert.Equal(0, consumed);
     }
@@ -116,7 +116,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.Operator.Optional(), Query.Ident);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyOperator.Optional(), Query.AnyIdent);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed); // Only 2 because = is optional and not present
     }
@@ -132,7 +132,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstNode = root.Children.First();
         
-        var query = Query.Ident.ZeroOrMore();
+        var query = Query.AnyIdent.ZeroOrMore();
         Assert.True(query.TryMatch(firstNode, out var consumed));
         Assert.Equal(0, consumed);
     }
@@ -144,7 +144,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.ZeroOrMore();
+        var query = Query.AnyIdent.ZeroOrMore();
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(3, consumed);
     }
@@ -156,7 +156,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstNode = root.Children.First();
         
-        var query = Query.Ident.OneOrMore();
+        var query = Query.AnyIdent.OneOrMore();
         Assert.False(query.TryMatch(firstNode, out _));
     }
 
@@ -167,7 +167,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.OneOrMore();
+        var query = Query.AnyIdent.OneOrMore();
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(3, consumed);
     }
@@ -179,7 +179,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Exactly(2);
+        var query = Query.AnyIdent.Exactly(2);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -191,7 +191,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Exactly(2);
+        var query = Query.AnyIdent.Exactly(2);
         Assert.False(query.TryMatch(firstIdent, out _));
     }
 
@@ -202,7 +202,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Repeat(2, 3);
+        var query = Query.AnyIdent.Repeat(2, 3);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(3, consumed); // Stops at max
     }
@@ -218,7 +218,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Any.Until(Query.Symbol);
+        var query = Query.Any.Until(Query.AnySymbol);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(3, consumed); // foo, bar, baz (not semicolon)
     }
@@ -230,7 +230,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstNode = root.Children.First();
         
-        var query = Query.Ident.Until(Query.Symbol);
+        var query = Query.AnyIdent.Until(Query.AnySymbol);
         Assert.True(query.TryMatch(firstNode, out var consumed));
         Assert.Equal(0, consumed);
     }
@@ -242,7 +242,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Until(Query.Symbol);
+        var query = Query.AnyIdent.Until(Query.AnySymbol);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(3, consumed);
     }
@@ -259,7 +259,7 @@ public class QueryCombinatorTests
         var firstIdent = root.Children.First();
         
         // Match identifier only if followed by paren block (function call)
-        var query = Query.Ident.FollowedBy(Query.ParenBlock);
+        var query = Query.AnyIdent.FollowedBy(Query.ParenBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(1, consumed); // Only consumes the identifier
     }
@@ -271,7 +271,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.FollowedBy(Query.ParenBlock);
+        var query = Query.AnyIdent.FollowedBy(Query.ParenBlock);
         Assert.False(query.TryMatch(firstIdent, out _));
     }
 
@@ -283,7 +283,7 @@ public class QueryCombinatorTests
         var firstIdent = root.Children.First();
         
         // Match identifier only if NOT followed by paren block (not a function call)
-        var query = Query.Ident.NotFollowedBy(Query.ParenBlock);
+        var query = Query.AnyIdent.NotFollowedBy(Query.ParenBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(1, consumed);
     }
@@ -295,7 +295,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.NotFollowedBy(Query.ParenBlock);
+        var query = Query.AnyIdent.NotFollowedBy(Query.ParenBlock);
         Assert.False(query.TryMatch(firstIdent, out _));
     }
 
@@ -309,7 +309,7 @@ public class QueryCombinatorTests
         var tree = Parse("foo 123");
         var root = tree.Root;
         
-        var query = Query.Ident | Query.Numeric;
+        var query = Query.AnyIdent | Query.AnyNumeric;
         
         Assert.True(query.TryMatch(root.Children.First(), out var c1));
         Assert.Equal(1, c1);
@@ -325,7 +325,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident | Query.Numeric, Query.Ident | Query.Numeric);
+        var query = Query.Sequence(Query.AnyIdent | Query.AnyNumeric, Query.AnyIdent | Query.AnyNumeric);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -342,7 +342,7 @@ public class QueryCombinatorTests
         var firstIdent = root.Children.First();
         
         // type name(params) { body }
-        var query = Query.Sequence(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock);
+        var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(4, consumed);
     }
@@ -355,8 +355,8 @@ public class QueryCombinatorTests
         var firstIdent = root.Children.First();
         
         // identifier followed by .identifier repeated, then optional call
-        var dotIdent = Query.Sequence(Query.Symbol.WithText("."), Query.Ident);
-        var query = Query.Sequence(Query.Ident, dotIdent.OneOrMore(), Query.ParenBlock.Optional());
+        var dotIdent = Query.Sequence(Query.AnySymbol.WithText("."), Query.AnyIdent);
+        var query = Query.Sequence(Query.AnyIdent, dotIdent.OneOrMore(), Query.ParenBlock.Optional());
         
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         // foo, ., bar, ., baz, ()
@@ -370,7 +370,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Sequence(Query.Ident, Query.BracketBlock);
+        var query = Query.Sequence(Query.AnyIdent, Query.BracketBlock);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -386,7 +386,7 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident.Then(Query.Ident);
+        var query = Query.AnyIdent.Then(Query.AnyIdent);
         Assert.True(query.TryMatch(firstIdent, out var consumed));
         Assert.Equal(2, consumed);
     }
@@ -398,8 +398,8 @@ public class QueryCombinatorTests
         var root = tree.Root;
         var firstIdent = root.Children.First();
         
-        var query = Query.Ident
-            .Then(Query.Ident)
+        var query = Query.AnyIdent
+            .Then(Query.AnyIdent)
             .Then(Query.ParenBlock)
             .Then(Query.BraceBlock);
             

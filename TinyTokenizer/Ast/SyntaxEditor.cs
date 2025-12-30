@@ -13,8 +13,8 @@ namespace TinyTokenizer.Ast;
 /// 
 /// tree.CreateEditor()
 ///     .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
-///     .Replace(Query.Numeric.First(), "42")
-///     .Remove(Query.Ident.WithText("unused"))
+///     .Replace(Query.AnyNumeric.First(), "42")
+///     .Remove(Query.AnyIdent.WithText("unused"))
 ///     .Commit();
 /// </code>
 /// </example>

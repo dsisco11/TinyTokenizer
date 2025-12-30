@@ -110,7 +110,7 @@ public class SemanticNodeTests
     public void QueryPattern_Matches_SingleNode()
     {
         var tree = SyntaxTree.Parse("foo");
-        var pattern = new QueryPattern(Query.Ident);
+        var pattern = new QueryPattern(Query.AnyIdent);
         var node = tree.Root.Children.First();
         
         Assert.True(pattern.TryMatch(node, out var match));
@@ -122,7 +122,7 @@ public class SemanticNodeTests
     public void SequencePattern_Matches_MultipleNodes()
     {
         var tree = SyntaxTree.Parse("foo(x)");
-        var pattern = NodePattern.Sequence(Query.Ident, Query.ParenBlock);
+        var pattern = NodePattern.Sequence(Query.AnyIdent, Query.ParenBlock);
         var node = tree.Root.Children.First();
         
         Assert.True(pattern.TryMatch(node, out var match));
@@ -134,7 +134,7 @@ public class SemanticNodeTests
     public void SequencePattern_FailsOnPartialMatch()
     {
         var tree = SyntaxTree.Parse("foo bar"); // No paren block
-        var pattern = NodePattern.Sequence(Query.Ident, Query.ParenBlock);
+        var pattern = NodePattern.Sequence(Query.AnyIdent, Query.ParenBlock);
         var node = tree.Root.Children.First();
         
         Assert.False(pattern.TryMatch(node, out _));
@@ -156,8 +156,8 @@ public class SemanticNodeTests
     {
         var tree = SyntaxTree.Parse("123");
         var pattern = NodePattern.OneOf(
-            new QueryPattern(Query.Ident),
-            new QueryPattern(Query.Numeric));
+            new QueryPattern(Query.AnyIdent),
+            new QueryPattern(Query.AnyNumeric));
         var node = tree.Root.Children.First();
         
         Assert.True(pattern.TryMatch(node, out var match));
