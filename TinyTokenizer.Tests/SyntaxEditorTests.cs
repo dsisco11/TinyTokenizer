@@ -771,7 +771,8 @@ public class SyntaxEditorTests
     public void Insert_BeforeAndAfterMultipleFunctions_HandlesCorrectly()
     {
         // Simulates: inserting around multiple function definitions
-        // With trivia transfer: inserted content takes target's leading trivia
+        // Roslyn-style trivia: space after {first} is trailing trivia for {first}
+        // So {second} has no leading trivia to transfer
         var tree = SyntaxTree.Parse("{first} {second}");
         
         tree.CreateEditor()
@@ -779,9 +780,9 @@ public class SyntaxEditorTests
             .Commit();
         
         var text = tree.ToFullString();
-        // First block has no leading trivia: "/* fn */{first}"
-        // Second block had leading space, transferred to inserted content: " /* fn */{second}"
-        Assert.Equal("/* fn */{first} /* fn */{second}", text);
+        // First block: "/* fn */{first }" (space is {first}'s trailing)
+        // Second block: "/* fn */{second}" (no leading trivia)
+        Assert.Equal("/* fn */{first }/* fn */{second}", text);
     }
 
     [Fact]

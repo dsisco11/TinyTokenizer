@@ -140,7 +140,8 @@ void main() {
         var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlslDirectiveSyntax;
         
         Assert.NotNull(versionDirective);
-        Assert.Equal("#version 330", versionDirective!.ToString());
+        // Roslyn-style: ToString() includes trailing trivia (space before next token)
+        Assert.StartsWith("#version 330", versionDirective!.ToString());
     }
     
     #endregion
