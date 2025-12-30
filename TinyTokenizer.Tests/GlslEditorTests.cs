@@ -202,16 +202,9 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        Assert.NotNull(mainFunc);
-        
-        // Insert at the inner start of main's body
-        var mainBodyQuery = Query.BraceBlock
-            .Where(n => n.Parent is GlslFunctionSyntax f && f.Name == "main");
-        
+        // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(mainBodyQuery.InnerStart(), "\n    vec4 sample = texture(tex, uv);")
+            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             .Commit();
         
         var result = tree.Root.ToString();
@@ -230,16 +223,9 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        Assert.NotNull(mainFunc);
-        
-        // Insert at the inner end of main's body (before closing brace)
-        var mainBodyQuery = Query.BraceBlock
-            .Where(n => n.Parent is GlslFunctionSyntax f && f.Name == "main");
-        
+        // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(mainBodyQuery.InnerEnd(), "\n    fragColor = color;")
+            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
             .Commit();
         
         var result = tree.Root.ToString();
@@ -283,29 +269,14 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var versionDirectiveQuery = Query.Syntax<GlslDirectiveSyntax>().Where(d => d.Name == "version");
-        var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlslDirectiveSyntax;
-        Assert.NotNull(versionDirective);
-        
-        // Find the numeric literal after #version (330) and insert after it
-        // We need to insert after the entire #version line
-        // Since we have #version 330 core, let's find "core" and insert after it
-        var coreIdent = new TreeWalker(tree.Root)
-            .DescendantsAndSelf()
-            .OfType<RedLeaf>()
-            .FirstOrDefault(n => n.Text == "core");
-        
-        Assert.NotNull(coreIdent);
-        
-        var coreQuery = Query.Ident.WithText("core").First();
-        
+        // Use INamedNode API to find the #version directive and insert after it
         tree.CreateEditor()
-            .Insert(coreQuery.After(), "\n@import \"my-include.glsl\"")
+            .Insert(Query.Syntax<GlslDirectiveSyntax>().Named("version").After(), "\n@import \"my-include.glsl\"")
             .Commit();
         
         var result = tree.Root.ToString();
         
-        // Verify insertion appears after "core" and before "uniform" (the content + surrounding context)
+        // Verify insertion appears after #version directive and before "uniform"
         Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
     }
     
@@ -319,14 +290,9 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
-        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        Assert.NotNull(fooFunc);
-        
-        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Where(n => n.Name == "foo");
-        
+        // Use INamedNode API to find foo function by name
         tree.CreateEditor()
-            .Insert(fooQuery.Before(), "/* foo comment */\n")
+            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("foo").Before(), "/* foo comment */\n")
             .Commit();
         
         var result = tree.Root.ToString();
@@ -346,37 +312,22 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        
-        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
-        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        var coreIdent = new TreeWalker(tree.Root)
-            .DescendantsAndSelf()
-            .OfType<RedLeaf>()
-            .FirstOrDefault(n => n.Text == "core");
-        
-        Assert.NotNull(mainFunc);
-        Assert.NotNull(fooFunc);
-        Assert.NotNull(coreIdent);
-        
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
-        var mainBodyQuery = Query.BraceBlock
-            .Where(n => n.Parent is GlslFunctionSyntax f && f.Name == "main");
-        var coreQuery = Query.Ident.WithText("core").First();
+        // Use INamedNode + IBlockContainerNode APIs for all injection points
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Named("foo");
+        var versionQuery = Query.Syntax<GlslDirectiveSyntax>().Named("version");
         
         tree.CreateEditor()
             // 1. Comment above main
             .Insert(mainQuery.Before(), "// Entry point for the fragment shader\n")
-            // 2. Sample from texture at top of main
-            .Insert(mainBodyQuery.InnerStart(), "\n    vec4 sample = texture(tex, uv);")
-            // 3. Write to out buffer at end of main
-            .Insert(mainBodyQuery.InnerEnd(), "\n    fragColor = sample;")
+            // 2. Sample from texture at top of main body
+            .Insert(mainQuery.InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
+            // 3. Write to out buffer at end of main body
+            .Insert(mainQuery.InnerEnd("body"), "\n    fragColor = sample;")
             // 4. Comment after main
             .Insert(mainQuery.After(), "\n// End of main function\n")
-            // 5. Import below #version
-            .Insert(coreQuery.After(), "\n@import \"my-include.glsl\"")
+            // 5. Import below #version directive
+            .Insert(versionQuery.After(), "\n@import \"my-include.glsl\"")
             // 6. Comment above foo
             .Insert(fooQuery.Before(), "/* foo comment */\n")
             .Commit();
