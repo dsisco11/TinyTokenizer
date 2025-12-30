@@ -155,15 +155,14 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
+        // Create a query that finds the main function by checking the name
         var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
         var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
         
-        // Create a query that finds the main function by checking the name
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(n => n.Name == "main");
         
         tree.CreateEditor()
-            .Insert(mainQuery.Before(), "// Entry point for the fragment shader\r\n")
+            .Insert(mainFuncQuery.Before(), "// Entry point for the fragment shader\r\n")
             .Commit();
         
         var result = tree.Root.ToString();
@@ -197,11 +196,8 @@ void main() {
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("vec4 sample = texture(tex, uv);", result);
-        // Verify it appears after the opening brace of main
-        var mainIndex = result.IndexOf("void main()");
-        var sampleIndex = result.IndexOf("vec4 sample = texture(tex, uv);");
-        Assert.True(sampleIndex > mainIndex, "Sample should be after main declaration");
+        // Verify insertion appears at inner start of main's body (after opening brace)
+        Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
     }
     
     #endregion
@@ -228,11 +224,9 @@ void main() {
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("fragColor = color;", result);
-        // Verify it appears before the closing brace of main
-        var fragColorIndex = result.IndexOf("fragColor = color;");
-        var mainEndIndex = result.LastIndexOf("}"); // Last brace should be main's
-        Assert.True(fragColorIndex < mainEndIndex, "fragColor assignment should be before closing brace");
+        // Verify insertion appears at inner end of main's body, showing context (last statement + inserted + closing brace)
+        // The exact whitespace may vary, so we check the key sequence
+        Assert.Matches(@"foo\(uv\);\s*fragColor = color;\s*}", result);
     }
     
     #endregion
@@ -245,12 +239,9 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(mainFunc);
-        
-        var mainQuery = Query.Kind(mainFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "main");
         
         tree.CreateEditor()
             .Insert(mainQuery.After(), "\n// End of main function\n")
@@ -258,11 +249,8 @@ void main() {
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("// End of main function", result);
-        // Should appear after main's closing brace
-        var mainBodyEnd = result.IndexOf("vec4 color = foo(uv);");
-        var commentIndex = result.IndexOf("// End of main function");
-        Assert.True(commentIndex > mainBodyEnd, "Comment should be after main body");
+        // Verify insertion appears after main's closing brace
+        Assert.Contains("}\n// End of main function\n", result);
     }
     
     #endregion
@@ -297,15 +285,8 @@ void main() {
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("@import \"my-include.glsl\"", result);
-        // Verify order: #version comes before @import
-        var versionIndex = result.IndexOf("#version");
-        var importIndex = result.IndexOf("@import");
-        Assert.True(importIndex > versionIndex, "@import should be after #version");
-        
-        // @import should be before uniform
-        var uniformIndex = result.IndexOf("uniform");
-        Assert.True(importIndex < uniformIndex, "@import should be before uniform");
+        // Verify insertion appears after "core" and before "uniform" (the content + surrounding context)
+        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
     }
     
     #endregion
@@ -322,8 +303,7 @@ void main() {
         var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
         Assert.NotNull(fooFunc);
         
-        var fooQuery = Query.Kind(fooFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "foo");
+        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Where(n => n.Name == "foo");
         
         tree.CreateEditor()
             .Insert(fooQuery.Before(), "/* foo comment */\n")
@@ -360,10 +340,8 @@ void main() {
         Assert.NotNull(fooFunc);
         Assert.NotNull(coreIdent);
         
-        var mainQuery = Query.Kind(mainFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "main");
-        var fooQuery = Query.Kind(fooFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "foo");
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
         var mainBodyQuery = Query.BraceBlock
             .Where(n => n.Parent is GlslFunctionSyntax f && f.Name == "main");
         var coreQuery = Query.Ident.WithText("core").First();
@@ -385,26 +363,19 @@ void main() {
         
         var result = tree.Root.ToString();
         
-        // Verify all edits were applied
-        Assert.Contains("// Entry point for the fragment shader", result);
-        Assert.Contains("vec4 sample = texture(tex, uv);", result);
-        Assert.Contains("fragColor = sample;", result);
-        Assert.Contains("// End of main function", result);
-        Assert.Contains("@import \"my-include.glsl\"", result);
-        Assert.Contains("// Entry point for the fragment shader\r\n\r\nvoid main()", result);
-        
-        // Verify order
-        var lines = result.Split('\n');
-        var versionLineIdx = Array.FindIndex(lines, l => l.Contains("#version"));
-        var importLineIdx = Array.FindIndex(lines, l => l.Contains("@import"));
-        var fooCommentIdx = Array.FindIndex(lines, l => l.Contains("// Helper function"));
-        var mainCommentIdx = Array.FindIndex(lines, l => l.Contains("// Entry point"));
-        var endCommentIdx = Array.FindIndex(lines, l => l.Contains("// End of main"));
-        
-        Assert.True(importLineIdx > versionLineIdx, "@import should be after #version");
-        Assert.True(fooCommentIdx > importLineIdx, "foo comment should be after @import");
-        Assert.True(mainCommentIdx > fooCommentIdx, "main comment should be after foo comment");
-        Assert.True(endCommentIdx > mainCommentIdx, "end comment should be after main comment");
+        // Verify all edits with their surrounding context using patterns that match the sequence
+        // 1. Import after "core" and before "uniform"
+        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
+        // 2. Comment above foo (before existing comment/leading trivia)
+        Assert.Contains("/* foo comment */\n\r\n// A helper function to sample a texture\r\nvec4 foo", result);
+        // 3. Comment above main (before leading trivia)
+        Assert.Contains("// Entry point for the fragment shader\n\r\nvoid main()", result);
+        // 4. Sample at inner start of main body  
+        Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
+        // 5. fragColor at inner end of main body (shows context: last stmt + inserted + close brace)
+        Assert.Matches(@"foo\(uv\);\s*fragColor = sample;\s*}", result);
+        // 6. Comment after main (shows closing brace + inserted content)
+        Assert.Contains("}\n// End of main function\n", result);
     }
     
     #endregion
@@ -418,10 +389,9 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         var originalText = tree.Root.ToString();
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        var mainQuery = Query.Kind(mainFunc!.Kind)
-            .Where(n => n is GlslFunctionSyntax f && f.Name == "main");
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
+        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlslFunctionSyntax;
+        Assert.NotNull(mainFunc);
         
         tree.CreateEditor()
             .Insert(mainQuery.Before(), "// This comment will be undone\n")
