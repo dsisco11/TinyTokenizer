@@ -88,6 +88,22 @@ public abstract record NodePattern
     /// <summary>Creates a repetition pattern with bounds.</summary>
     public static RepeatPattern Repeat(NodePattern inner, int min, int max) => new(inner, min, max);
     
+    /// <summary>
+    /// Creates a repetition pattern that repeats until a terminator is encountered.
+    /// The terminator is not consumed (lookahead-style matching).
+    /// </summary>
+    /// <param name="inner">The pattern to repeat.</param>
+    /// <param name="terminator">The pattern that stops repetition (not consumed).</param>
+    /// <returns>A pattern that matches zero or more occurrences of inner, stopping before terminator.</returns>
+    public static RepeatUntilPattern RepeatUntil(NodePattern inner, NodePattern terminator) => 
+        new(inner, terminator);
+    
+    /// <summary>
+    /// Creates a repetition pattern from a query that repeats until a terminator.
+    /// </summary>
+    public static RepeatUntilPattern RepeatUntil(INodeQuery inner, INodeQuery terminator) => 
+        new(new QueryPattern(inner), new QueryPattern(terminator));
+    
     #endregion
 }
 
@@ -130,6 +146,58 @@ public sealed record QueryPattern : NodePattern
         }
         
         consumedCount = 0;
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if the query matches the trivia of a red node.
+    /// Used by RepeatUntilPattern for newline detection.
+    /// </summary>
+    internal bool MatchesTrivia(RedNode node)
+    {
+        if (_query is not NewlineNodeQuery)
+            return false;
+        
+        // Check leading trivia for newlines
+        var trivia = node.Green switch
+        {
+            GreenLeaf leaf => leaf.LeadingTrivia,
+            GreenBlock block => block.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in trivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if the query matches the trivia of a green node.
+    /// Used by RepeatUntilPattern for newline detection.
+    /// </summary>
+    internal bool MatchesTriviaGreen(GreenNode node)
+    {
+        if (_query is not NewlineNodeQuery)
+            return false;
+        
+        // Check leading trivia for newlines
+        var trivia = node switch
+        {
+            GreenLeaf leaf => leaf.LeadingTrivia,
+            GreenBlock block => block.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in trivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
         return false;
     }
     
@@ -408,6 +476,137 @@ public sealed record RepeatPattern : NodePattern
 
 #endregion
 
+#region RepeatUntil Pattern
+
+/// <summary>
+/// Pattern that repeats the inner pattern until a terminator pattern is encountered.
+/// The terminator is NOT consumed (lookahead-style matching).
+/// Matches zero or more occurrences of the inner pattern.
+/// </summary>
+/// <remarks>
+/// This is useful for patterns like "match everything until newline" where you want to
+/// stop before the terminator without consuming it:
+/// <code>
+/// NodePattern.RepeatUntil(Query.Any, Query.Newline)
+/// </code>
+/// </remarks>
+public sealed record RepeatUntilPattern : NodePattern
+{
+    private readonly NodePattern _inner;
+    private readonly NodePattern _terminator;
+    
+    /// <summary>
+    /// Creates a repeat-until pattern.
+    /// </summary>
+    /// <param name="inner">The pattern to repeat.</param>
+    /// <param name="terminator">The pattern that stops repetition (not consumed).</param>
+    public RepeatUntilPattern(NodePattern inner, NodePattern terminator)
+    {
+        _inner = inner;
+        _terminator = terminator;
+    }
+    
+    public override bool TryMatch(RedNode node, out NodeMatch match)
+    {
+        var parts = ImmutableArray.CreateBuilder<RedNode>();
+        var current = node;
+        int totalConsumed = 0;
+        
+        while (current != null)
+        {
+            // First, check if terminator matches (lookahead - don't consume)
+            if (TerminatorMatches(current))
+                break;
+            
+            // Try to match inner pattern
+            if (!_inner.TryMatch(current, out var partMatch))
+                break;
+            
+            parts.AddRange(partMatch.Parts);
+            totalConsumed += partMatch.ConsumedCount;
+            
+            // Advance to next sibling
+            for (int i = 0; i < partMatch.ConsumedCount; i++)
+            {
+                current = current?.NextSibling();
+            }
+        }
+        
+        // RepeatUntil always succeeds (can match zero items)
+        match = new NodeMatch
+        {
+            Position = node?.Position ?? 0,
+            Parts = parts.ToImmutable(),
+            ConsumedCount = totalConsumed
+        };
+        return true;
+    }
+    
+    /// <summary>
+    /// Checks if the terminator matches, including checking trivia for newlines.
+    /// </summary>
+    private bool TerminatorMatches(RedNode node)
+    {
+        // Direct match on the node
+        if (_terminator.TryMatch(node, out _))
+            return true;
+        
+        // For newline terminators, also check leading trivia
+        if (_terminator is QueryPattern qp && qp.MatchesTrivia(node))
+            return true;
+        
+        return false;
+    }
+    
+    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        int currentIndex = startIndex;
+        int totalConsumed = 0;
+        
+        while (currentIndex < siblings.Count)
+        {
+            // First, check if terminator matches (lookahead - don't consume)
+            if (TerminatorMatchesGreen(siblings, currentIndex))
+                break;
+            
+            // Try to match inner pattern
+            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+                break;
+            
+            totalConsumed += partConsumed;
+            currentIndex += partConsumed;
+        }
+        
+        // RepeatUntil always succeeds (can match zero items)
+        consumedCount = totalConsumed;
+        return true;
+    }
+    
+    /// <summary>
+    /// Checks if the terminator matches at the green node level, including trivia.
+    /// </summary>
+    private bool TerminatorMatchesGreen(IReadOnlyList<GreenNode> siblings, int index)
+    {
+        // Direct match
+        if (_terminator.TryMatchGreen(siblings, index, out _))
+            return true;
+        
+        // For newline terminators, check leading trivia of the current node
+        if (_terminator is QueryPattern qp)
+        {
+            var greenNode = siblings[index];
+            if (qp.MatchesTriviaGreen(greenNode))
+                return true;
+        }
+        
+        return false;
+    }
+    
+    public override string Description => $"{_inner.Description}*(?={_terminator.Description})";
+}
+
+#endregion
+
 #region Lookahead Pattern
 
 /// <summary>
@@ -620,6 +819,87 @@ public sealed class PatternBuilder
             return builder.Build();
         }).ToArray();
         _parts.Add(new AlternativePattern(patterns));
+        return this;
+    }
+    
+    /// <summary>
+    /// Wraps all current patterns in a RepeatUntil pattern that stops before the terminator.
+    /// The terminator is not consumed.
+    /// </summary>
+    /// <param name="terminator">Builder for the terminator pattern.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// // Match tokens until newline (for directive-style lines)
+    /// .Any().RepeatUntil(t => t.Newline())
+    /// </code>
+    /// </example>
+    public PatternBuilder RepeatUntil(Action<PatternBuilder> terminator)
+    {
+        if (_parts.Count == 0)
+            throw new InvalidOperationException("RepeatUntil requires at least one pattern to repeat.");
+        
+        // Build the inner pattern from accumulated parts
+        var innerPattern = _parts.Count == 1 ? _parts[0] : new SequencePattern(_parts);
+        _parts.Clear();
+        
+        // Build terminator pattern
+        var terminatorBuilder = new PatternBuilder();
+        terminator(terminatorBuilder);
+        var terminatorPattern = terminatorBuilder.Build();
+        
+        // Add the repeat-until pattern
+        _parts.Add(new RepeatUntilPattern(innerPattern, terminatorPattern));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a RepeatUntil pattern that repeats a specified inner pattern until a terminator.
+    /// Unlike the other RepeatUntil overload, this adds a NEW pattern without affecting accumulated patterns.
+    /// </summary>
+    /// <param name="inner">Builder for the pattern to repeat.</param>
+    /// <param name="terminator">Builder for the terminator pattern.</param>
+    /// <returns>This builder for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// // Match tagged identifier followed by any tokens until newline
+    /// .TaggedIdent().AnyUntil(t => t.Newline())
+    /// </code>
+    /// </example>
+    public PatternBuilder AnyUntil(Action<PatternBuilder> terminator)
+    {
+        var terminatorBuilder = new PatternBuilder();
+        terminator(terminatorBuilder);
+        var terminatorPattern = terminatorBuilder.Build();
+        
+        _parts.Add(new RepeatUntilPattern(new QueryPattern(Q.Any), terminatorPattern));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches any node, useful with RepeatUntil.
+    /// </summary>
+    public PatternBuilder Any()
+    {
+        _parts.Add(new QueryPattern(Q.Any));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches a newline (via trivia or whitespace token).
+    /// </summary>
+    public PatternBuilder Newline()
+    {
+        _parts.Add(new QueryPattern(Q.Newline));
+        return this;
+    }
+    
+    /// <summary>
+    /// Adds a pattern that matches tagged identifiers (e.g., #define, @attribute).
+    /// </summary>
+    public PatternBuilder TaggedIdent()
+    {
+        _parts.Add(new QueryPattern(Q.TaggedIdent));
         return this;
     }
     

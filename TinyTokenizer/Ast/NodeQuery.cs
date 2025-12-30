@@ -194,6 +194,10 @@ public enum InsertionPoint
     InnerStart,
     /// <summary>Insert at the end of a block's content (before closing delimiter).</summary>
     InnerEnd,
+    /// <summary>Insert at the start of a named block's content (for IBlockContainerNode).</summary>
+    NamedBlockInnerStart,
+    /// <summary>Insert at the end of a named block's content (for IBlockContainerNode).</summary>
+    NamedBlockInnerEnd,
 }
 
 /// <summary>
@@ -207,10 +211,14 @@ public sealed record InsertionQuery
     /// <summary>Gets the insertion point relative to matched nodes.</summary>
     public InsertionPoint Point { get; }
     
-    internal InsertionQuery(INodeQuery inner, InsertionPoint point)
+    /// <summary>Gets the block name for named block insertion points, or null.</summary>
+    public string? BlockName { get; }
+    
+    internal InsertionQuery(INodeQuery inner, InsertionPoint point, string? blockName = null)
     {
         InnerQuery = inner;
         Point = point;
+        BlockName = blockName;
     }
     
     /// <summary>
@@ -265,8 +273,30 @@ public sealed record InsertionQuery
             InsertionPoint.InnerEnd when node is RedBlock block => new InsertionPosition(
                 NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1, Point, null,
                 ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
+            InsertionPoint.NamedBlockInnerStart when node is IBlockContainerNode container => 
+                ResolveNamedBlockPosition(node, container.GetBlock(BlockName), isStart: true),
+            InsertionPoint.NamedBlockInnerEnd when node is IBlockContainerNode container => 
+                ResolveNamedBlockPosition(node, container.GetBlock(BlockName), isStart: false),
             _ => null
         };
+    }
+    
+    private static InsertionPosition ResolveNamedBlockPosition(RedNode syntaxNode, RedBlock block, bool isStart)
+    {
+        var blockPath = NodePath.FromNode(block);
+        
+        if (isStart)
+        {
+            return new InsertionPosition(
+                blockPath, 0, block.Position + 1, InsertionPoint.InnerStart, null,
+                ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+        }
+        else
+        {
+            return new InsertionPosition(
+                blockPath, block.ChildCount, block.EndPosition - 1, InsertionPoint.InnerEnd, null,
+                ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+        }
     }
     
     private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(RedNode node)

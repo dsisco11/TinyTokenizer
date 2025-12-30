@@ -70,6 +70,18 @@ public static class Query
     /// <summary>Matches only leaf nodes (non-containers).</summary>
     public static LeafNodeQuery Leaf => new LeafNodeQuery();
     
+    /// <summary>
+    /// Matches nodes that are preceded by a newline (in trivia or as whitespace token).
+    /// Useful for line-based pattern matching.
+    /// </summary>
+    public static NewlineNodeQuery Newline => new NewlineNodeQuery();
+    
+    /// <summary>
+    /// Matches nodes that are NOT preceded by a newline.
+    /// Useful for matching tokens on the same line.
+    /// </summary>
+    public static NewlineNodeQuery NotNewline => new NewlineNodeQuery(negated: true);
+    
     #endregion
     
     #region Syntax Queries

@@ -286,6 +286,150 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 
 #endregion
 
+#region Newline Query
+
+/// <summary>
+/// Matches nodes that represent or are preceded by a newline.
+/// Checks:
+/// 1. The node itself is a whitespace token containing newline characters.
+/// 2. The node's leading trivia contains a newline.
+/// 3. The previous sibling's trailing trivia contains a newline.
+/// </summary>
+/// <remarks>
+/// This query is particularly useful for line-based pattern matching, such as
+/// matching directive lines that should consume tokens until a newline.
+/// </remarks>
+public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
+{
+    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    private readonly bool _negated;
+    
+    public NewlineNodeQuery(bool negated = false) : this(null, SelectionMode.All, 0, negated) { }
+    
+    private NewlineNodeQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg, bool negated = false)
+    {
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+        _negated = negated;
+    }
+    
+    /// <summary>
+    /// Returns a negated query that matches nodes NOT preceded by a newline.
+    /// </summary>
+    public NewlineNodeQuery Negate() => new(_predicate, _mode, _modeArg, !_negated);
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf().Where(Matches);
+        
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <inheritdoc/>
+    public override bool Matches(RedNode node)
+    {
+        bool hasNewline = HasNewline(node);
+        bool result = _negated ? !hasNewline : hasNewline;
+        return result && (_predicate == null || _predicate(node));
+    }
+    
+    private static bool HasNewline(RedNode node)
+    {
+        // Check 1: Does leading trivia contain newline?
+        var leadingTrivia = node.Green switch
+        {
+            GreenLeaf gl => gl.LeadingTrivia,
+            GreenBlock gb => gb.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in leadingTrivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        // Check 2: Does previous sibling's trailing trivia contain newline?
+        var prev = node.PreviousSibling();
+        if (prev != null)
+        {
+            var trailingTrivia = prev.Green switch
+            {
+                GreenLeaf gl => gl.TrailingTrivia,
+                GreenBlock gb => gb.TrailingTrivia,
+                _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+            };
+            
+            foreach (var t in trailingTrivia)
+            {
+                if (t.Kind == TriviaKind.Newline)
+                    return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node)
+    {
+        bool hasNewline = HasNewlineGreen(node);
+        return _negated ? !hasNewline : hasNewline;
+    }
+    
+    private static bool HasNewlineGreen(GreenNode node)
+    {
+        // Check: Does leading trivia contain newline?
+        var leadingTrivia = node switch
+        {
+            GreenLeaf gl => gl.LeadingTrivia,
+            GreenBlock gb => gb.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in leadingTrivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        // Note: Can't check previous sibling's trailing trivia without parent context
+        // This is a limitation of green-level matching
+        
+        return false;
+    }
+    
+    protected override NewlineNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+        new(CombinePredicates(_predicate, predicate), _mode, _modeArg, _negated);
+    
+    protected override NewlineNodeQuery CreateFirst() => new(_predicate, SelectionMode.First, 0, _negated);
+    protected override NewlineNodeQuery CreateLast() => new(_predicate, SelectionMode.Last, 0, _negated);
+    protected override NewlineNodeQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n, _negated);
+    protected override NewlineNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count, _negated);
+    protected override NewlineNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count, _negated);
+    
+    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
+}
+
+#endregion
+
 #region Selection Mode
 
 /// <summary>

@@ -20,7 +20,7 @@ public class GlslEditorTests
     /// Pattern: Ident + Ident + ParenBlock + BraceBlock
     /// Example: void main() { ... }
     /// </summary>
-    public sealed class GlslFunctionSyntax : SyntaxNode
+    public sealed class GlslFunctionSyntax : SyntaxNode, INamedNode, IBlockContainerNode
     {
         public GlslFunctionSyntax(GreenSyntaxNode green, RedNode? parent, int position)
             : base(green, parent, position) { }
@@ -42,27 +42,47 @@ public class GlslEditorTests
         
         /// <summary>Function body block (braces).</summary>
         public RedBlock Body => GetTypedChild<RedBlock>(3);
+        
+        #region IBlockContainerNode
+        
+        /// <inheritdoc/>
+        public IReadOnlyList<string> BlockNames => ["body", "params"];
+        
+        /// <inheritdoc/>
+        public RedBlock GetBlock(string? name = null) => name switch
+        {
+            null or "body" => Body,
+            "params" => Parameters,
+            _ => throw new ArgumentException($"Unknown block name: {name}. Valid names are: {string.Join(", ", BlockNames)}")
+        };
+        
+        #endregion
     }
     
     /// <summary>
     /// A GLSL tagged directive: #version, #define, etc.
-    /// Pattern: TaggedIdent + rest of line (we just match the tag for now)
+    /// Pattern: TaggedIdent + rest of line
     /// </summary>
-    public sealed class GlslDirectiveSyntax : SyntaxNode
+    public sealed class GlslDirectiveSyntax : SyntaxNode, INamedNode
     {
         public GlslDirectiveSyntax(GreenSyntaxNode green, RedNode? parent, int position)
             : base(green, parent, position) { }
         
         /// <summary>The directive tag node (e.g., "#version").</summary>
         public RedLeaf DirectiveNode => GetTypedChild<RedLeaf>(0);
-
-        public RedLeaf ArgumentsNode => GetTypedChild<RedLeaf>(1);
         
         /// <summary>The directive name without # (e.g., "version").</summary>
         public string Name => DirectiveNode.Text.TrimStart('#');
-
-        /// <summary> The directive arguments as text. </summary>
-        public string Arguments => ArgumentsNode.Text;
+        
+        /// <summary>
+        /// Gets all children after the directive tag (the arguments).
+        /// </summary>
+        public IEnumerable<RedNode> Arguments => Children.Skip(1);
+        
+        /// <summary>
+        /// Gets the arguments as a string.
+        /// </summary>
+        public string ArgumentsText => string.Concat(Arguments.Select(a => a.ToString()));
     }
     
     #endregion
@@ -83,9 +103,9 @@ public class GlslEditorTests
                 .Match(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock)
                 .WithPriority(10)
                 .Build())
-            // Directive: #tag ...
+            // Directive: #tag followed by tokens until newline
             .DefineSyntax(Syntax.Define<GlslDirectiveSyntax>("GlslDirective")
-                .Match(Query.TaggedIdent, Query.Any)
+                .Match(p => p.TaggedIdent().AnyUntil(t => t.Newline()))
                 .Build())
             .Build();
     }
@@ -406,6 +426,93 @@ void main() {
         var undoneText = tree.Root.ToString();
         Assert.Equal(originalText, undoneText);
         Assert.DoesNotContain("// This comment will be undone", undoneText);
+    }
+    
+    #endregion
+    
+    #region New API Tests (INamedNode, IBlockContainerNode)
+    
+    [Fact]
+    public void Named_FindsFunctionByName()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // Use the new .Named() extension method
+        var mainFunc = Query.Syntax<GlslFunctionSyntax>().Named("main")
+            .SelectTyped(tree)
+            .FirstOrDefault();
+        
+        Assert.NotNull(mainFunc);
+        Assert.Equal("main", mainFunc!.Name);
+        Assert.Equal("void", mainFunc.ReturnType);
+    }
+    
+    [Fact]
+    public void Named_ReturnsEmptyForNonExistentName()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        var nonExistent = Query.Syntax<GlslFunctionSyntax>().Named("nonexistent")
+            .SelectTyped(tree)
+            .FirstOrDefault();
+        
+        Assert.Null(nonExistent);
+    }
+    
+    [Fact]
+    public void InnerStart_WithBlockName_InsertsIntoBody()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // Use the new .InnerStart("body") extension method
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+        
+        tree.CreateEditor()
+            .Insert(mainQuery.InnerStart("body"), "\n    // Body start")
+            .Commit();
+        
+        var result = tree.Root.ToString();
+        Assert.Contains("void main() {\n    // Body start", result);
+    }
+    
+    [Fact]
+    public void InnerEnd_WithDefaultBlock_InsertsIntoBody()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // Use the new .InnerEnd() extension method (defaults to "body" as first block)
+        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+        
+        tree.CreateEditor()
+            .Insert(mainQuery.InnerEnd(), "\n    // Body end")
+            .Commit();
+        
+        var result = tree.Root.ToString();
+        Assert.Matches(@"// Body end\s*}", result);
+    }
+    
+    [Fact]
+    public void DirectiveSyntax_CapturesFullLine()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // The directive should capture "#version 330 core"
+        var versionDirective = Query.Syntax<GlslDirectiveSyntax>().Named("version")
+            .SelectTyped(tree)
+            .FirstOrDefault();
+        
+        Assert.NotNull(versionDirective);
+        Assert.Equal("version", versionDirective!.Name);
+        
+        // The arguments should contain "330" and "core"
+        var argsText = versionDirective.ArgumentsText;
+        Assert.Contains("330", argsText);
+        Assert.Contains("core", argsText);
     }
     
     #endregion
