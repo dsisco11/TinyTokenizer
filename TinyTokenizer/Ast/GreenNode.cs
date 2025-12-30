@@ -72,7 +72,7 @@ public abstract record GreenNode : IFormattable
     /// <summary>
     /// Whether this node is a container (has children) vs a leaf.
     /// </summary>
-    public bool IsContainer => SlotCount > 0 || Kind >= NodeKind.BraceBlock;
+    public bool IsContainer => this is GreenContainer;
     
     /// <summary>
     /// Whether this node is a leaf (no children).

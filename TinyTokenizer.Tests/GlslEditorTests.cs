@@ -99,6 +99,7 @@ uniform sampler2D tex;
 in vec2 uv;
 out vec4 fragColor;
 
+// A helper function to sample a texture
 vec4 foo(vec2 coord) {
     return texture(tex, coord);
 }
@@ -146,9 +147,9 @@ void main() {
     
     #endregion
     
-    #region 1. Insert Comment Above main() Method
+    #region 1. Insert Comment Above Method
     
-    [Fact(Skip = "Semantic node path resolution needs work - paths through semantic tree don't map to green tree")]
+    [Fact]
     public void InsertCommentAboveMainMethod()
     {
         var schema = CreateGlslSchema();
@@ -162,20 +163,21 @@ void main() {
         var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(n => n.Name == "main");
         
         tree.CreateEditor()
-            .Insert(mainQuery.Before(), "// Entry point for the fragment shader\n")
+            .Insert(mainQuery.Before(), "// Entry point for the fragment shader\r\n")
             .Commit();
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("// Entry point for the fragment shader", result);
-        Assert.Contains("// Entry point for the fragment shader\nvoid main()", result);
+        // Roslyn-style: insertion goes BEFORE target's leading trivia.
+        // The blank line (leading trivia of 'void') stays with 'void', so comment appears before the blank line.
+        Assert.Contains("// Entry point for the fragment shader\r\n\r\nvoid main()", result);
     }
-    
+
     #endregion
     
     #region 2. Insert Sample-From-Texture at Top of main()
     
-    [Fact(Skip = "Semantic node path resolution needs work - paths through semantic tree don't map to green tree")]
+    [Fact]
     public void InsertSampleFromTextureAtTopOfMain()
     {
         var schema = CreateGlslSchema();
@@ -206,7 +208,7 @@ void main() {
     
     #region 3. Insert Write-to-Out-Buffer at End of main()
     
-    [Fact(Skip = "Semantic node path resolution needs work - paths through semantic tree don't map to green tree")]
+    [Fact]
     public void InsertWriteToOutBufferAtEndOfMain()
     {
         var schema = CreateGlslSchema();
@@ -310,7 +312,7 @@ void main() {
     
     #region 6. Insert Comment Above foo() Method
     
-    [Fact(Skip = "Semantic node path resolution needs work - paths through semantic tree don't map to green tree")]
+    [Fact]
     public void InsertCommentAboveFooMethod()
     {
         var schema = CreateGlslSchema();
@@ -324,20 +326,21 @@ void main() {
             .Where(n => n is GlslFunctionSyntax f && f.Name == "foo");
         
         tree.CreateEditor()
-            .Insert(fooQuery.Before(), "// Helper function to sample texture\n")
+            .Insert(fooQuery.Before(), "/* foo comment */\n")
             .Commit();
         
         var result = tree.Root.ToString();
         
-        Assert.Contains("// Helper function to sample texture", result);
-        Assert.Contains("// Helper function to sample texture\nvec4 foo", result);
+        // Roslyn-style: insertion goes BEFORE target's leading trivia.
+        // The existing comment is leading trivia of 'vec4', so our comment appears before it.
+        Assert.Contains("/* foo comment */\n\r\n// A helper function to sample a texture\r\nvec4 foo", result);
     }
     
     #endregion
     
     #region Combined Edit Test
     
-    [Fact(Skip = "Semantic node path resolution needs work - paths through semantic tree don't map to green tree")]
+    [Fact]
     public void ApplyAllEditsInSingleCommit()
     {
         var schema = CreateGlslSchema();
@@ -377,7 +380,7 @@ void main() {
             // 5. Import below #version
             .Insert(coreQuery.After(), "\n@import \"my-include.glsl\"")
             // 6. Comment above foo
-            .Insert(fooQuery.Before(), "// Helper function to sample texture\n")
+            .Insert(fooQuery.Before(), "/* foo comment */\n")
             .Commit();
         
         var result = tree.Root.ToString();
@@ -388,7 +391,7 @@ void main() {
         Assert.Contains("fragColor = sample;", result);
         Assert.Contains("// End of main function", result);
         Assert.Contains("@import \"my-include.glsl\"", result);
-        Assert.Contains("// Helper function to sample texture", result);
+        Assert.Contains("// Entry point for the fragment shader\r\n\r\nvoid main()", result);
         
         // Verify order
         var lines = result.Split('\n');

@@ -12,7 +12,7 @@ namespace TinyTokenizer.Ast;
 /// When the red tree is created, it produces typed red nodes (e.g., RedFunctionCall) that provide
 /// domain-specific accessors for the matched syntax pattern.
 /// </remarks>
-public sealed record GreenSyntaxNode : GreenNode
+public sealed record GreenSyntaxNode : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly NodeKind _kind;
@@ -29,11 +29,11 @@ public sealed record GreenSyntaxNode : GreenNode
     {
         _kind = kind;
         _redType = redType;
-        _children = children;
+        _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
         
         // Calculate total width
         int width = 0;
-        foreach (var child in children)
+        foreach (var child in _children)
         {
             width += child.Width;
         }
@@ -54,18 +54,13 @@ public sealed record GreenSyntaxNode : GreenNode
     /// <inheritdoc/>
     public override int Width => _width;
     
-    /// <inheritdoc/>
-    public override int SlotCount => _children.Length;
-    
     /// <summary>
     /// The concrete RedSyntaxNode subclass to instantiate when creating the red node.
     /// </summary>
     public Type RedType => _redType;
     
-    /// <summary>
-    /// The child green nodes.
-    /// </summary>
-    public ImmutableArray<GreenNode> Children => _children;
+    /// <inheritdoc/>
+    public override ImmutableArray<GreenNode> Children => _children;
     
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index) =>
@@ -81,6 +76,46 @@ public sealed record GreenSyntaxNode : GreenNode
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position) =>
         SyntaxRedFactory.Create(this, parent, position);
+    
+    #region Structural Sharing Mutations
+    
+    /// <inheritdoc/>
+    public override GreenSyntaxNode WithSlot(int index, GreenNode newChild)
+    {
+        if (index < 0 || index >= _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        return new GreenSyntaxNode(_kind, _redType, _children.SetItem(index, newChild));
+    }
+    
+    /// <inheritdoc/>
+    public override GreenSyntaxNode WithChildren(ImmutableArray<GreenNode> newChildren)
+        => new(_kind, _redType, newChildren);
+    
+    /// <inheritdoc/>
+    public override GreenSyntaxNode WithInsert(int index, ImmutableArray<GreenNode> nodes)
+    {
+        if (index < 0 || index > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        var builder = _children.ToBuilder();
+        builder.InsertRange(index, nodes);
+        return new GreenSyntaxNode(_kind, _redType, builder.ToImmutable());
+    }
+    
+    /// <inheritdoc/>
+    public override GreenSyntaxNode WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
+    {
+        if (index < 0 || count < 0 || index + count > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        
+        var builder = _children.ToBuilder();
+        builder.RemoveRange(index, count);
+        builder.InsertRange(index, replacement);
+        return new GreenSyntaxNode(_kind, _redType, builder.ToImmutable());
+    }
+    
+    #endregion
 }
 
 /// <summary>

@@ -12,7 +12,7 @@ namespace TinyTokenizer.Ast;
 /// - LeadingTrivia: trivia before the opening delimiter
 /// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
 /// </remarks>
-public sealed record GreenBlock : GreenNode
+public sealed record GreenBlock : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
@@ -35,9 +35,6 @@ public sealed record GreenBlock : GreenNode
     
     /// <inheritdoc/>
     public override int Width => _width;
-    
-    /// <inheritdoc/>
-    public override int SlotCount => _children.Length;
     
     /// <summary>Total width of leading trivia.</summary>
     public int LeadingTriviaWidth { get; }
@@ -85,7 +82,7 @@ public sealed record GreenBlock : GreenNode
     }
     
     /// <summary>Gets the children of this block.</summary>
-    public ImmutableArray<GreenNode> Children => _children;
+    public override ImmutableArray<GreenNode> Children => _children;
     
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index)
@@ -126,11 +123,8 @@ public sealed record GreenBlock : GreenNode
     
     #region Structural Sharing Mutations
     
-    /// <summary>
-    /// Creates a new block with one child replaced.
-    /// Other children are shared by reference.
-    /// </summary>
-    public GreenBlock WithSlot(int index, GreenNode newChild)
+    /// <inheritdoc/>
+    public override GreenBlock WithSlot(int index, GreenNode newChild)
     {
         if (index < 0 || index >= _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -139,11 +133,12 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, newChildren, LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with children inserted at the specified index.
-    /// Existing children are shared by reference.
-    /// </summary>
-    public GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
+    /// <inheritdoc/>
+    public override GreenBlock WithChildren(ImmutableArray<GreenNode> newChildren)
+        => new(Opener, newChildren, LeadingTrivia, TrailingTrivia);
+    
+    /// <inheritdoc/>
+    public override GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
     {
         if (index < 0 || index > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -153,11 +148,8 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with children removed from the specified range.
-    /// Remaining children are shared by reference.
-    /// </summary>
-    public GreenBlock WithRemove(int index, int count)
+    /// <inheritdoc/>
+    public override GreenBlock WithRemove(int index, int count)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
@@ -167,10 +159,8 @@ public sealed record GreenBlock : GreenNode
         return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
     }
     
-    /// <summary>
-    /// Creates a new block with a range of children replaced.
-    /// </summary>
-    public GreenBlock WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
+    /// <inheritdoc/>
+    public override GreenBlock WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
     {
         if (index < 0 || count < 0 || index + count > _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));

@@ -125,8 +125,7 @@ public class GreenTreeBuilder
             // Reached target - do the insertion
             return current switch
             {
-                GreenBlock block => block.WithInsert(insertIndex, nodes),
-                GreenList list => list.WithInsert(insertIndex, nodes),
+                GreenContainer container => container.WithInsert(insertIndex, nodes),
                 _ => throw new InvalidOperationException("Cannot insert into leaf node")
             };
         }
@@ -141,8 +140,7 @@ public class GreenTreeBuilder
         // Replace the child slot with modified version
         return current switch
         {
-            GreenBlock block => block.WithSlot(childSlot, modifiedChild),
-            GreenList list => list.WithSlot(childSlot, modifiedChild),
+            GreenContainer container => container.WithSlot(childSlot, modifiedChild),
             _ => throw new InvalidOperationException("Cannot descend into leaf node")
         };
     }
@@ -160,8 +158,7 @@ public class GreenTreeBuilder
             // Reached target - do the replacement
             return current switch
             {
-                GreenBlock block => block.WithReplace(startIndex, count, replacement),
-                GreenList list => list.WithReplace(startIndex, count, replacement),
+                GreenContainer container => container.WithReplace(startIndex, count, replacement),
                 _ => throw new InvalidOperationException("Cannot replace in leaf node")
             };
         }
@@ -175,8 +172,7 @@ public class GreenTreeBuilder
         
         return current switch
         {
-            GreenBlock block => block.WithSlot(childSlot, modifiedChild),
-            GreenList list => list.WithSlot(childSlot, modifiedChild),
+            GreenContainer container => container.WithSlot(childSlot, modifiedChild),
             _ => throw new InvalidOperationException("Cannot descend into leaf node")
         };
     }
@@ -193,8 +189,7 @@ public class GreenTreeBuilder
             // Reached target - replace the child
             return current switch
             {
-                GreenBlock block => block.WithSlot(childIndex, newChild),
-                GreenList list => list.WithSlot(childIndex, newChild),
+                GreenContainer container => container.WithSlot(childIndex, newChild),
                 _ => throw new InvalidOperationException("Cannot replace child in leaf node")
             };
         }
@@ -208,8 +203,7 @@ public class GreenTreeBuilder
         
         return current switch
         {
-            GreenBlock block => block.WithSlot(childSlot, modifiedChild),
-            GreenList list => list.WithSlot(childSlot, modifiedChild),
+            GreenContainer container => container.WithSlot(childSlot, modifiedChild),
             _ => throw new InvalidOperationException("Cannot descend into leaf node")
         };
     }
@@ -236,8 +230,7 @@ public class GreenTreeBuilder
             
             return current switch
             {
-                GreenBlock block => block.WithSlot(childIndex, modifiedChild),
-                GreenList list => list.WithSlot(childIndex, modifiedChild),
+                GreenContainer container => container.WithSlot(childIndex, modifiedChild),
                 _ => throw new InvalidOperationException("Cannot update child in leaf node")
             };
         }
@@ -251,8 +244,7 @@ public class GreenTreeBuilder
         
         return current switch
         {
-            GreenBlock block => block.WithSlot(childSlot, modifiedPathChild),
-            GreenList list => list.WithSlot(childSlot, modifiedPathChild),
+            GreenContainer container => container.WithSlot(childSlot, modifiedPathChild),
             _ => throw new InvalidOperationException("Cannot descend into leaf node")
         };
     }
