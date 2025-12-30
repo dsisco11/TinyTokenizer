@@ -13,6 +13,15 @@ namespace TinyTokenizer.Tests;
 /// </summary>
 public class GlslEditorTests
 {
+    #region Helpers
+    
+    /// <summary>
+    /// Normalizes line endings to \n for cross-platform test assertions.
+    /// </summary>
+    private static string NormalizeLineEndings(string text) => text.ReplaceLineEndings("\n");
+    
+    #endregion
+    
     #region Custom Syntax Nodes for GLSL
     
     /// <summary>
@@ -185,11 +194,11 @@ void main() {
             .Insert(mainFuncQuery.Before(), "// Entry point for the fragment shader\r\n")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Roslyn-style: insertion goes BEFORE target's leading trivia.
         // The blank line (leading trivia of 'void') stays with 'void', so comment appears before the blank line.
-        Assert.Contains("// Entry point for the fragment shader\r\n\r\nvoid main()", result);
+        Assert.Contains("// Entry point for the fragment shader\n\nvoid main()", result);
     }
 
     #endregion
@@ -207,7 +216,7 @@ void main() {
             .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify insertion appears at inner start of main's body (after opening brace)
         Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
@@ -228,7 +237,7 @@ void main() {
             .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify insertion appears at inner end of main's body, showing context (last statement + inserted + closing brace)
         // The exact whitespace may vary, so we check the key sequence
@@ -253,7 +262,7 @@ void main() {
             .Insert(mainQuery.After(), "\n// End of main function\n")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify insertion appears after main's closing brace
         Assert.Contains("}\n// End of main function\n", result);
@@ -274,7 +283,7 @@ void main() {
             .Insert(Query.Syntax<GlslDirectiveSyntax>().Named("version").After(), "\n@import \"my-include.glsl\"")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify insertion appears after #version directive and before "uniform"
         Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
@@ -295,11 +304,11 @@ void main() {
             .Insert(Query.Syntax<GlslFunctionSyntax>().Named("foo").Before(), "/* foo comment */\n")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Roslyn-style: insertion goes BEFORE target's leading trivia.
         // The existing comment is leading trivia of 'vec4', so our comment appears before it.
-        Assert.Contains("/* foo comment */\n\r\n// A helper function to sample a texture\r\nvec4 foo", result);
+        Assert.Contains("/* foo comment */\n\n// A helper function to sample a texture\nvec4 foo", result);
     }
     
     #endregion
@@ -332,15 +341,15 @@ void main() {
             .Insert(fooQuery.Before(), "/* foo comment */\n")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify all edits with their surrounding context using patterns that match the sequence
         // 1. Import after "core" and before "uniform"
         Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
         // 2. Comment above foo (before existing comment/leading trivia)
-        Assert.Contains("/* foo comment */\n\r\n// A helper function to sample a texture\r\nvec4 foo", result);
+        Assert.Contains("/* foo comment */\n\n// A helper function to sample a texture\nvec4 foo", result);
         // 3. Comment above main (before leading trivia)
-        Assert.Contains("// Entry point for the fragment shader\n\r\nvoid main()", result);
+        Assert.Contains("// Entry point for the fragment shader\n\nvoid main()", result);
         // 4. Sample at inner start of main body  
         Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
         // 5. fragColor at inner end of main body (shows context: last stmt + inserted + close brace)
@@ -425,7 +434,7 @@ void main() {
             .Insert(mainQuery.InnerStart("body"), "\n    // Body start")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         Assert.Contains("void main() {\n    // Body start", result);
     }
     
@@ -442,7 +451,7 @@ void main() {
             .Insert(mainQuery.InnerEnd(), "\n    // Body end")
             .Commit();
         
-        var result = tree.Root.ToString();
+        var result = NormalizeLineEndings(tree.Root.ToString());
         Assert.Matches(@"// Body end\s*}", result);
     }
     
