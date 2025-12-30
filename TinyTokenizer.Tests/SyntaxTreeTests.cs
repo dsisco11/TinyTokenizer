@@ -572,6 +572,241 @@ public class SyntaxTreeTests
     
     #endregion
     
+    #region Query Named Methods (Concise API)
+    
+    [Fact]
+    public void Query_Ident_WithText_SelectsSpecificIdentifier()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz foo");
+        
+        var foos = Q.Ident("foo").Select(tree).ToList();
+        
+        Assert.Equal(2, foos.Count);
+        Assert.All(foos, node => Assert.Equal("foo", ((RedLeaf)node).Text));
+    }
+    
+    [Fact]
+    public void Query_Ident_WithText_NoMatch_ReturnsEmpty()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        var matches = Q.Ident("nonexistent").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    [Fact]
+    public void Query_Ident_CaseSensitive()
+    {
+        var tree = SyntaxTree.Parse("Foo foo FOO");
+        
+        var foos = Q.Ident("foo").Select(tree).ToList();
+        
+        Assert.Single(foos);
+        Assert.Equal("foo", ((RedLeaf)foos[0]).Text);
+    }
+    
+    [Fact]
+    public void Query_Symbol_WithText_SelectsSpecificSymbol()
+    {
+        var tree = SyntaxTree.Parse("a, b; c: d");
+        
+        var commas = Q.Symbol(",").Select(tree).ToList();
+        var semicolons = Q.Symbol(";").Select(tree).ToList();
+        var colons = Q.Symbol(":").Select(tree).ToList();
+        
+        Assert.Single(commas);
+        Assert.Single(semicolons);
+        Assert.Single(colons);
+    }
+    
+    [Fact]
+    public void Query_Operator_WithText_SelectsSpecificOperator()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("a == b && c != d || e", options);
+        
+        var equals = Q.Operator("==").Select(tree).ToList();
+        var ands = Q.Operator("&&").Select(tree).ToList();
+        var notEquals = Q.Operator("!=").Select(tree).ToList();
+        var ors = Q.Operator("||").Select(tree).ToList();
+        
+        Assert.Single(equals);
+        Assert.Single(ands);
+        Assert.Single(notEquals);
+        Assert.Single(ors);
+    }
+    
+    [Fact]
+    public void Query_Numeric_WithText_SelectsSpecificNumber()
+    {
+        var tree = SyntaxTree.Parse("x = 42 + 3.14 + 42");
+        
+        var fortyTwos = Q.Numeric("42").Select(tree).ToList();
+        var pis = Q.Numeric("3.14").Select(tree).ToList();
+        
+        Assert.Equal(2, fortyTwos.Count);
+        Assert.Single(pis);
+    }
+    
+    [Fact]
+    public void Query_String_WithText_SelectsSpecificString()
+    {
+        var tree = SyntaxTree.Parse("a = \"hello\" + \"world\" + \"hello\"");
+        
+        var hellos = Q.String("\"hello\"").Select(tree).ToList();
+        var worlds = Q.String("\"world\"").Select(tree).ToList();
+        
+        Assert.Equal(2, hellos.Count);
+        Assert.Single(worlds);
+    }
+    
+    [Fact]
+    public void Query_TaggedIdent_WithText_SelectsSpecificTag()
+    {
+        var options = TokenizerOptions.Default.WithTagPrefixes('#', '@');
+        var tree = SyntaxTree.Parse("#define #include @attr #define", options);
+        
+        var defines = Q.TaggedIdent("#define").Select(tree).ToList();
+        var includes = Q.TaggedIdent("#include").Select(tree).ToList();
+        var attrs = Q.TaggedIdent("@attr").Select(tree).ToList();
+        
+        Assert.Equal(2, defines.Count);
+        Assert.Single(includes);
+        Assert.Single(attrs);
+    }
+    
+    [Fact]
+    public void Query_Named_EquivalentToWithText()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo");
+        
+        // These should produce identical results
+        var namedQuery = Q.Ident("foo").Select(tree).ToList();
+        var withTextQuery = Q.AnyIdent.WithText("foo").Select(tree).ToList();
+        
+        Assert.Equal(namedQuery.Count, withTextQuery.Count);
+        Assert.Equal(2, namedQuery.Count);
+    }
+    
+    [Fact]
+    public void Query_Named_CanBeChained()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo baz foo");
+        
+        // Named query with .First()
+        var firstFoo = Q.Ident("foo").First().Select(tree).ToList();
+        
+        Assert.Single(firstFoo);
+    }
+    
+    [Fact]
+    public void Query_Named_WorksInSequence()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("x = 42", options);
+        
+        // Sequence: Ident("x") followed by Operator("=") followed by Numeric
+        var query = Q.Sequence(Q.Ident("x"), Q.Operator("="), Q.AnyNumeric);
+        var firstNode = tree.Root.Children.First();
+        
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(3, consumed);
+    }
+    
+    [Fact]
+    public void Query_AnyIdent_VsNamedIdent_Coverage()
+    {
+        var tree = SyntaxTree.Parse("alpha beta gamma");
+        
+        // AnyIdent matches all
+        var all = Q.AnyIdent.Select(tree).ToList();
+        Assert.Equal(3, all.Count);
+        
+        // Named queries match specific
+        var alphas = Q.Ident("alpha").Select(tree).ToList();
+        var betas = Q.Ident("beta").Select(tree).ToList();
+        
+        Assert.Single(alphas);
+        Assert.Single(betas);
+    }
+    
+    [Fact]
+    public void Query_AnySymbol_VsNamedSymbol_Coverage()
+    {
+        var tree = SyntaxTree.Parse("a, b; c, d");
+        
+        // AnySymbol matches all
+        var allSymbols = Q.AnySymbol.Select(tree).ToList();
+        Assert.Equal(3, allSymbols.Count); // 2 commas, 1 semicolon
+        
+        // Named queries match specific
+        var commas = Q.Symbol(",").Select(tree).ToList();
+        var semicolons = Q.Symbol(";").Select(tree).ToList();
+        
+        Assert.Equal(2, commas.Count);
+        Assert.Single(semicolons);
+    }
+    
+    [Fact]
+    public void Query_AnyOperator_VsNamedOperator_Coverage()
+    {
+        var options = TokenizerOptions.Default.WithOperators(CommonOperators.CFamily);
+        var tree = SyntaxTree.Parse("a + b - c + d", options);
+        
+        // AnyOperator matches all
+        var allOps = Q.AnyOperator.Select(tree).ToList();
+        Assert.Equal(3, allOps.Count);
+        
+        // Named queries match specific
+        var plusses = Q.Operator("+").Select(tree).ToList();
+        var minuses = Q.Operator("-").Select(tree).ToList();
+        
+        Assert.Equal(2, plusses.Count);
+        Assert.Single(minuses);
+    }
+    
+    [Fact]
+    public void Query_AnyNumeric_VsNamedNumeric_Coverage()
+    {
+        var tree = SyntaxTree.Parse("1 2 3 2 1");
+        
+        // AnyNumeric matches all
+        var allNums = Q.AnyNumeric.Select(tree).ToList();
+        Assert.Equal(5, allNums.Count);
+        
+        // Named queries match specific
+        var ones = Q.Numeric("1").Select(tree).ToList();
+        var twos = Q.Numeric("2").Select(tree).ToList();
+        var threes = Q.Numeric("3").Select(tree).ToList();
+        
+        Assert.Equal(2, ones.Count);
+        Assert.Equal(2, twos.Count);
+        Assert.Single(threes);
+    }
+    
+    [Fact]
+    public void Query_Named_EmptyStringMatchesNothing()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        var matches = Q.Ident("").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    [Fact]
+    public void Query_Named_WhitespaceDoesNotMatchIdent()
+    {
+        var tree = SyntaxTree.Parse("foo bar");
+        
+        var matches = Q.Ident(" ").Select(tree).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    #endregion
+    
     #region Query Composition
     
     [Fact]
