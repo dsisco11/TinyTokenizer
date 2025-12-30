@@ -256,101 +256,10 @@ internal sealed class InsertEdit : PendingEdit
         var lexer = new GreenLexer(options);
         var nodes = lexer.ParseToGreenNodes(_text);
         
-        // For Before insertions: transfer target's leading trivia to inserted content,
-        // and give inserted content's trailing trivia to the target as its new leading
-        if (_insertPos.Point == InsertionPoint.Before && nodes.Length > 0)
-        {
-            // Step 1: Give target's leading trivia to the first inserted node
-            if (!_insertPos.TargetLeadingTrivia.IsEmpty)
-            {
-                nodes = PrependLeadingTrivia(nodes, _insertPos.TargetLeadingTrivia);
-            }
-            
-            // Step 2: Extract trailing trivia from last inserted node - this becomes target's new leading
-            var (nodesWithoutTrailing, extractedTrailing) = ExtractTrailingTrivia(nodes);
-            nodes = nodesWithoutTrailing;
-            
-            // Step 3: We need to also update the target node to have the extracted trailing as its new leading.
-            // First, get the current target node and update its trivia, then insert everything together.
-            
-            // Get the current target from root
-            var targetNode = GetNodeAtPath(root, _insertPos.ParentPath.ToArray(), _insertPos.ChildIndex);
-            if (targetNode != null)
-            {
-                // Update target's leading trivia
-                var updatedTarget = UpdateNodeLeadingTrivia(targetNode, extractedTrailing);
-                
-                // Replace target with updated target, then insert nodes before it
-                root = builder.ReplaceAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, 1, 
-                    nodes.Add(updatedTarget));
-                return root;
-            }
-        }
-        
+        // Roslyn-style insertion: insert content before the target node's leading trivia.
+        // Both inserted content and target keep their own trivia - no transfer occurs.
+        // This means "insert X before Y" places X before Y's leading whitespace/comments.
         return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, nodes);
-    }
-    
-    private static GreenNode? GetNodeAtPath(GreenNode root, int[] path, int childIndex)
-    {
-        var current = root;
-        foreach (var idx in path)
-        {
-            current = current.GetSlot(idx);
-            if (current == null) return null;
-        }
-        return current.GetSlot(childIndex);
-    }
-    
-    private static GreenNode UpdateNodeLeadingTrivia(GreenNode node, ImmutableArray<GreenTrivia> newLeading)
-    {
-        return node switch
-        {
-            GreenLeaf leaf => leaf.WithLeadingTrivia(newLeading),
-            GreenBlock block => new GreenBlock(block.Opener, block.Children, newLeading, block.TrailingTrivia),
-            _ => node
-        };
-    }
-    
-    private static ImmutableArray<GreenNode> PrependLeadingTrivia(ImmutableArray<GreenNode> nodes, ImmutableArray<GreenTrivia> trivia)
-    {
-        if (nodes.IsEmpty || trivia.IsEmpty)
-            return nodes;
-        
-        var first = nodes[0];
-        var newFirst = first switch
-        {
-            GreenLeaf leaf => leaf.WithLeadingTrivia(trivia.AddRange(leaf.LeadingTrivia)),
-            GreenBlock block => new GreenBlock(block.Opener, block.Children, trivia.AddRange(block.LeadingTrivia), block.TrailingTrivia),
-            _ => first
-        };
-        
-        return nodes.SetItem(0, newFirst);
-    }
-    
-    private static (ImmutableArray<GreenNode> Nodes, ImmutableArray<GreenTrivia> Trailing) ExtractTrailingTrivia(ImmutableArray<GreenNode> nodes)
-    {
-        if (nodes.IsEmpty)
-            return (nodes, ImmutableArray<GreenTrivia>.Empty);
-        
-        var last = nodes[^1];
-        var trailing = last switch
-        {
-            GreenLeaf leaf => leaf.TrailingTrivia,
-            GreenBlock block => block.TrailingTrivia,
-            _ => ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        if (trailing.IsEmpty)
-            return (nodes, ImmutableArray<GreenTrivia>.Empty);
-        
-        var newLast = last switch
-        {
-            GreenLeaf leaf => leaf.WithTrailingTrivia(ImmutableArray<GreenTrivia>.Empty),
-            GreenBlock block => new GreenBlock(block.Opener, block.Children, block.LeadingTrivia, ImmutableArray<GreenTrivia>.Empty),
-            _ => last
-        };
-        
-        return (nodes.SetItem(nodes.Length - 1, newLast), trailing);
     }
 }
 
