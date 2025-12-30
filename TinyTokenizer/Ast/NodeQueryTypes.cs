@@ -451,6 +451,7 @@ internal enum SelectionMode
 
 /// <summary>
 /// Matches nodes that satisfy either of two queries (OR logic).
+/// For sequence matching, tries left first, then right if left fails.
 /// </summary>
 public sealed record UnionNodeQuery : INodeQuery
 {
@@ -489,10 +490,28 @@ public sealed record UnionNodeQuery : INodeQuery
     
     /// <inheritdoc/>
     public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) || _right.MatchesGreen(node);
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Try left first (like alternation - first match wins)
+        if (_left.TryMatch(startNode, out consumedCount))
+            return true;
+        return _right.TryMatch(startNode, out consumedCount);
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (_left.TryMatchGreen(siblings, startIndex, out consumedCount))
+            return true;
+        return _right.TryMatchGreen(siblings, startIndex, out consumedCount);
+    }
 }
 
 /// <summary>
 /// Matches nodes that satisfy both queries (AND logic).
+/// For sequence matching, both must match and consume the same count.
 /// </summary>
 public sealed record IntersectionNodeQuery : INodeQuery
 {
@@ -525,6 +544,35 @@ public sealed record IntersectionNodeQuery : INodeQuery
     
     /// <inheritdoc/>
     public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) && _right.MatchesGreen(node);
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Both must match with same consumed count
+        if (_left.TryMatch(startNode, out var leftCount) && 
+            _right.TryMatch(startNode, out var rightCount) &&
+            leftCount == rightCount)
+        {
+            consumedCount = leftCount;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (_left.TryMatchGreen(siblings, startIndex, out var leftCount) &&
+            _right.TryMatchGreen(siblings, startIndex, out var rightCount) &&
+            leftCount == rightCount)
+        {
+            consumedCount = leftCount;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
 }
 
 #endregion

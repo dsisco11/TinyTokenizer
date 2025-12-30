@@ -168,9 +168,9 @@ public sealed class SyntaxBinder
     private (int MatchedCount, ImmutableArray<GreenNode> Children)? 
         TryMatchDefinition(SyntaxNodeDefinition definition, ImmutableArray<GreenNode> children, int startIndex)
     {
-        foreach (var pattern in definition.Patterns)
+        foreach (var query in definition.Patterns)
         {
-            var matchResult = TryMatchPattern(pattern, children, startIndex);
+            var matchResult = TryMatchQuery(query, children, startIndex);
             if (matchResult.HasValue)
                 return matchResult;
         }
@@ -178,15 +178,15 @@ public sealed class SyntaxBinder
     }
     
     /// <summary>
-    /// Attempts to match a pattern starting at the given position.
+    /// Attempts to match a query starting at the given position.
     /// Returns the number of children consumed and the matched children.
-    /// Uses green-level pattern matching for efficiency (no red tree creation).
+    /// Uses green-level query matching for efficiency (no red tree creation).
     /// </summary>
     private static (int MatchedCount, ImmutableArray<GreenNode> Children)? 
-        TryMatchPattern(NodePattern pattern, ImmutableArray<GreenNode> children, int startIndex)
+        TryMatchQuery(INodeQuery query, ImmutableArray<GreenNode> children, int startIndex)
     {
-        // Use efficient green-level pattern matching
-        if (pattern.TryMatchGreen(children, startIndex, out var consumedCount) && consumedCount > 0)
+        // Use efficient green-level query matching
+        if (query.TryMatchGreen(children, startIndex, out var consumedCount) && consumedCount > 0)
         {
             var matchedGreen = children.Skip(startIndex).Take(consumedCount).ToImmutableArray();
             return (consumedCount, matchedGreen);
@@ -237,8 +237,8 @@ public sealed record SyntaxNodeDefinition
     /// <summary>Unique name for this definition.</summary>
     public required string Name { get; init; }
     
-    /// <summary>Pattern alternatives (tried in order until one matches).</summary>
-    public required ImmutableArray<NodePattern> Patterns { get; init; }
+    /// <summary>Query alternatives (tried in order until one matches).</summary>
+    public required ImmutableArray<INodeQuery> Patterns { get; init; }
     
     /// <summary>The concrete RedSyntaxNode subclass to instantiate.</summary>
     public required Type RedType { get; init; }
@@ -261,37 +261,38 @@ public sealed record SyntaxNodeDefinition
 public sealed class SyntaxNodeDefinitionBuilder<T> where T : SyntaxNode
 {
     private readonly string _name;
-    private readonly List<NodePattern> _patterns = [];
+    private readonly List<INodeQuery> _patterns = [];
     private int _priority;
     
     public SyntaxNodeDefinitionBuilder(string name) => _name = name;
     
     /// <summary>
-    /// Adds a pattern that this definition matches.
+    /// Adds a query that this definition matches.
     /// </summary>
-    public SyntaxNodeDefinitionBuilder<T> Match(NodePattern pattern)
+    public SyntaxNodeDefinitionBuilder<T> Match(INodeQuery query)
     {
-        _patterns.Add(pattern);
+        _patterns.Add(query);
         return this;
     }
     
     /// <summary>
-    /// Adds a pattern built from a sequence of queries.
+    /// Adds a sequence query built from multiple queries.
     /// </summary>
     public SyntaxNodeDefinitionBuilder<T> Match(params INodeQuery[] sequence)
     {
-        _patterns.Add(NodePattern.Sequence(sequence));
+        _patterns.Add(Query.Sequence(sequence));
         return this;
     }
     
     /// <summary>
-    /// Adds a pattern built using the pattern builder.
+    /// Adds a pattern built using the pattern builder (legacy support).
     /// </summary>
+    [Obsolete("Use Match(INodeQuery) or Match(params INodeQuery[]) instead")]
     public SyntaxNodeDefinitionBuilder<T> Match(Action<PatternBuilder> configure)
     {
         var builder = new PatternBuilder();
         configure(builder);
-        _patterns.Add(builder.Build());
+        _patterns.Add(builder.BuildQuery());
         return this;
     }
     

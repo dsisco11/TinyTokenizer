@@ -4,6 +4,7 @@ namespace TinyTokenizer.Ast;
 
 /// <summary>
 /// Non-generic interface for node queries, enabling polymorphic collections and composition.
+/// Queries can match single nodes (via Matches) or sequences of siblings (via TryMatch).
 /// </summary>
 public interface INodeQuery
 {
@@ -19,6 +20,7 @@ public interface INodeQuery
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
+    /// For sequence queries, returns true if the sequence can start at this node.
     /// </summary>
     bool Matches(RedNode node);
     
@@ -27,6 +29,24 @@ public interface INodeQuery
     /// Used for efficient pattern matching without creating red trees.
     /// </summary>
     bool MatchesGreen(GreenNode node);
+    
+    /// <summary>
+    /// Attempts to match this query starting at the given node, consuming siblings.
+    /// </summary>
+    /// <param name="startNode">The first sibling node to try matching.</param>
+    /// <param name="consumedCount">Number of sibling nodes consumed if matched.</param>
+    /// <returns>True if the query matched.</returns>
+    bool TryMatch(RedNode startNode, out int consumedCount);
+    
+    /// <summary>
+    /// Attempts to match this query against green nodes starting at the given index.
+    /// Used for efficient pattern matching without creating red trees.
+    /// </summary>
+    /// <param name="siblings">The sibling green nodes to match against.</param>
+    /// <param name="startIndex">Index of the first sibling to try matching.</param>
+    /// <param name="consumedCount">Number of siblings consumed if matched.</param>
+    /// <returns>True if the query matched.</returns>
+    bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount);
 }
 
 /// <summary>
@@ -57,6 +77,38 @@ public abstract record NodeQuery<TSelf> : INodeQuery where TSelf : NodeQuery<TSe
     /// Default implementation checks kind; override for more specific matching.
     /// </summary>
     public abstract bool MatchesGreen(GreenNode node);
+    
+    /// <summary>
+    /// Attempts to match this query starting at the given node.
+    /// Default implementation for single-node queries: matches one node, consumes 1.
+    /// Override for sequence queries that consume multiple siblings.
+    /// </summary>
+    public virtual bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        if (Matches(startNode))
+        {
+            consumedCount = 1;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+    
+    /// <summary>
+    /// Attempts to match this query against green nodes starting at the given index.
+    /// Default implementation for single-node queries: matches one node, consumes 1.
+    /// Override for sequence queries that consume multiple siblings.
+    /// </summary>
+    public virtual bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (startIndex < siblings.Count && MatchesGreen(siblings[startIndex]))
+        {
+            consumedCount = 1;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
     
     #region CRTP Factory Methods
     

@@ -99,4 +99,30 @@ public static class Query
     public static SyntaxNodeQuery<T> Syntax<T>() where T : SyntaxNode => new SyntaxNodeQuery<T>();
     
     #endregion
+    
+    #region Sequence Combinators
+    
+    /// <summary>
+    /// Creates a sequence query that matches the specified queries in order.
+    /// Each query consumes one or more sibling nodes.
+    /// </summary>
+    /// <param name="parts">The queries to match in sequence.</param>
+    /// <returns>A sequence query.</returns>
+    /// <example>
+    /// <code>
+    /// // Function call: identifier followed by parenthesis block
+    /// Query.Sequence(Query.Ident, Query.ParenBlock)
+    /// 
+    /// // Function definition: type name(params) { body }
+    /// Query.Sequence(Query.Ident, Query.Ident, Query.ParenBlock, Query.BraceBlock)
+    /// </code>
+    /// </example>
+    public static SequenceQuery Sequence(params INodeQuery[] parts) => new(parts);
+    
+    /// <summary>
+    /// Creates a sequence query from an enumerable of queries.
+    /// </summary>
+    public static SequenceQuery Sequence(IEnumerable<INodeQuery> parts) => new(parts);
+    
+    #endregion
 }

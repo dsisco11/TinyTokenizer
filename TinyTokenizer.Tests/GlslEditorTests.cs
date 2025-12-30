@@ -105,7 +105,7 @@ public class GlslEditorTests
                 .Build())
             // Directive: #tag followed by tokens until newline
             .DefineSyntax(Syntax.Define<GlslDirectiveSyntax>("GlslDirective")
-                .Match(p => p.TaggedIdent().AnyUntil(t => t.Newline()))
+                .Match(Query.TaggedIdent, Query.Any.Until(Query.Newline))
                 .Build())
             .Build();
     }

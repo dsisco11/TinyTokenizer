@@ -8,6 +8,7 @@ namespace TinyTokenizer.Ast;
 /// <summary>
 /// Result of a successful pattern match, capturing matched nodes.
 /// </summary>
+[Obsolete("Use INodeQuery.TryMatch with out int consumedCount instead")]
 public readonly struct NodeMatch
 {
     /// <summary>The starting position of the match in source text.</summary>
@@ -37,6 +38,10 @@ public readonly struct NodeMatch
 /// Base class for patterns that match sequences of sibling nodes in the AST.
 /// Patterns are tree-aware and operate on RedNode siblings within a parent.
 /// </summary>
+/// <remarks>
+/// DEPRECATED: Use Query combinators instead (Query.Sequence, .Optional(), .Until(), etc.)
+/// </remarks>
+[Obsolete("Use Query combinators instead: Query.Sequence(), .Optional(), .Until(), .Repeat(), .FollowedBy()")]
 public abstract record NodePattern
 {
     /// <summary>
@@ -117,6 +122,9 @@ public abstract record NodePattern
 public sealed record QueryPattern : NodePattern
 {
     private readonly INodeQuery _query;
+    
+    /// <summary>Gets the inner query.</summary>
+    internal INodeQuery InnerQuery => _query;
     
     public QueryPattern(INodeQuery query) => _query = query;
     
@@ -216,6 +224,9 @@ public sealed record SequencePattern : NodePattern
 {
     private readonly ImmutableArray<NodePattern> _parts;
     
+    /// <summary>Gets the parts of this sequence.</summary>
+    internal ImmutableArray<NodePattern> Parts => _parts;
+    
     public SequencePattern(IEnumerable<INodeQuery> queries)
     {
         _parts = queries.Select(q => (NodePattern)new QueryPattern(q)).ToImmutableArray();
@@ -307,6 +318,9 @@ public sealed record AlternativePattern : NodePattern
 {
     private readonly ImmutableArray<NodePattern> _alternatives;
     
+    /// <summary>Gets the alternative patterns.</summary>
+    internal ImmutableArray<NodePattern> Alternatives => _alternatives;
+    
     public AlternativePattern(IEnumerable<NodePattern> alternatives)
     {
         _alternatives = alternatives.ToImmutableArray();
@@ -352,6 +366,9 @@ public sealed record OptionalPattern : NodePattern
 {
     private readonly NodePattern _inner;
     
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
     public OptionalPattern(NodePattern inner) => _inner = inner;
     
     public override bool TryMatch(RedNode node, out NodeMatch match)
@@ -395,6 +412,15 @@ public sealed record RepeatPattern : NodePattern
     private readonly NodePattern _inner;
     private readonly int _min;
     private readonly int _max;
+    
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
+    /// <summary>Gets the minimum repetitions.</summary>
+    internal int Min => _min;
+    
+    /// <summary>Gets the maximum repetitions.</summary>
+    internal int Max => _max;
     
     public RepeatPattern(NodePattern inner, int min, int max)
     {
@@ -494,6 +520,12 @@ public sealed record RepeatUntilPattern : NodePattern
 {
     private readonly NodePattern _inner;
     private readonly NodePattern _terminator;
+    
+    /// <summary>Gets the inner pattern.</summary>
+    internal NodePattern Inner => _inner;
+    
+    /// <summary>Gets the terminator pattern.</summary>
+    internal NodePattern Terminator => _terminator;
     
     /// <summary>
     /// Creates a repeat-until pattern.
@@ -618,6 +650,15 @@ public sealed record LookaheadPattern : NodePattern
     private readonly NodePattern _match;
     private readonly NodePattern _lookahead;
     private readonly bool _positive;
+    
+    /// <summary>Gets the match pattern.</summary>
+    internal NodePattern Match => _match;
+    
+    /// <summary>Gets the lookahead pattern.</summary>
+    internal NodePattern Lookahead => _lookahead;
+    
+    /// <summary>Gets whether this is positive lookahead.</summary>
+    internal bool IsPositive => _positive;
     
     /// <summary>
     /// Creates a positive lookahead pattern.
@@ -904,11 +945,54 @@ public sealed class PatternBuilder
     }
     
     /// <summary>Builds the sequence pattern.</summary>
+    [Obsolete("Use BuildQuery() instead for the unified Query API")]
     public NodePattern Build()
     {
         if (_parts.Count == 1)
             return _parts[0];
         return new SequencePattern(_parts);
+    }
+    
+    /// <summary>
+    /// Builds an INodeQuery from the accumulated patterns.
+    /// Converts internal NodePattern representation to unified Query API.
+    /// </summary>
+    public INodeQuery BuildQuery()
+    {
+        if (_parts.Count == 0)
+            return Q.Any; // Empty pattern matches anything
+        
+        // Convert NodePatterns to INodeQueries
+        var queries = _parts.Select(ConvertPatternToQuery).ToArray();
+        
+        if (queries.Length == 1)
+            return queries[0];
+        return Query.Sequence(queries);
+    }
+    
+    /// <summary>
+    /// Converts a NodePattern to an INodeQuery.
+    /// </summary>
+    private static INodeQuery ConvertPatternToQuery(NodePattern pattern)
+    {
+        return pattern switch
+        {
+            QueryPattern qp => qp.InnerQuery,
+            SequencePattern sp => Query.Sequence(sp.Parts.Select(ConvertPatternToQuery)),
+            OptionalPattern op => ConvertPatternToQuery(op.Inner).Optional(),
+            RepeatPattern rp => new RepeatQuery(ConvertPatternToQuery(rp.Inner), rp.Min, rp.Max),
+            RepeatUntilPattern rup => new RepeatUntilQuery(
+                ConvertPatternToQuery(rup.Inner), 
+                ConvertPatternToQuery(rup.Terminator)),
+            AlternativePattern ap => ap.Alternatives
+                .Select(ConvertPatternToQuery)
+                .Aggregate((a, b) => new UnionNodeQuery(a, b)),
+            LookaheadPattern lp => new LookaheadQuery(
+                ConvertPatternToQuery(lp.Match),
+                ConvertPatternToQuery(lp.Lookahead),
+                lp.IsPositive),
+            _ => throw new NotSupportedException($"Cannot convert pattern type: {pattern.GetType().Name}")
+        };
     }
 }
 
