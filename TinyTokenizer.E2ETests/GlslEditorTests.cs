@@ -538,6 +538,27 @@ void main() {
         Assert.Contains("330", argsText);
         Assert.Contains("core", argsText);
     }
+
+    [Fact]
+    public void CanCommentOutImportDirective()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        var importQuery = Query.Syntax<GlImportNode>().Named("import");
+        var importNode = tree.Select(importQuery).FirstOrDefault() as GlImportNode;
+        Assert.NotNull(importNode);
+        
+        // Comment out the import directive by inserting '//' before it
+        tree.CreateEditor()
+            .Edit(importQuery, str => $"// {str}")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.Root.ToString());
+        
+        // Verify that the import directive is now commented out
+        Assert.Contains("// @import \"my-include.glsl\"", result);
+    }
     
     #endregion
 }
