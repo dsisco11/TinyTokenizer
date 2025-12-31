@@ -5,6 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     
+    <!-- XML Documentation for IntelliSense -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    
     <!-- NuGet Package Metadata -->
     <PackageId>TinyTokenizer</PackageId>
     <Title>TinyTokenizer</Title>
