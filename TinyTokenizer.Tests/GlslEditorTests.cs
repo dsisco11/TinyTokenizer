@@ -31,8 +31,8 @@ public class GlslEditorTests
     /// </summary>
     public sealed class GlslFunctionSyntax : SyntaxNode, INamedNode, IBlockContainerNode
     {
-        public GlslFunctionSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-            : base(green, parent, position) { }
+        internal GlslFunctionSyntax(CreationContext context)
+            : base(context) { }
         
         /// <summary>Return type node (e.g., "void", "vec4").</summary>
         public RedLeaf ReturnTypeNode => GetTypedChild<RedLeaf>(0);
@@ -74,8 +74,8 @@ public class GlslEditorTests
     /// </summary>
     public sealed class GlslDirectiveSyntax : SyntaxNode, INamedNode
     {
-        public GlslDirectiveSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-            : base(green, parent, position) { }
+        internal GlslDirectiveSyntax(CreationContext context)
+            : base(context) { }
         
         /// <summary>The directive tag node (e.g., "#version").</summary>
         public RedLeaf DirectiveNode => GetTypedChild<RedLeaf>(0);

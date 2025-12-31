@@ -17,7 +17,7 @@ public class SyntaxTree
     /// <summary>
     /// Creates a new syntax tree from a green root.
     /// </summary>
-    public SyntaxTree(GreenNode greenRoot, Schema? schema = null)
+    internal SyntaxTree(GreenNode greenRoot, Schema? schema = null)
     {
         _greenRoot = greenRoot;
         Schema = schema;

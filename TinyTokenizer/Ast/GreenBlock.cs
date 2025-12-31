@@ -12,7 +12,7 @@ namespace TinyTokenizer.Ast;
 /// - LeadingTrivia: trivia before the opening delimiter
 /// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
 /// </remarks>
-public sealed record GreenBlock : GreenContainer
+internal sealed record GreenBlock : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;

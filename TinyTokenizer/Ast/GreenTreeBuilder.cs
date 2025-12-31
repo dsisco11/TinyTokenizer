@@ -6,7 +6,7 @@ namespace TinyTokenizer.Ast;
 /// Builder for creating new green trees with structural sharing.
 /// Mutations only recreate nodes along the edit path; siblings are shared by reference.
 /// </summary>
-public class GreenTreeBuilder
+internal class GreenTreeBuilder
 {
     private readonly GreenNode _root;
     

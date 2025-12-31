@@ -6,7 +6,7 @@ namespace TinyTokenizer.Ast;
 /// Cache for common green nodes to maximize structural sharing.
 /// Pre-caches well-known tokens (delimiters, operators, keywords).
 /// </summary>
-public static class GreenNodeCache
+internal static class GreenNodeCache
 {
     #region Pre-cached Leaves (no trivia)
     

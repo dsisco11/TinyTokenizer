@@ -14,10 +14,10 @@ namespace TinyTokenizer.Ast;
 /// </remarks>
 /// <example>
 /// <code>
-/// public sealed class FunctionCallSyntax : RedSyntaxNode
+/// public sealed class FunctionCallSyntax : SyntaxNode
 /// {
-///     public FunctionCallSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-///         : base(green, parent, position) { }
+///     internal FunctionCallSyntax(CreationContext context)
+///         : base(context) { }
 ///     
 ///     public RedLeaf NameNode => GetTypedChild&lt;RedLeaf&gt;(0);
 ///     public string Name => NameNode.Text;
@@ -27,24 +27,49 @@ namespace TinyTokenizer.Ast;
 /// </example>
 public abstract class SyntaxNode : RedNode
 {
+    /// <summary>
+    /// Opaque context for creating SyntaxNode instances.
+    /// Used by the library to construct syntax nodes without exposing green layer details.
+    /// </summary>
+    /// <remarks>
+    /// This struct is passed to SyntaxNode constructors to provide the necessary
+    /// green node, parent, and position information without requiring users to
+    /// directly reference internal green types.
+    /// </remarks>
+    protected internal readonly record struct CreationContext
+    {
+        internal GreenSyntaxNode Green { get; init; }
+        
+        /// <summary>The parent red node, or null if this is the root.</summary>
+        public RedNode? Parent { get; init; }
+        
+        /// <summary>The absolute position in the source text.</summary>
+        public int Position { get; init; }
+        
+        internal CreationContext(GreenSyntaxNode green, RedNode? parent, int position)
+        {
+            Green = green;
+            Parent = parent;
+            Position = position;
+        }
+    }
+    
     private readonly RedNode?[] _children;
     
     /// <summary>
-    /// Creates a red syntax node wrapping the specified green node.
+    /// Creates a red syntax node from a creation context.
     /// </summary>
-    /// <param name="green">The underlying green syntax node.</param>
-    /// <param name="parent">The parent red node, or null for root.</param>
-    /// <param name="position">The absolute position in source text.</param>
-    protected SyntaxNode(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position)
+    /// <param name="context">The creation context containing green node and position info.</param>
+    protected SyntaxNode(CreationContext context)
+        : base(context.Green, context.Parent, context.Position)
     {
-        _children = new RedNode?[green.SlotCount];
+        _children = new RedNode?[context.Green.SlotCount];
     }
     
     /// <summary>
     /// Gets the underlying green syntax node with proper typing.
     /// </summary>
-    public new GreenSyntaxNode Green => (GreenSyntaxNode)base.Green;
+    internal new GreenSyntaxNode Green => (GreenSyntaxNode)base.Green;
     
     /// <summary>
     /// Gets the child at the specified slot index, creating lazily if needed.
@@ -116,8 +141,8 @@ public sealed class FunctionCallSyntax : SyntaxNode
     /// <summary>
     /// Creates a function call red syntax node.
     /// </summary>
-    public FunctionCallSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal FunctionCallSyntax(CreationContext context)
+        : base(context)
     {
     }
     
@@ -147,8 +172,8 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     /// <summary>
     /// Creates an array access red syntax node.
     /// </summary>
-    public ArrayAccessSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal ArrayAccessSyntax(CreationContext context)
+        : base(context)
     {
     }
     
@@ -178,8 +203,8 @@ public sealed class PropertyAccessSyntax : SyntaxNode
     /// <summary>
     /// Creates a property access red syntax node.
     /// </summary>
-    public PropertyAccessSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal PropertyAccessSyntax(CreationContext context)
+        : base(context)
     {
     }
     

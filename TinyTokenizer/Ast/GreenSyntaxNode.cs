@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq.Expressions;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -12,7 +13,7 @@ namespace TinyTokenizer.Ast;
 /// When the red tree is created, it produces typed red nodes (e.g., RedFunctionCall) that provide
 /// domain-specific accessors for the matched syntax pattern.
 /// </remarks>
-public sealed record GreenSyntaxNode : GreenContainer
+internal sealed record GreenSyntaxNode : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly NodeKind _kind;
@@ -124,7 +125,7 @@ public sealed record GreenSyntaxNode : GreenContainer
 /// </summary>
 internal static class SyntaxRedFactory
 {
-    private static readonly Dictionary<Type, Func<GreenSyntaxNode, RedNode?, int, SyntaxNode>> _factories = new();
+    private static readonly Dictionary<Type, Func<SyntaxNode.CreationContext, SyntaxNode>> _factories = new();
     private static readonly object _lock = new();
     
     /// <summary>
@@ -133,28 +134,36 @@ internal static class SyntaxRedFactory
     public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position)
     {
         var factory = GetOrCreateFactory(green.RedType);
-        return factory(green, parent, position);
+        var context = new SyntaxNode.CreationContext(green, parent, position);
+        return factory(context);
     }
     
-    private static Func<GreenSyntaxNode, RedNode?, int, SyntaxNode> GetOrCreateFactory(Type redType)
+    private static Func<SyntaxNode.CreationContext, SyntaxNode> GetOrCreateFactory(Type redType)
     {
         lock (_lock)
         {
             if (_factories.TryGetValue(redType, out var existing))
                 return existing;
             
-            // Find constructor: (GreenSyntaxNode green, RedNode? parent, int position)
-            var ctor = redType.GetConstructor(new[] { typeof(GreenSyntaxNode), typeof(RedNode), typeof(int) });
+            // Find constructor: (SyntaxNode.CreationContext context)
+            var ctor = redType.GetConstructor(
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public,
+                null,
+                [typeof(SyntaxNode.CreationContext)],
+                null);
             if (ctor == null)
             {
                 throw new InvalidOperationException(
-                    $"RedSyntaxNode type '{redType.Name}' must have a constructor " +
-                    $"with signature (GreenSyntaxNode green, RedNode? parent, int position).");
+                    $"SyntaxNode type '{redType.Name}' must have a constructor " +
+                    $"with signature (SyntaxNode.CreationContext context). " +
+                    $"The constructor can be internal or protected.");
             }
             
-            // Create factory delegate
-            Func<GreenSyntaxNode, RedNode?, int, SyntaxNode> factory = 
-                (g, p, pos) => (SyntaxNode)ctor.Invoke(new object?[] { g, p, pos });
+            // Compile a fast factory delegate using expression trees
+            var param = Expression.Parameter(typeof(SyntaxNode.CreationContext), "ctx");
+            var newExpr = Expression.New(ctor, param);
+            var lambda = Expression.Lambda<Func<SyntaxNode.CreationContext, SyntaxNode>>(newExpr, param);
+            var factory = lambda.Compile();
             
             _factories[redType] = factory;
             return factory;
@@ -163,14 +172,13 @@ internal static class SyntaxRedFactory
     
     /// <summary>
     /// Registers a custom factory for a red syntax node type.
-    /// Useful for avoiding reflection overhead in hot paths.
     /// </summary>
-    public static void RegisterFactory<T>(Func<GreenSyntaxNode, RedNode?, int, T> factory) 
+    public static void RegisterFactory<T>(Func<SyntaxNode.CreationContext, T> factory) 
         where T : SyntaxNode
     {
         lock (_lock)
         {
-            _factories[typeof(T)] = (g, p, pos) => factory(g, p, pos);
+            _factories[typeof(T)] = ctx => factory(ctx);
         }
     }
 }

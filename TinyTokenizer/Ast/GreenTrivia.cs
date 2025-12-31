@@ -4,7 +4,7 @@ namespace TinyTokenizer.Ast;
 /// Represents trivia (whitespace, newlines, comments) attached to a token.
 /// Trivia does not affect semantics but preserves formatting information.
 /// </summary>
-public readonly record struct GreenTrivia
+internal readonly record struct GreenTrivia
 {
     /// <summary>The kind of trivia.</summary>
     public TriviaKind Kind { get; }

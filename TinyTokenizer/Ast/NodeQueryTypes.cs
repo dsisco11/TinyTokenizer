@@ -49,8 +49,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     public override bool Matches(RedNode node) => 
         node.Kind == Kind && (_predicate == null || _predicate(node));
     
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node) => node.Kind == Kind;
+    internal override bool MatchesGreen(GreenNode node) => node.Kind == Kind;
     
     protected override KindNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -125,17 +124,8 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
         return _predicate == null || _predicate(node);
     }
     
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node)
-    {
-        if (node is not GreenBlock block)
-            return false;
-        
-        if (_opener != null && block.Opener != _opener.Value)
-            return false;
-        
-        return true;
-    }
+    internal override bool MatchesGreen(GreenNode node) => 
+        node is GreenBlock block && (_opener == null || block.Opener == _opener);
     
     protected override BlockNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_opener, CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -206,8 +196,7 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => _predicate == null || _predicate(node);
     
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node) => true;
+    internal override bool MatchesGreen(GreenNode node) => true;
     
     protected override AnyNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -268,8 +257,7 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     public override bool Matches(RedNode node) => 
         node is RedLeaf && (_predicate == null || _predicate(node));
     
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node) => node is GreenLeaf;
+    internal override bool MatchesGreen(GreenNode node) => node is GreenLeaf;
     
     protected override LeafNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -349,6 +337,31 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         return result && (_predicate == null || _predicate(node));
     }
     
+    internal override bool MatchesGreen(GreenNode node)
+    {
+        bool hasNewline = HasGreenNewline(node);
+        return _negated ? !hasNewline : hasNewline;
+    }
+    
+    private static bool HasGreenNewline(GreenNode node)
+    {
+        // Check leading trivia for newline
+        var leadingTrivia = node switch
+        {
+            GreenLeaf gl => gl.LeadingTrivia,
+            GreenBlock gb => gb.LeadingTrivia,
+            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
+        };
+        
+        foreach (var t in leadingTrivia)
+        {
+            if (t.Kind == TriviaKind.Newline)
+                return true;
+        }
+        
+        return false;
+    }
+    
     private static bool HasNewline(RedNode node)
     {
         // Check 1: Does leading trivia contain newline?
@@ -382,35 +395,6 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
                     return true;
             }
         }
-        
-        return false;
-    }
-    
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node)
-    {
-        bool hasNewline = HasNewlineGreen(node);
-        return _negated ? !hasNewline : hasNewline;
-    }
-    
-    private static bool HasNewlineGreen(GreenNode node)
-    {
-        // Check: Does leading trivia contain newline?
-        var leadingTrivia = node switch
-        {
-            GreenLeaf gl => gl.LeadingTrivia,
-            GreenBlock gb => gb.LeadingTrivia,
-            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        foreach (var t in leadingTrivia)
-        {
-            if (t.Kind == TriviaKind.Newline)
-                return true;
-        }
-        
-        // Note: Can't check previous sibling's trailing trivia without parent context
-        // This is a limitation of green-level matching
         
         return false;
     }
@@ -489,23 +473,12 @@ public sealed record UnionNodeQuery : INodeQuery
     public bool Matches(RedNode node) => _left.Matches(node) || _right.Matches(node);
     
     /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) || _right.MatchesGreen(node);
-    
-    /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
     {
         // Try left first (like alternation - first match wins)
         if (_left.TryMatch(startNode, out consumedCount))
             return true;
         return _right.TryMatch(startNode, out consumedCount);
-    }
-    
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
-    {
-        if (_left.TryMatchGreen(siblings, startIndex, out consumedCount))
-            return true;
-        return _right.TryMatchGreen(siblings, startIndex, out consumedCount);
     }
 }
 
@@ -543,28 +516,11 @@ public sealed record IntersectionNodeQuery : INodeQuery
     public bool Matches(RedNode node) => _left.Matches(node) && _right.Matches(node);
     
     /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => _left.MatchesGreen(node) && _right.MatchesGreen(node);
-    
-    /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
     {
         // Both must match with same consumed count
         if (_left.TryMatch(startNode, out var leftCount) && 
             _right.TryMatch(startNode, out var rightCount) &&
-            leftCount == rightCount)
-        {
-            consumedCount = leftCount;
-            return true;
-        }
-        consumedCount = 0;
-        return false;
-    }
-    
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
-    {
-        if (_left.TryMatchGreen(siblings, startIndex, out var leftCount) &&
-            _right.TryMatchGreen(siblings, startIndex, out var rightCount) &&
             leftCount == rightCount)
         {
             consumedCount = leftCount;
@@ -630,9 +586,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     public override bool Matches(RedNode node) => 
         ReferenceEquals(node, _target) && (_predicate == null || _predicate(node));
     
-    /// <inheritdoc/>
-    public override bool MatchesGreen(GreenNode node) => 
-        ReferenceEquals(node, _target.Green);
+    internal override bool MatchesGreen(GreenNode node) => ReferenceEquals(node, _target.Green);
     
     protected override ExactNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_target, CombinePredicates(_predicate, predicate), _mode, _modeArg);

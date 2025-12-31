@@ -78,7 +78,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of pre-built nodes at positions resolved by the query.
     /// </summary>
-    public SyntaxEditor Insert(InsertionQuery query, ImmutableArray<GreenNode> nodes)
+    internal SyntaxEditor Insert(InsertionQuery query, ImmutableArray<GreenNode> nodes)
     {
         var positions = query.ResolvePositions(_tree).ToList();
         
@@ -93,7 +93,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of pre-built nodes at positions resolved by multiple queries.
     /// </summary>
-    public SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, ImmutableArray<GreenNode> nodes)
+    internal SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, ImmutableArray<GreenNode> nodes)
     {
         foreach (var query in queries)
         {
@@ -167,7 +167,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node before the specified target.
     /// </summary>
-    public SyntaxEditor InsertBefore(RedNode target, GreenNode nodeToInsert)
+    internal SyntaxEditor InsertBefore(RedNode target, GreenNode nodeToInsert)
     {
         return InsertBefore(target, [nodeToInsert]);
     }
@@ -183,7 +183,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes before the specified target.
     /// </summary>
-    public SyntaxEditor InsertBefore(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertBefore(RedNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         var pos = CreateInsertionPosition(target, InsertionPoint.Before);
@@ -210,7 +210,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes before each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
@@ -232,7 +232,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node after the specified target.
     /// </summary>
-    public SyntaxEditor InsertAfter(RedNode target, GreenNode nodeToInsert)
+    internal SyntaxEditor InsertAfter(RedNode target, GreenNode nodeToInsert)
     {
         return InsertAfter(target, [nodeToInsert]);
     }
@@ -248,7 +248,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes after the specified target.
     /// </summary>
-    public SyntaxEditor InsertAfter(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertAfter(RedNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         var pos = CreateInsertionPosition(target, InsertionPoint.After);
@@ -275,7 +275,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes after each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
@@ -410,7 +410,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching the query with pre-built nodes.
     /// </summary>
-    public SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
+    internal SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
     {
         var matchedNodes = query.Select(_tree).ToList();
         
@@ -427,7 +427,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all nodes matching any of the queries with pre-built nodes.
     /// </summary>
-    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, ImmutableArray<GreenNode> nodes)
+    internal SyntaxEditor Replace(IEnumerable<INodeQuery> queries, ImmutableArray<GreenNode> nodes)
     {
         foreach (var query in queries)
         {
@@ -498,7 +498,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with a single node.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, GreenNode replacement)
+    internal SyntaxEditor Replace(RedNode node, GreenNode replacement)
     {
         return Replace(node, [replacement]);
     }
@@ -514,7 +514,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with multiple nodes.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, IEnumerable<GreenNode> replacements)
+    internal SyntaxEditor Replace(RedNode node, IEnumerable<GreenNode> replacements)
     {
         var greenNodes = replacements.ToImmutableArray();
         var path = NodePath.FromNode(node);

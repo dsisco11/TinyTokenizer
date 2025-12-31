@@ -16,7 +16,7 @@ public abstract class RedNode : IFormattable
     /// <summary>
     /// Creates a new red node wrapping a green node.
     /// </summary>
-    protected RedNode(GreenNode green, RedNode? parent, int position)
+    internal RedNode(GreenNode green, RedNode? parent, int position)
     {
         _green = green;
         _parent = parent;
@@ -24,7 +24,7 @@ public abstract class RedNode : IFormattable
     }
     
     /// <summary>The underlying green node containing the actual data.</summary>
-    public GreenNode Green => _green;
+    internal GreenNode Green => _green;
     
     /// <summary>The parent red node, or null if this is the root.</summary>
     public RedNode? Parent => _parent;
