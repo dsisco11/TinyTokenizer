@@ -453,29 +453,66 @@ Define your own syntax node types:
 // 1. Define the node class
 public sealed class LambdaSyntax : SyntaxNode
 {
-    public LambdaSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position) { }
+    // Constructor receives an opaque CreationContext - just pass it to base
+    protected LambdaSyntax(CreationContext context)
+        : base(context) { }
 
+    // Access child nodes by index (determined by the pattern)
     public RedBlock Parameters => GetTypedChild<RedBlock>(0);
+    public RedLeaf Arrow => GetTypedChild<RedLeaf>(1);
     public RedBlock Body => GetTypedChild<RedBlock>(2);
 }
 
 // 2. Create a definition with pattern using Query combinators
 var lambdaDef = Syntax.Define<LambdaSyntax>("Lambda")
     .Match(Query.Sequence(Query.ParenBlock, Query.Operator("=>"), Query.BraceBlock))
-    .Create((green, parent, pos) => new LambdaSyntax(green, parent, pos))
     .WithPriority(15)
     .Build();
 
 // 3. Add to schema
 var schema = Schema.Create()
     .WithOperators(CommonOperators.JavaScript)
-    .Define(lambdaDef)
+    .DefineSyntax(lambdaDef)
     .Build();
 
 // 4. Match
 var tree = SyntaxTree.Parse("(x) => { return x; }", schema);
 var lambdas = tree.Match<LambdaSyntax>().ToList();
+```
+
+### INamedNode and IBlockContainerNode
+
+Implement these interfaces for enhanced querying capabilities:
+
+```csharp
+// A function syntax node with named access and block containers
+public sealed class FunctionSyntax : SyntaxNode, INamedNode, IBlockContainerNode
+{
+    protected FunctionSyntax(CreationContext context)
+        : base(context) { }
+
+    // INamedNode - enables Query.Syntax<T>().Named("foo")
+    public string Name => GetTypedChild<RedLeaf>(1).Text;
+
+    // IBlockContainerNode - enables .InnerStart("body"), .InnerEnd("params")
+    public IReadOnlyList<string> BlockNames => ["body", "params"];
+    
+    public RedBlock GetBlock(string? name = null) => name switch
+    {
+        null or "body" => GetTypedChild<RedBlock>(3),  // { }
+        "params" => GetTypedChild<RedBlock>(2),        // ( )
+        _ => throw new ArgumentException($"Unknown block: {name}")
+    };
+}
+
+// Usage with fluent queries
+var mainQuery = Query.Syntax<FunctionSyntax>().Named("main");
+
+tree.CreateEditor()
+    .Insert(mainQuery.Before(), "// Entry point\n")
+    .Insert(mainQuery.InnerStart("body"), "\n    console.log('enter');")
+    .Insert(mainQuery.InnerEnd("body"), "\n    console.log('exit');")
+    .Commit();
 ```
 
 ### Query Combinators Reference
