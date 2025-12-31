@@ -213,6 +213,7 @@ public abstract class RedNode : IFormattable
     /// - "R": Range only (e.g., "0..5")
     /// - "D": Debug info (e.g., "Ident[0..5]")
     /// - "T": Type name (e.g., "RedLeaf")
+    /// - "S": Structure dump (full subtree with trivia info)
     /// </param>
     /// <param name="formatProvider">Format provider (unused).</param>
     public string ToString(string? format, IFormatProvider? formatProvider)
@@ -227,8 +228,57 @@ public abstract class RedNode : IFormattable
                 ? $"{Kind}[{_position}..{EndPosition}] ({SlotCount} children)" 
                 : $"{Kind}[{_position}..{EndPosition}]",
             "T" => GetType().Name,
+            "S" => DumpStructure(0),
             _ => ToText()
         };
+    }
+    
+    /// <summary>
+    /// Dumps the subtree structure for debugging, including trivia information.
+    /// </summary>
+    private string DumpStructure(int indent)
+    {
+        var sb = new StringBuilder();
+        var prefix = new string(' ', indent * 2);
+        
+        // Show trivia info for leaves
+        string triviaInfo = "";
+        string textContent = "";
+        
+        if (this is RedLeaf leaf)
+        {
+            textContent = leaf.Text.Replace("\n", "\\n").Replace("\r", "\\r");
+            var leadingNewlines = leaf.Green is GreenLeaf gl 
+                ? gl.LeadingTrivia.Count(t => t.Kind == TriviaKind.Newline) 
+                : 0;
+            var trailingNewlines = leaf.Green is GreenLeaf gl2 
+                ? gl2.TrailingTrivia.Count(t => t.Kind == TriviaKind.Newline) 
+                : 0;
+            if (leadingNewlines > 0 || trailingNewlines > 0)
+                triviaInfo = $" [lead:{leadingNewlines}NL, trail:{trailingNewlines}NL]";
+        }
+        else
+        {
+            textContent = ToText().Replace("\n", "\\n").Replace("\r", "\\r");
+        }
+        
+        if (textContent.Length > 40)
+            textContent = textContent[..40] + "...";
+        
+        // Format: Kind[width] (children) [trivia]: "text"
+        var nodeInfo = SlotCount > 0
+            ? $"{Kind}[{Width}] ({SlotCount} children)"
+            : $"{Kind}[{Width}]";
+        
+        sb.AppendLine($"{prefix}{nodeInfo}{triviaInfo}: \"{textContent}\"");
+        
+        foreach (var child in Children)
+        {
+            if (child is RedNode redChild)
+                sb.Append(redChild.DumpStructure(indent + 1));
+        }
+        
+        return sb.ToString();
     }
     
     /// <summary>
