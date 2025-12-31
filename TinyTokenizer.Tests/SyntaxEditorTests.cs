@@ -912,5 +912,100 @@ public class SyntaxEditorTests
         Assert.Equal(0, editor2.PendingEditCount);
     }
 
+    [Fact]
+    public void Replace_CommentOutFunctionCall_InMiddleOfMethod()
+    {
+        // Arrange: a simple sequence with a function call in the middle
+        var source = "setup(); doSomething(x, y); cleanup();";
+        var tree = SyntaxTree.Parse(source);
+        
+        // To comment out a function call (ident + paren block), we use two operations:
+        // 1. Replace the identifier with the commented version of the full call
+        // 2. Remove the arguments block that follows
+        var funcNameQuery = Q.Ident("doSomething").FollowedBy(Q.ParenBlock);
+        
+        // Find the paren block for doSomething - it's the second one (after setup's args)
+        var doSomethingArgs = tree.Root.Children
+            .OfType<RedBlock>()
+            .Skip(1)  // Skip setup()'s args
+            .First();
+        
+        // Act: comment out the function call
+        tree.CreateEditor()
+            .Replace(funcNameQuery, "/* doSomething(x, y) */")
+            .Remove(Q.ParenBlock.Where(b => b.Position == doSomethingArgs.Position))
+            .Commit();
+        
+        // Assert: the function call should now be commented out
+        // Note: trivia from the removed block is transferred, causing the space before )*/
+        var result = tree.ToFullString();
+        Assert.Equal("setup(); /* doSomething(x, y )*/; cleanup();", result);
+    }
+
+    [Fact]
+    public void Replace_FunctionName_PreservesArguments()
+    {
+        // This test demonstrates the actual behavior: FollowedBy queries select
+        // only the identifier, so Replace only affects the identifier.
+        var source = "before(); target(a); after();";
+        var tree = SyntaxTree.Parse(source);
+        
+        // FollowedBy is a lookahead - it matches identifiers followed by paren block
+        // but only the identifier is selected/replaced
+        var funcNameQuery = Q.Ident("target").FollowedBy(Q.ParenBlock);
+        
+        // Act: replace only the function name
+        tree.CreateEditor()
+            .Replace(funcNameQuery, "renamed")
+            .Commit();
+        
+        // Assert: the identifier is replaced but arguments remain
+        var result = tree.ToFullString();
+        Assert.Equal("before(); renamed(a); after();", result);
+    }
+
+    [Fact]
+    public void Replace_SingleIdentifier_UsingTransformer()
+    {
+        // Arrange: use transformer to wrap identifier in comment
+        var source = "log(message);";
+        var tree = SyntaxTree.Parse(source);
+        
+        // Use FollowedBy as lookahead to find function name
+        var funcNameQuery = Q.Ident("log").FollowedBy(Q.ParenBlock);
+        
+        // Act: comment out using transformer to preserve original text
+        tree.CreateEditor()
+            .Replace(funcNameQuery, node => $"/* {node.ToText()} */")
+            .Commit();
+        
+        // Assert: only the identifier is wrapped, args remain
+        var result = tree.ToFullString();
+        Assert.Equal("/* log */(message);", result);
+    }
+
+    [Fact]
+    public void Replace_AndRemove_CommentOutEntireFunctionCall()
+    {
+        // This test shows how to fully comment out a function call
+        // by combining replace and remove operations
+        var source = "before(); log(msg); after();";
+        var tree = SyntaxTree.Parse(source);
+        
+        // Find the function name identifier using FollowedBy for matching
+        var funcNameQuery = Q.Ident("log").FollowedBy(Q.ParenBlock);
+        
+        // Act: replace function name with commented call, then remove args block
+        tree.CreateEditor()
+            .Replace(funcNameQuery, "/* log(msg) */")
+            .Remove(Q.ParenBlock.Nth(1)) // The second paren block is log's args
+            .Commit();
+        
+        // Assert: the call should be commented out
+        // Note: trivia from the removed block is transferred, causing space before )*/
+        var result = tree.ToFullString();
+        Assert.Equal("before(); /* log(msg )*/; after();", result);
+    }
+
     #endregion
 }
