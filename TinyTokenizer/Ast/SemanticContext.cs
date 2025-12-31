@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace TinyTokenizer.Ast;
 
@@ -16,12 +14,6 @@ public class SemanticContext
     /// The syntax tree being analyzed.
     /// </summary>
     public SyntaxTree? Tree { get; init; }
-    
-    /// <summary>
-    /// Logger for reporting errors/warnings during semantic analysis.
-    /// Defaults to NullLogger (no output).
-    /// </summary>
-    public ILogger Logger { get; init; } = NullLogger.Instance;
     
     /// <summary>
     /// When true, semantic node factories should fail on unresolved references.
