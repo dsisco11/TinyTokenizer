@@ -17,7 +17,7 @@ public class SyntaxTree
     /// <summary>
     /// Creates a new syntax tree from a green root.
     /// </summary>
-    public SyntaxTree(GreenNode greenRoot, Schema? schema = null)
+    internal SyntaxTree(GreenNode greenRoot, Schema? schema = null)
     {
         _greenRoot = greenRoot;
         Schema = schema;
@@ -30,9 +30,9 @@ public class SyntaxTree
     public Schema? Schema { get; }
     
     /// <summary>
-    /// The green root node.
+    /// The green root node (internal implementation detail).
     /// </summary>
-    public GreenNode GreenRoot => _greenRoot;
+    internal GreenNode GreenRoot => _greenRoot;
     
     /// <summary>
     /// The red root node. Created lazily and cached until mutation.
@@ -61,7 +61,7 @@ public class SyntaxTree
     /// The mutation function receives a builder and returns a new green root.
     /// Supports undo/redo.
     /// </summary>
-    public void Edit(Func<GreenTreeBuilder, GreenNode> mutation)
+    internal void Edit(Func<GreenTreeBuilder, GreenNode> mutation)
     {
         _undoStack.Push(_greenRoot);
         _redoStack.Clear();
@@ -75,7 +75,7 @@ public class SyntaxTree
     /// Replaces the green root directly (advanced usage).
     /// Supports undo/redo.
     /// </summary>
-    public void SetRoot(GreenNode newRoot)
+    internal void SetRoot(GreenNode newRoot)
     {
         _undoStack.Push(_greenRoot);
         _redoStack.Clear();

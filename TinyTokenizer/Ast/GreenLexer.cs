@@ -7,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Optimized path that skips intermediate Token allocations.
 /// Handles trivia attachment and recursive block parsing.
 /// </summary>
-public sealed class GreenLexer
+internal sealed class GreenLexer
 {
     private readonly TokenizerOptions _options;
     private readonly Lexer _charLexer;

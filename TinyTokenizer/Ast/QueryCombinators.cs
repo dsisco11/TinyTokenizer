@@ -7,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// <summary>
 /// Matches a sequence of queries in order, consuming multiple sibling nodes.
 /// </summary>
-public sealed record SequenceQuery : INodeQuery
+public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
 {
     private readonly ImmutableArray<INodeQuery> _parts;
     
@@ -55,14 +55,6 @@ public sealed record SequenceQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node)
-    {
-        // Can't fully evaluate sequence without sibling context
-        // Return true if first part matches
-        return _parts.Length > 0 && _parts[0].MatchesGreen(node);
-    }
-    
-    /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
     {
         var current = startNode;
@@ -96,7 +88,15 @@ public sealed record SequenceQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        // Sequence matches if first part matches
+        if (_parts.Length == 0) return true;
+        return _parts[0] is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node);
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         int currentIndex = startIndex;
         int totalConsumed = 0;
@@ -109,7 +109,8 @@ public sealed record SequenceQuery : INodeQuery
                 return false;
             }
             
-            if (!part.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+            if (part is not IGreenNodeQuery greenQuery || 
+                !greenQuery.TryMatchGreen(siblings, currentIndex, out var partConsumed))
             {
                 consumedCount = 0;
                 return false;
@@ -132,7 +133,7 @@ public sealed record SequenceQuery : INodeQuery
 /// Matches zero or one occurrence of the inner query.
 /// Always succeeds - returns empty match if inner doesn't match.
 /// </summary>
-public sealed record OptionalQuery : INodeQuery
+public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery
 {
     private readonly INodeQuery _inner;
     
@@ -147,8 +148,7 @@ public sealed record OptionalQuery : INodeQuery
     /// <inheritdoc/>
     public bool Matches(RedNode node) => true; // Optional always "matches"
     
-    /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => true;
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node) => true;
     
     /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
@@ -161,14 +161,14 @@ public sealed record OptionalQuery : INodeQuery
         return true; // Optional always succeeds with 0 consumed
     }
     
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
-        if (_inner.TryMatchGreen(siblings, startIndex, out consumedCount))
+        if (_inner is IGreenNodeQuery greenQuery && 
+            greenQuery.TryMatchGreen(siblings, startIndex, out consumedCount))
             return true;
         
         consumedCount = 0;
-        return true;
+        return true; // Optional always succeeds with 0 consumed
     }
 }
 
@@ -179,7 +179,7 @@ public sealed record OptionalQuery : INodeQuery
 /// <summary>
 /// Matches the inner query multiple times (min to max occurrences).
 /// </summary>
-public sealed record RepeatQuery : INodeQuery
+public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
 {
     private readonly INodeQuery _inner;
     private readonly int _min;
@@ -209,8 +209,11 @@ public sealed record RepeatQuery : INodeQuery
     /// <inheritdoc/>
     public bool Matches(RedNode node) => TryMatch(node, out _);
     
-    /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => _inner.MatchesGreen(node) || _min == 0;
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        if (_min == 0) return true;
+        return _inner is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node);
+    }
     
     /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
@@ -244,16 +247,21 @@ public sealed record RepeatQuery : INodeQuery
         return true;
     }
     
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
+        if (_inner is not IGreenNodeQuery greenQuery)
+        {
+            consumedCount = 0;
+            return _min == 0;
+        }
+        
         int currentIndex = startIndex;
         int count = 0;
         int totalConsumed = 0;
         
         while (currentIndex < siblings.Count && count < _max)
         {
-            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+            if (!greenQuery.TryMatchGreen(siblings, currentIndex, out var partConsumed))
                 break;
             
             totalConsumed += partConsumed;
@@ -280,7 +288,7 @@ public sealed record RepeatQuery : INodeQuery
 /// Matches the inner query repeatedly until a terminator is encountered.
 /// The terminator is NOT consumed (lookahead-style matching).
 /// </summary>
-public sealed record RepeatUntilQuery : INodeQuery
+public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _terminator;
@@ -308,8 +316,7 @@ public sealed record RepeatUntilQuery : INodeQuery
     /// <inheritdoc/>
     public bool Matches(RedNode node) => TryMatch(node, out _);
     
-    /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => true; // Can match zero items
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node) => true; // Can match zero items
     
     /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
@@ -367,11 +374,17 @@ public sealed record RepeatUntilQuery : INodeQuery
         return false;
     }
     
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         int currentIndex = startIndex;
         int totalConsumed = 0;
+        
+        // Check if inner query supports green matching
+        if (_inner is not IGreenNodeQuery innerGreen)
+        {
+            consumedCount = 0;
+            return true; // Can match zero items
+        }
         
         while (currentIndex < siblings.Count)
         {
@@ -380,7 +393,7 @@ public sealed record RepeatUntilQuery : INodeQuery
                 break;
             
             // Try to match inner
-            if (!_inner.TryMatchGreen(siblings, currentIndex, out var partConsumed))
+            if (!innerGreen.TryMatchGreen(siblings, currentIndex, out var partConsumed))
                 break;
             
             totalConsumed += partConsumed;
@@ -391,10 +404,14 @@ public sealed record RepeatUntilQuery : INodeQuery
         return true;
     }
     
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+        => TryMatchGreen(siblings, startIndex, out consumedCount);
+    
     private bool TerminatorMatchesGreen(IReadOnlyList<GreenNode> siblings, int index)
     {
         // Direct match
-        if (_terminator.TryMatchGreen(siblings, index, out _))
+        if (_terminator is IGreenNodeQuery terminatorGreen && 
+            terminatorGreen.TryMatchGreen(siblings, index, out _))
             return true;
         
         // For newline terminators, check leading trivia
@@ -427,7 +444,7 @@ public sealed record RepeatUntilQuery : INodeQuery
 /// Matches the inner query only if followed by (or not followed by) the lookahead query.
 /// The lookahead is not consumed (zero-width assertion).
 /// </summary>
-public sealed record LookaheadQuery : INodeQuery
+public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _lookahead;
@@ -463,8 +480,10 @@ public sealed record LookaheadQuery : INodeQuery
     /// <inheritdoc/>
     public bool Matches(RedNode node) => TryMatch(node, out _);
     
-    /// <inheritdoc/>
-    public bool MatchesGreen(GreenNode node) => _inner.MatchesGreen(node);
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        return _inner is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node);
+    }
     
     /// <inheritdoc/>
     public bool TryMatch(RedNode startNode, out int consumedCount)
@@ -497,11 +516,17 @@ public sealed record LookaheadQuery : INodeQuery
         return true;
     }
     
-    /// <inheritdoc/>
-    public bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
+        // Check if inner query supports green matching
+        if (_inner is not IGreenNodeQuery innerGreen)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
         // First, try to match the inner query
-        if (!_inner.TryMatchGreen(siblings, startIndex, out var innerConsumed))
+        if (!innerGreen.TryMatchGreen(siblings, startIndex, out var innerConsumed))
         {
             consumedCount = 0;
             return false;
@@ -510,7 +535,8 @@ public sealed record LookaheadQuery : INodeQuery
         // Check lookahead at the position after inner match
         int lookaheadIndex = startIndex + innerConsumed;
         bool lookaheadMatches = lookaheadIndex < siblings.Count && 
-            _lookahead.TryMatchGreen(siblings, lookaheadIndex, out _);
+            _lookahead is IGreenNodeQuery lookaheadGreen &&
+            lookaheadGreen.TryMatchGreen(siblings, lookaheadIndex, out _);
         
         if (lookaheadMatches != _positive)
         {
@@ -518,6 +544,7 @@ public sealed record LookaheadQuery : INodeQuery
             return false;
         }
         
+        // Return only the inner consumed count (lookahead not consumed)
         consumedCount = innerConsumed;
         return true;
     }

@@ -14,13 +14,13 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    public RedBlock(GreenBlock green, RedNode? parent, int position)
+    internal RedBlock(GreenBlock green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }
     
     /// <summary>The underlying green block.</summary>
-    public new GreenBlock Green => (GreenBlock)base.Green;
+    internal new GreenBlock Green => (GreenBlock)base.Green;
     
     /// <summary>The opening delimiter character.</summary>
     public char Opener => Green.Opener;
@@ -32,10 +32,10 @@ public sealed class RedBlock : RedNode
     public int ChildCount => Green.SlotCount;
     
     /// <summary>Leading trivia before the opening delimiter.</summary>
-    public ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
+    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
     
     /// <summary>Trailing trivia after the closing delimiter.</summary>
-    public ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
+    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
     
     /// <summary>Width of leading trivia.</summary>
     public int LeadingTriviaWidth => Green.LeadingTriviaWidth;

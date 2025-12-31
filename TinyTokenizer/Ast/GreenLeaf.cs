@@ -7,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Green node for leaf tokens (identifiers, operators, strings, etc.).
 /// Stores the token text and attached trivia. Has no children.
 /// </summary>
-public sealed record GreenLeaf : GreenNode
+internal sealed record GreenLeaf : GreenNode
 {
     private readonly int _width;
     

@@ -152,7 +152,7 @@ public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
     public override bool Matches(RedNode node) => 
         node.Kind == _kind && (_predicate == null || _predicate(node));
     
-    public override bool MatchesGreen(GreenNode node) => node.Kind == _kind;
+    internal override bool MatchesGreen(GreenNode node) => node.Kind == _kind;
     
     protected override SyntaxNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
         new(_kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
@@ -246,7 +246,7 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     public override bool Matches(RedNode node) => 
         node is T typed && (_predicate == null || _predicate(typed));
     
-    public override bool MatchesGreen(GreenNode node) => 
+    internal override bool MatchesGreen(GreenNode node) => 
         node is GreenSyntaxNode gsn && gsn.RedType == typeof(T);
     
     /// <summary>

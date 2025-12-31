@@ -76,7 +76,8 @@ public class QueryCombinatorTests
         var greenChildren = greenRoot.Children;
         
         var query = Query.Sequence(Query.AnyIdent, Query.AnyIdent);
-        Assert.True(query.TryMatchGreen(greenChildren, 0, out var consumed));
+        var greenQuery = (IGreenNodeQuery)query;
+        Assert.True(greenQuery.TryMatchGreen(greenChildren, 0, out var consumed));
         Assert.Equal(2, consumed);
     }
 

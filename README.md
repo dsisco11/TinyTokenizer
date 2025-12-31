@@ -127,6 +127,9 @@ Query.Any.Until(Query.Newline)   // Repeat until terminator (not consumed)
 // Lookahead assertions
 Query.AnyIdent.FollowedBy(Query.ParenBlock)     // Positive lookahead
 Query.Ident.NotFollowedBy(Query.ParenBlock)  // Negative lookahead
+
+// Exact node reference (when you have a specific RedNode)
+Query.Exact(myRedNode)           // Match this specific node instance
 ```
 
 ### Insertion Positions
@@ -175,110 +178,142 @@ tree.CreateEditor()
 
 ### SyntaxEditor
 
-The `SyntaxEditor` provides batched mutations with atomic commit:
+The `SyntaxEditor` provides batched mutations with atomic commit. You can work directly with `RedNode` references or use query-based selection.
+
+**Working with RedNode references (preferred for known nodes):**
+
+```csharp
+var tree = SyntaxTree.Parse("a + b");
+var idents = tree.Select(Query.AnyIdent).ToList();
+
+tree.CreateEditor()
+    .Replace(idents[0], "x")                 // Replace specific node
+    .Replace(idents[1], "y")                 // Replace another node
+    .InsertBefore(idents[0], "(")            // Insert before node
+    .InsertAfter(idents[1], ")")             // Insert after node
+    .Commit();
+// Result: "(x + y)"
+```
+
+**Working with queries (for pattern matching):**
 
 ```csharp
 var tree = SyntaxTree.Parse("a + b");
 
-var editor = tree.CreateEditor();
-
-// Queue multiple edits
-editor
-    .Replace(Query.Ident("a"), "x")
+tree.CreateEditor()
+    .Replace(Query.Ident("a"), "x")          // Replace by query
     .Replace(Query.Ident("b"), "y")
     .Insert(Query.AnyOperator.First().Before(), "(")
-    .Insert(Query.AnyOperator.First().After(), ")");
+    .Insert(Query.AnyOperator.First().After(), ")")
+    .Commit();
+// Result: "(x + y)"
+```
 
-// Apply atomically (supports undo)
-editor.Commit();
+**Batch operations on multiple nodes:**
 
-// Or discard
-editor.Rollback();
+```csharp
+var tree = SyntaxTree.Parse("a b c");
+var idents = tree.Select(Query.AnyIdent);
+
+tree.CreateEditor()
+    .Replace(idents, "X")                    // Replace all at once
+    .Commit();
+// Result: "X X X"
 ```
 
 ### Common SyntaxEditor Patterns
 
-**Insert before a function/block:**
+**Insert around a node (using RedNode directly):**
 
 ```csharp
 var tree = SyntaxTree.Parse("function {body}");
+var block = tree.Select(Query.BraceBlock.First()).Single();
 
 tree.CreateEditor()
-    .Insert(Query.BraceBlock.First().Before(), "/* decorator */ ")
+    .InsertBefore(block, "/* decorator */ ")
+    .InsertAfter(block, " // end")
     .Commit();
-// Result: "function /* decorator */ {body}"
+// Result: "function /* decorator */ {body} // end"
 ```
 
-**Insert at the start of a function body (after opening brace):**
+**Insert inside blocks (using queries for position):**
 
 ```csharp
 var tree = SyntaxTree.Parse("function {existing}");
 
 tree.CreateEditor()
     .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter'); ")
-    .Commit();
-// Result: "function {console.log('enter'); existing}"
-```
-
-**Insert at the end of a function body (before closing brace):**
-
-```csharp
-var tree = SyntaxTree.Parse("function {existing}");
-
-tree.CreateEditor()
     .Insert(Query.BraceBlock.First().InnerEnd(), " return result;")
     .Commit();
-// Result: "function {existing return result;}"
+// Result: "function {console.log('enter'); existing return result;}"
 ```
 
-**Insert after a function/block:**
+**Replace with transformation:**
 
 ```csharp
-var tree = SyntaxTree.Parse("function {body}");
+var tree = SyntaxTree.Parse("hello world");
+var idents = tree.Select(Query.AnyIdent);
 
 tree.CreateEditor()
-    .Insert(Query.BraceBlock.First().After(), " // end of function")
+    .Replace(idents, n => ((RedLeaf)n).Text.ToUpper())
     .Commit();
-// Result: "function {body} // end of function"
+// Result: "HELLO WORLD"
 ```
 
-**Multiple insertions in one commit:**
+**Replace with another node:**
 
 ```csharp
-var tree = SyntaxTree.Parse("fn {body}");
+var tree = SyntaxTree.Parse("old");
+var oldNode = tree.Select(Query.Ident("old")).Single();
+
+// From another tree
+var sourceTree = SyntaxTree.Parse("new");
+var newNode = sourceTree.Select(Query.Ident("new")).Single();
 
 tree.CreateEditor()
-    .Insert(Query.BraceBlock.First().Before(), "/* before */ ")
-    .Insert(Query.BraceBlock.First().InnerStart(), "start(); ")
-    .Insert(Query.BraceBlock.First().InnerEnd(), " end();")
-    .Insert(Query.BraceBlock.First().After(), " /* after */")
+    .Replace(oldNode, newNode)               // Copy node from another tree
     .Commit();
-// Result: "fn /* before */ {start(); body end();} /* after */"
+// Result: "new"
 ```
 
-**Replace multiple occurrences:**
-
-```csharp
-var tree = SyntaxTree.Parse("a + b + a");
-
-tree.CreateEditor()
-    .Replace(Query.Ident("a"), "x")  // Replaces ALL 'a' with 'x'
-    .Commit();
-// Result: "x + b + x"
-```
-
-**Remove nodes:**
+**Remove specific nodes:**
 
 ```csharp
 var tree = SyntaxTree.Parse("keep remove keep");
+var toRemove = tree.Select(Query.Ident("remove")).Single();
 
 tree.CreateEditor()
-    .Remove(Query.Ident("remove"))
+    .Remove(toRemove)                        // Remove specific node
     .Commit();
-// Result: "keep keep"
+// Result: "keep  keep"
 ```
 
-The editor supports `Insert`, `Remove`, and `Replace` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
+**Batch operations with multiple queries:**
+
+```csharp
+var tree = SyntaxTree.Parse("foo bar baz");
+var queries = new[] { Query.Ident("foo"), Query.Ident("baz") };
+
+tree.CreateEditor()
+    .Replace(queries, "X")                   // Replace all matches
+    .Commit();
+// Result: "X bar X"
+```
+
+**Use Query.Exact for precise targeting:**
+
+```csharp
+var tree = SyntaxTree.Parse("a b c");
+var bNode = tree.Select(Query.Ident("b")).Single();
+
+// Use Query.Exact when you need a query but have a specific node
+tree.CreateEditor()
+    .Replace(Query.Exact(bNode), "X")        // Same as .Replace(bNode, "X")
+    .Commit();
+// Result: "a X c"
+```
+
+The editor supports `Insert`, `InsertBefore`, `InsertAfter`, `Remove`, and `Replace` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
 
 ## Schema — Unified Configuration
 
@@ -418,29 +453,66 @@ Define your own syntax node types:
 // 1. Define the node class
 public sealed class LambdaSyntax : SyntaxNode
 {
-    public LambdaSyntax(GreenSyntaxNode green, RedNode? parent, int position)
-        : base(green, parent, position) { }
+    // Constructor receives an opaque CreationContext - just pass it to base
+    protected LambdaSyntax(CreationContext context)
+        : base(context) { }
 
+    // Access child nodes by index (determined by the pattern)
     public RedBlock Parameters => GetTypedChild<RedBlock>(0);
+    public RedLeaf Arrow => GetTypedChild<RedLeaf>(1);
     public RedBlock Body => GetTypedChild<RedBlock>(2);
 }
 
 // 2. Create a definition with pattern using Query combinators
 var lambdaDef = Syntax.Define<LambdaSyntax>("Lambda")
     .Match(Query.Sequence(Query.ParenBlock, Query.Operator("=>"), Query.BraceBlock))
-    .Create((green, parent, pos) => new LambdaSyntax(green, parent, pos))
     .WithPriority(15)
     .Build();
 
 // 3. Add to schema
 var schema = Schema.Create()
     .WithOperators(CommonOperators.JavaScript)
-    .Define(lambdaDef)
+    .DefineSyntax(lambdaDef)
     .Build();
 
 // 4. Match
 var tree = SyntaxTree.Parse("(x) => { return x; }", schema);
 var lambdas = tree.Match<LambdaSyntax>().ToList();
+```
+
+### INamedNode and IBlockContainerNode
+
+Implement these interfaces for enhanced querying capabilities:
+
+```csharp
+// A function syntax node with named access and block containers
+public sealed class FunctionSyntax : SyntaxNode, INamedNode, IBlockContainerNode
+{
+    protected FunctionSyntax(CreationContext context)
+        : base(context) { }
+
+    // INamedNode - enables Query.Syntax<T>().Named("foo")
+    public string Name => GetTypedChild<RedLeaf>(1).Text;
+
+    // IBlockContainerNode - enables .InnerStart("body"), .InnerEnd("params")
+    public IReadOnlyList<string> BlockNames => ["body", "params"];
+    
+    public RedBlock GetBlock(string? name = null) => name switch
+    {
+        null or "body" => GetTypedChild<RedBlock>(3),  // { }
+        "params" => GetTypedChild<RedBlock>(2),        // ( )
+        _ => throw new ArgumentException($"Unknown block: {name}")
+    };
+}
+
+// Usage with fluent queries
+var mainQuery = Query.Syntax<FunctionSyntax>().Named("main");
+
+tree.CreateEditor()
+    .Insert(mainQuery.Before(), "// Entry point\n")
+    .Insert(mainQuery.InnerStart("body"), "\n    console.log('enter');")
+    .Insert(mainQuery.InnerEnd("body"), "\n    console.log('exit');")
+    .Commit();
 ```
 
 ### Query Combinators Reference
@@ -473,6 +545,7 @@ var lambdas = tree.Match<LambdaSyntax>().ToList();
 | `.FollowedBy(q)`       | Positive lookahead       | `Query.AnyIdent.FollowedBy(Query.ParenBlock)`      |
 | `.NotFollowedBy(q)`    | Negative lookahead       | `Query.AnyIdent.NotFollowedBy(Query.ParenBlock)`   |
 | `.Then(q)`             | Fluent sequence          | `Query.AnyIdent.Then(Query.ParenBlock)`            |
+| `Query.Exact(node)`    | Exact node reference     | `Query.Exact(myRedNode)`                           |
 
 ## Async Tokenization
 

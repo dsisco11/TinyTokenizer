@@ -60,7 +60,7 @@ public abstract record NodePattern
     /// <param name="startIndex">Index of the first sibling to try matching.</param>
     /// <param name="consumedCount">Number of siblings consumed if matched.</param>
     /// <returns>True if the pattern matched.</returns>
-    public abstract bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount);
+    internal abstract bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount);
     
     /// <summary>
     /// Gets a description of this pattern for diagnostics.
@@ -145,9 +145,11 @@ public sealed record QueryPattern : NodePattern
         return false;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
-        if (startIndex < siblings.Count && _query.MatchesGreen(siblings[startIndex]))
+        if (startIndex < siblings.Count && 
+            _query is IGreenNodeQuery greenQuery && 
+            greenQuery.MatchesGreen(siblings[startIndex]))
         {
             consumedCount = 1;
             return true;
@@ -276,7 +278,7 @@ public sealed record SequencePattern : NodePattern
         return true;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         int currentIndex = startIndex;
         int totalConsumed = 0;
@@ -338,7 +340,7 @@ public sealed record AlternativePattern : NodePattern
         return false;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         foreach (var alt in _alternatives)
         {
@@ -386,7 +388,7 @@ public sealed record OptionalPattern : NodePattern
         return true;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         // Try to match inner pattern
         if (_inner.TryMatchGreen(siblings, startIndex, out consumedCount))
@@ -467,7 +469,7 @@ public sealed record RepeatPattern : NodePattern
         return true;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         int currentIndex = startIndex;
         int count = 0;
@@ -590,7 +592,7 @@ public sealed record RepeatUntilPattern : NodePattern
         return false;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         int currentIndex = startIndex;
         int totalConsumed = 0;
@@ -702,7 +704,7 @@ public sealed record LookaheadPattern : NodePattern
         return true;
     }
     
-    public override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
     {
         // First, try to match the primary pattern
         if (!_match.TryMatchGreen(siblings, startIndex, out var primaryConsumed))

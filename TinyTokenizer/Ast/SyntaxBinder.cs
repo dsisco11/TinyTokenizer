@@ -38,7 +38,7 @@ public sealed class SyntaxBinder
     /// </summary>
     /// <param name="root">The structural green root node.</param>
     /// <returns>A new green tree with GreenSyntaxNodes where patterns matched.</returns>
-    public GreenNode Bind(GreenNode root)
+    internal GreenNode Bind(GreenNode root)
     {
         return BindNode(root);
     }
@@ -186,7 +186,9 @@ public sealed class SyntaxBinder
         TryMatchQuery(INodeQuery query, ImmutableArray<GreenNode> children, int startIndex)
     {
         // Use efficient green-level query matching
-        if (query.TryMatchGreen(children, startIndex, out var consumedCount) && consumedCount > 0)
+        if (query is IGreenNodeQuery greenQuery &&
+            greenQuery.TryMatchGreen(children, startIndex, out var consumedCount) && 
+            consumedCount > 0)
         {
             var matchedGreen = children.Skip(startIndex).Take(consumedCount).ToImmutableArray();
             return (consumedCount, matchedGreen);

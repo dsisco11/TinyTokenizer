@@ -11,13 +11,13 @@ public sealed class RedLeaf : RedNode
     /// <summary>
     /// Creates a new red leaf wrapping a green leaf.
     /// </summary>
-    public RedLeaf(GreenLeaf green, RedNode? parent, int position)
+    internal RedLeaf(GreenLeaf green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }
     
     /// <summary>The underlying green leaf.</summary>
-    public new GreenLeaf Green => (GreenLeaf)base.Green;
+    internal new GreenLeaf Green => (GreenLeaf)base.Green;
     
     /// <summary>The token text (excluding trivia).</summary>
     public string Text => Green.Text;
@@ -26,10 +26,10 @@ public sealed class RedLeaf : RedNode
     public ReadOnlySpan<char> TextSpan => Green.Text.AsSpan();
     
     /// <summary>Leading trivia attached to this token.</summary>
-    public ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
+    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
     
     /// <summary>Trailing trivia attached to this token.</summary>
-    public ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
+    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
     
     /// <summary>Width of the token text only.</summary>
     public int TextWidth => Green.TextWidth;

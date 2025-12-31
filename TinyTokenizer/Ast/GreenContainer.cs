@@ -14,7 +14,7 @@ namespace TinyTokenizer.Ast;
 /// 
 /// All support structural sharing through WithSlot/WithChildren/WithInsert/WithReplace.
 /// </remarks>
-public abstract record GreenContainer : GreenNode
+internal abstract record GreenContainer : GreenNode
 {
     /// <summary>
     /// Gets the child nodes of this container.

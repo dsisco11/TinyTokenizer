@@ -7,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Green node for the root token list (top-level sequence of nodes).
 /// Similar to GreenBlock but without delimiters.
 /// </summary>
-public sealed record GreenList : GreenContainer
+internal sealed record GreenList : GreenContainer
 {
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
@@ -137,13 +137,13 @@ public sealed class RedList : RedNode
     /// <summary>
     /// Creates a new red list.
     /// </summary>
-    public RedList(GreenList green, RedNode? parent, int position)
+    internal RedList(GreenList green, RedNode? parent, int position)
         : base(green, parent, position)
     {
     }
     
     /// <summary>The underlying green list.</summary>
-    public new GreenList Green => (GreenList)base.Green;
+    internal new GreenList Green => (GreenList)base.Green;
     
     /// <summary>Number of children.</summary>
     public int ChildCount => Green.SlotCount;

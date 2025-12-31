@@ -8,7 +8,7 @@ namespace TinyTokenizer.Ast;
 /// Green nodes store width (not absolute position) and can be freely shared
 /// across different tree versions for structural sharing during mutations.
 /// </summary>
-public abstract record GreenNode : IFormattable
+internal abstract record GreenNode : IFormattable
 {
     /// <summary>The kind of this node.</summary>
     public abstract NodeKind Kind { get; }
