@@ -260,6 +260,35 @@ tree.CreateEditor()
 // Result: "HELLO WORLD"
 ```
 
+**Edit content (preserves trivia automatically):**
+
+The `Edit` methods transform node content while automatically preserving surrounding whitespace and comments. Unlike `Replace`, the transformer receives only the content string (without trivia):
+
+```csharp
+var tree = SyntaxTree.Parse("  hello   world  ");
+
+// Edit: transformer receives "hello" and "world" (no trivia)
+tree.CreateEditor()
+    .Edit(Query.AnyIdent, content => content.ToUpper())
+    .Commit();
+// Result: "  HELLO   WORLD  " (whitespace preserved)
+
+// Works with any transformation
+tree.CreateEditor()
+    .Edit(Query.AnyNumeric, content => (int.Parse(content) * 2).ToString())
+    .Commit();
+
+// Query-based or node-based
+var node = tree.Select(Query.Ident("foo")).Single();
+tree.CreateEditor()
+    .Edit(node, content => $"[{content}]")
+    .Commit();
+```
+
+**Edit vs Replace:**
+- `Replace(query, node => ...)` — transformer receives full `RedNode`, you handle trivia
+- `Edit(query, content => ...)` — transformer receives content string only, trivia auto-preserved
+
 **Replace with another node:**
 
 ```csharp
@@ -313,7 +342,7 @@ tree.CreateEditor()
 // Result: "a X c"
 ```
 
-The editor supports `Insert`, `InsertBefore`, `InsertAfter`, `Remove`, and `Replace` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
+The editor supports `Insert`, `InsertBefore`, `InsertAfter`, `Remove`, `Replace`, and `Edit` operations. All changes can be undone with `tree.Undo()` and redone with `tree.Redo()`.
 
 ## Schema — Unified Configuration
 
