@@ -36,7 +36,7 @@ public abstract class SyntaxNode : RedNode
     /// green node, parent, and position information without requiring users to
     /// directly reference internal green types.
     /// </remarks>
-    protected internal readonly record struct CreationContext
+    public readonly record struct CreationContext
     {
         internal GreenSyntaxNode Green { get; init; }
         

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyTokenizer.Tests", "Tiny
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyTokenizer.Benchmarks", "TinyTokenizer.Benchmarks\TinyTokenizer.Benchmarks.csproj", "{3AE7D3B6-A8A7-41C4-939D-9E686D865495}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyTokenizer.E2ETests", "TinyTokenizer.E2ETests\TinyTokenizer.E2ETests.csproj", "{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{3AE7D3B6-A8A7-41C4-939D-9E686D865495}.Release|x64.Build.0 = Release|Any CPU
 		{3AE7D3B6-A8A7-41C4-939D-9E686D865495}.Release|x86.ActiveCfg = Release|Any CPU
 		{3AE7D3B6-A8A7-41C4-939D-9E686D865495}.Release|x86.Build.0 = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|x64.Build.0 = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Debug|x86.Build.0 = Debug|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|x64.ActiveCfg = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|x64.Build.0 = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|x86.ActiveCfg = Release|Any CPU
+		{4EAB8794-90E2-45E6-8F72-4A2EE087A12A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using TinyTokenizer.Ast;
 using Xunit;
 
-namespace TinyTokenizer.Tests;
+namespace TinyTokenizer.E2ETests;
 
 /// <summary>
 /// End-to-end tests for editing GLSL shaders using the SyntaxTree and SyntaxEditor APIs.
@@ -29,9 +29,9 @@ public class GlslEditorTests
     /// Pattern: Ident + Ident + ParenBlock + BraceBlock
     /// Example: void main() { ... }
     /// </summary>
-    public sealed class GlslFunctionSyntax : SyntaxNode, INamedNode, IBlockContainerNode
+    public sealed class GlFunctionNode : SyntaxNode, INamedNode, IBlockContainerNode
     {
-        internal GlslFunctionSyntax(CreationContext context)
+        public GlFunctionNode(CreationContext context)
             : base(context) { }
         
         /// <summary>Return type node (e.g., "void", "vec4").</summary>
@@ -72,9 +72,9 @@ public class GlslEditorTests
     /// A GLSL tagged directive: #version, #define, etc.
     /// Pattern: TaggedIdent + rest of line
     /// </summary>
-    public sealed class GlslDirectiveSyntax : SyntaxNode, INamedNode
+    public sealed class GlDirectiveNode : SyntaxNode, INamedNode
     {
-        internal GlslDirectiveSyntax(CreationContext context)
+        public GlDirectiveNode(CreationContext context)
             : base(context) { }
         
         /// <summary>The directive tag node (e.g., "#version").</summary>
@@ -108,12 +108,12 @@ public class GlslEditorTests
             .WithOperators(CommonOperators.CFamily)
             .WithTagPrefixes('#', '@')
             // Function definition: type name(params) { body }
-            .DefineSyntax(Syntax.Define<GlslFunctionSyntax>("GlslFunction")
+            .DefineSyntax(Syntax.Define<GlFunctionNode>("glFunction")
                 .Match(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock)
                 .WithPriority(10)
                 .Build())
             // Directive: #tag followed by tokens until newline
-            .DefineSyntax(Syntax.Define<GlslDirectiveSyntax>("GlslDirective")
+            .DefineSyntax(Syntax.Define<GlDirectiveNode>("glDirective")
                 .Match(Query.AnyTaggedIdent, Query.Any.Until(Query.Newline))
                 .Build())
             .Build();
@@ -148,11 +148,11 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var fooFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "foo");
+        var mainFuncQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        var fooFuncQuery = Query.Syntax<GlFunctionNode>().Named("foo");
 
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
-        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlFunctionNode;
+        var fooFunc = tree.Select(fooFuncQuery).FirstOrDefault() as GlFunctionNode;
         
         Assert.NotNull(mainFunc);
         Assert.NotNull(fooFunc);
@@ -166,8 +166,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var versionDirectiveQuery = Query.Syntax<GlslDirectiveSyntax>().Where(d => d.Name == "version");
-        var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlslDirectiveSyntax;
+        var versionDirectiveQuery = Query.Syntax<GlDirectiveNode>().Named("version");
+        var versionDirective = tree.Select(versionDirectiveQuery).FirstOrDefault() as GlDirectiveNode;
         
         Assert.NotNull(versionDirective);
         // Roslyn-style: ToString() includes trailing trivia (space before next token)
@@ -185,8 +185,8 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // Create a query that finds the main function by checking the name
-        var mainFuncQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var mainFuncQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        var mainFunc = tree.Select(mainFuncQuery).FirstOrDefault() as GlFunctionNode;
         Assert.NotNull(mainFunc);
         
         
@@ -213,7 +213,7 @@ void main() {
         
         // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
+            .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToString());
@@ -234,7 +234,7 @@ void main() {
         
         // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
+            .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToString());
@@ -254,8 +254,8 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlFunctionNode;
         Assert.NotNull(mainFunc);
         
         tree.CreateEditor()
@@ -280,7 +280,7 @@ void main() {
         
         // Use INamedNode API to find the #version directive and insert after it
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlslDirectiveSyntax>().Named("version").After(), "\n@import \"my-include.glsl\"")
+            .Insert(Query.Syntax<GlDirectiveNode>().Named("version").After(), "\n@import \"my-include.glsl\"")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToString());
@@ -301,7 +301,7 @@ void main() {
         
         // Use INamedNode API to find foo function by name
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlslFunctionSyntax>().Named("foo").Before(), "/* foo comment */\n")
+            .Insert(Query.Syntax<GlFunctionNode>().Named("foo").Before(), "/* foo comment */\n")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToString());
@@ -322,9 +322,9 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // Use INamedNode + IBlockContainerNode APIs for all injection points
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
-        var fooQuery = Query.Syntax<GlslFunctionSyntax>().Named("foo");
-        var versionQuery = Query.Syntax<GlslDirectiveSyntax>().Named("version");
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        var fooQuery = Query.Syntax<GlFunctionNode>().Named("foo");
+        var versionQuery = Query.Syntax<GlDirectiveNode>().Named("version");
         
         tree.CreateEditor()
             // 1. Comment above main
@@ -369,8 +369,8 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         var originalText = tree.Root.ToString();
         
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Where(f => f.Name == "main");
-        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlslFunctionSyntax;
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlFunctionNode;
         Assert.NotNull(mainFunc);
         
         tree.CreateEditor()
@@ -399,7 +399,7 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // Use the new .Named() extension method
-        var mainFunc = Query.Syntax<GlslFunctionSyntax>().Named("main")
+        var mainFunc = Query.Syntax<GlFunctionNode>().Named("main")
             .SelectTyped(tree)
             .FirstOrDefault();
         
@@ -414,7 +414,7 @@ void main() {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
-        var nonExistent = Query.Syntax<GlslFunctionSyntax>().Named("nonexistent")
+        var nonExistent = Query.Syntax<GlFunctionNode>().Named("nonexistent")
             .SelectTyped(tree)
             .FirstOrDefault();
         
@@ -428,7 +428,7 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // Use the new .InnerStart("body") extension method
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         
         tree.CreateEditor()
             .Insert(mainQuery.InnerStart("body"), "\n    // Body start")
@@ -445,7 +445,7 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // Use the new .InnerEnd() extension method (defaults to "body" as first block)
-        var mainQuery = Query.Syntax<GlslFunctionSyntax>().Named("main");
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         
         tree.CreateEditor()
             .Insert(mainQuery.InnerEnd(), "\n    // Body end")
@@ -462,7 +462,7 @@ void main() {
         var tree = SyntaxTree.Parse(SampleShader, schema);
         
         // The directive should capture "#version 330 core"
-        var versionDirective = Query.Syntax<GlslDirectiveSyntax>().Named("version")
+        var versionDirective = Query.Syntax<GlDirectiveNode>().Named("version")
             .SelectTyped(tree)
             .FirstOrDefault();
         
