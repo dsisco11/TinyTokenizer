@@ -22,6 +22,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>TinyTokenizer.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
   </ItemGroup>
 
