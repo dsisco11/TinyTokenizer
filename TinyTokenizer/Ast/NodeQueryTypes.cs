@@ -576,3 +576,87 @@ public sealed record IntersectionNodeQuery : INodeQuery
 }
 
 #endregion
+
+#region Exact Node Query
+
+/// <summary>
+/// Matches a specific node instance by reference equality.
+/// Used when you have a RedNode reference and want to create a query targeting exactly that node.
+/// </summary>
+/// <remarks>
+/// RedNodes are ephemeral - they are recreated on tree mutations. This query is intended for
+/// immediate use within a single tree traversal, not for queries that survive tree changes.
+/// </remarks>
+public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
+{
+    private readonly RedNode _target;
+    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    
+    /// <summary>Creates a query matching the exact node instance.</summary>
+    public ExactNodeQuery(RedNode target) : this(target, null, SelectionMode.All, 0) { }
+    
+    private ExactNodeQuery(RedNode target, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _target = target;
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
+    
+    /// <summary>The target node this query matches.</summary>
+    public RedNode Target => _target;
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(SyntaxTree tree)
+    {
+        // If the target node matches our criteria, return it
+        if (Matches(_target))
+            return [_target];
+        return [];
+    }
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(RedNode root)
+    {
+        // Check if target is within this subtree and matches
+        if (Matches(_target) && IsDescendantOrSelf(_target, root))
+            return [_target];
+        return [];
+    }
+    
+    /// <inheritdoc/>
+    public override bool Matches(RedNode node) => 
+        ReferenceEquals(node, _target) && (_predicate == null || _predicate(node));
+    
+    /// <inheritdoc/>
+    public override bool MatchesGreen(GreenNode node) => 
+        ReferenceEquals(node, _target.Green);
+    
+    protected override ExactNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+        new(_target, CombinePredicates(_predicate, predicate), _mode, _modeArg);
+    
+    protected override ExactNodeQuery CreateFirst() => new(_target, _predicate, SelectionMode.First, 0);
+    protected override ExactNodeQuery CreateLast() => new(_target, _predicate, SelectionMode.Last, 0);
+    protected override ExactNodeQuery CreateNth(int n) => new(_target, _predicate, SelectionMode.Nth, n);
+    protected override ExactNodeQuery CreateSkip(int count) => new(_target, _predicate, SelectionMode.Skip, count);
+    protected override ExactNodeQuery CreateTake(int count) => new(_target, _predicate, SelectionMode.Take, count);
+    
+    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
+    
+    private static bool IsDescendantOrSelf(RedNode node, RedNode root)
+    {
+        var current = node;
+        while (current != null)
+        {
+            if (ReferenceEquals(current, root))
+                return true;
+            current = current.Parent;
+        }
+        return false;
+    }
+}
+
+#endregion

@@ -158,4 +158,25 @@ public static class Query
     public static SequenceQuery Sequence(IEnumerable<INodeQuery> parts) => new(parts);
     
     #endregion
+    
+    #region Exact Node Query
+    
+    /// <summary>
+    /// Creates a query matching the exact node instance by reference.
+    /// Useful when you have a RedNode reference and want to use it with query-based APIs.
+    /// </summary>
+    /// <param name="node">The exact node to match.</param>
+    /// <remarks>
+    /// RedNodes are ephemeral - they are recreated on tree mutations. This query is intended for
+    /// immediate use within a single tree traversal, not for queries that survive tree changes.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var node = tree.Root.Children.First();
+    /// editor.Replace(Query.Exact(node), "newValue");
+    /// </code>
+    /// </example>
+    public static ExactNodeQuery Exact(RedNode node) => new ExactNodeQuery(node);
+    
+    #endregion
 }

@@ -1008,4 +1008,359 @@ public class SyntaxEditorTests
     }
 
     #endregion
+    
+    #region Query.Exact and RedNode-based Operations
+    
+    [Fact]
+    public void QueryExact_MatchesSpecificNode()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        // In this AST, whitespace is trivia attached to tokens, not separate nodes
+        // "a b c" has 3 ident children: "a", "b", "c"
+        var nodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        var targetNode = nodes[1]; // "b"
+        
+        var matched = Q.Exact(targetNode).Select(tree).ToList();
+        
+        Assert.Single(matched);
+        Assert.Same(targetNode, matched[0]);
+    }
+    
+    [Fact]
+    public void QueryExact_DoesNotMatchOtherNodes()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var nodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        var targetNode = nodes[1]; // "b"
+        
+        // Query for the exact node, but check against different nodes
+        Assert.False(Q.Exact(targetNode).Matches(nodes[0])); // "a"
+        Assert.False(Q.Exact(targetNode).Matches(nodes[2])); // "c"
+        Assert.True(Q.Exact(targetNode).Matches(targetNode)); // "b"
+    }
+    
+    [Fact]
+    public void Replace_RedNode_ReplacesSpecificNode()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        // Get the "b" identifier (second ident)
+        var bNode = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ElementAt(1);
+        
+        tree.CreateEditor()
+            .Replace(bNode, "X")
+            .Commit();
+        
+        Assert.Equal("a X c", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_RedNode_WithTransformer()
+    {
+        var tree = SyntaxTree.Parse("hello world");
+        // Get "world" (second ident)
+        var worldNode = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ElementAt(1);
+        
+        tree.CreateEditor()
+            .Replace(worldNode, n => ((RedLeaf)n).Text.ToUpper())
+            .Commit();
+        
+        Assert.Equal("hello WORLD", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_MultipleRedNodes_ReplacesAll()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var nodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        
+        tree.CreateEditor()
+            .Replace(nodes, "X")
+            .Commit();
+        
+        Assert.Equal("X X X", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_MultipleRedNodes_WithTransformer()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var nodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        
+        tree.CreateEditor()
+            .Replace(nodes, n => $"[{((RedLeaf)n).Text}]")
+            .Commit();
+        
+        // When replacing a token, its leading trivia is transferred to the replacement.
+        // The replacement text "[x]" doesn't include the space, so the space (leading trivia)
+        // goes before the bracket.
+        var text = tree.ToFullString();
+        Assert.Contains("[a]", text);
+        Assert.Contains("[b]", text);
+        Assert.Contains("[c]", text);
+    }
+    
+    [Fact]
+    public void Remove_RedNode_RemovesSpecificNode()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        // Get "b" identifier
+        var bNode = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ElementAt(1);
+        
+        tree.CreateEditor()
+            .Remove(bNode)
+            .Commit();
+        
+        var text = tree.ToFullString();
+        // After removal, the trivia (space before b) might remain or be gone depending on trivia attachment
+        // The key assertion is that "b" is removed
+        Assert.DoesNotContain("b", text.Replace(" ", "").Replace("  ", "")); // ignore whitespace for this test
+        Assert.Contains("a", text);
+        Assert.Contains("c", text);
+    }
+    
+    [Fact]
+    public void Remove_MultipleRedNodes_RemovesAll()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var identNodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).Take(2).ToList();
+        
+        tree.CreateEditor()
+            .Remove(identNodes)
+            .Commit();
+        
+        var text = tree.ToFullString();
+        var textWithoutSpaces = text.Replace(" ", "");
+        Assert.DoesNotContain("a", textWithoutSpaces);
+        Assert.DoesNotContain("b", textWithoutSpaces);
+        Assert.Contains("c", textWithoutSpaces);
+    }
+    
+    [Fact]
+    public void InsertBefore_RedNode_Text()
+    {
+        var tree = SyntaxTree.Parse("world");
+        var worldNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        
+        tree.CreateEditor()
+            .InsertBefore(worldNode, "hello ")
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void InsertAfter_RedNode_Text()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        var helloNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        
+        tree.CreateEditor()
+            .InsertAfter(helloNode, " world")
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void InsertBefore_MultipleRedNodes_Text()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var identNodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        
+        tree.CreateEditor()
+            .InsertBefore(identNodes, "[")
+            .Commit();
+        
+        // When inserting before a token, the insertion goes before the token's position.
+        // The token retains its leading trivia (whitespace), so we get "[]a []b []c".
+        var text = tree.ToFullString();
+        Assert.Equal("[]a []b []c", text);
+    }
+    
+    [Fact]
+    public void InsertAfter_MultipleRedNodes_Text()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var identNodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
+        
+        tree.CreateEditor()
+            .InsertAfter(identNodes, "]")
+            .Commit();
+        
+        // When inserting after a token, the insertion goes after the token's text.
+        // Whitespace (leading trivia of next token) comes after our insertion.
+        var text = tree.ToFullString();
+        Assert.Equal("a ]b ]c]", text);
+    }
+    
+    [Fact]
+    public void InsertBefore_RedNode_GreenNodes()
+    {
+        var tree = SyntaxTree.Parse("world");
+        var worldNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        var lexer = new GreenLexer();
+        var nodesToInsert = lexer.ParseToGreenNodes("hello ");
+        
+        tree.CreateEditor()
+            .InsertBefore(worldNode, nodesToInsert.AsEnumerable())
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void InsertAfter_RedNode_GreenNodes()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        var helloNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        var lexer = new GreenLexer();
+        var nodesToInsert = lexer.ParseToGreenNodes(" world");
+        
+        tree.CreateEditor()
+            .InsertAfter(helloNode, nodesToInsert.AsEnumerable())
+            .Commit();
+        
+        Assert.Equal("hello world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_RedNode_WithRedNode()
+    {
+        var tree = SyntaxTree.Parse("old");
+        var oldNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        
+        // Create a new tree to get a RedNode from it
+        var sourceTree = SyntaxTree.Parse("new");
+        var newRedNode = sourceTree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        
+        tree.CreateEditor()
+            .Replace(oldNode, newRedNode)
+            .Commit();
+        
+        Assert.Equal("new", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_RedNode_WithGreenNode()
+    {
+        var tree = SyntaxTree.Parse("old");
+        var oldNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        var lexer = new GreenLexer();
+        var newGreenNode = lexer.ParseToGreenNodes("new").First();
+        
+        tree.CreateEditor()
+            .Replace(oldNode, newGreenNode)
+            .Commit();
+        
+        Assert.Equal("new", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Replace_RedNode_WithMultipleRedNodes()
+    {
+        var tree = SyntaxTree.Parse("x");
+        var xNode = tree.Root.Children.First(n => n.Kind == NodeKind.Ident);
+        
+        var sourceTree = SyntaxTree.Parse("a b c");
+        // Get all children (identifiers and their trivia are combined in nodes)
+        var replacements = sourceTree.Root.Children;
+        
+        tree.CreateEditor()
+            .Replace(xNode, replacements)
+            .Commit();
+        
+        Assert.Equal("a b c", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void InsertBefore_RootNode_ThrowsArgumentException()
+    {
+        var tree = SyntaxTree.Parse("test");
+        
+        var ex = Assert.Throws<ArgumentException>(() =>
+        {
+            tree.CreateEditor()
+                .InsertBefore(tree.Root, "prefix")
+                .Commit();
+        });
+        
+        Assert.Contains("root", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+    
+    [Fact]
+    public void QueryExact_WithQueryBasedEditor_WorksCorrectly()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var bNode = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ElementAt(1); // "b"
+        
+        // Use Query.Exact with query-based Replace method
+        tree.CreateEditor()
+            .Replace(Q.Exact(bNode), "X")
+            .Commit();
+        
+        Assert.Equal("a X c", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void BatchRemove_WithQueries_RemovesAllMatches()
+    {
+        var tree = SyntaxTree.Parse("a1 b2 c3");
+        var queries = new INodeQuery[] 
+        { 
+            Q.Ident("a1"), 
+            Q.Ident("c3") 
+        };
+        
+        tree.CreateEditor()
+            .Remove(queries)
+            .Commit();
+        
+        var text = tree.ToFullString();
+        var textNoSpaces = text.Replace(" ", "");
+        Assert.DoesNotContain("a1", textNoSpaces);
+        Assert.DoesNotContain("c3", textNoSpaces);
+        Assert.Contains("b2", textNoSpaces);
+    }
+    
+    [Fact]
+    public void BatchReplace_WithQueries_ReplacesAllMatches()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        var queries = new INodeQuery[] 
+        { 
+            Q.Ident("foo"), 
+            Q.Ident("baz") 
+        };
+        
+        tree.CreateEditor()
+            .Replace(queries, "X")
+            .Commit();
+        
+        Assert.Equal("X bar X", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void BatchReplace_WithQueries_AndTransformer()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        var queries = new INodeQuery[] 
+        { 
+            Q.Ident("foo"), 
+            Q.Ident("baz") 
+        };
+        
+        tree.CreateEditor()
+            .Replace(queries, n => $"[{((RedLeaf)n).Text}]")
+            .Commit();
+        
+        // Trivia behavior: "foo" has no leading trivia, "bar" has leading space, "baz" has leading space.
+        // When we replace "foo" with "[foo]", the original token had no leading trivia.
+        // When we replace "baz" with "[baz]", its leading trivia (space) is preserved before the replacement.
+        var text = tree.ToFullString();
+        Assert.Contains("[foo]", text);
+        Assert.Contains("bar", text);
+        Assert.Contains("[baz]", text);
+    }
+    
+    #endregion
 }

@@ -44,7 +44,7 @@ public sealed class SyntaxEditor
     /// </summary>
     public bool HasPendingEdits => _edits.Count > 0;
     
-    #region Insert
+    #region Insert (Query-based)
     
     /// <summary>
     /// Queues an insertion of text at positions resolved by the query.
@@ -64,6 +64,18 @@ public sealed class SyntaxEditor
     }
     
     /// <summary>
+    /// Queues an insertion of text at positions resolved by multiple queries.
+    /// </summary>
+    public SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, string text)
+    {
+        foreach (var query in queries)
+        {
+            Insert(query, text);
+        }
+        return this;
+    }
+    
+    /// <summary>
     /// Queues an insertion of pre-built nodes at positions resolved by the query.
     /// </summary>
     public SyntaxEditor Insert(InsertionQuery query, ImmutableArray<GreenNode> nodes)
@@ -78,9 +90,205 @@ public sealed class SyntaxEditor
         return this;
     }
     
+    /// <summary>
+    /// Queues an insertion of pre-built nodes at positions resolved by multiple queries.
+    /// </summary>
+    public SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, ImmutableArray<GreenNode> nodes)
+    {
+        foreach (var query in queries)
+        {
+            Insert(query, nodes);
+        }
+        return this;
+    }
+    
     #endregion
     
-    #region Remove
+    #region Insert (RedNode-based)
+    
+    /// <summary>
+    /// Queues an insertion of text before the specified node.
+    /// </summary>
+    /// <param name="target">The node to insert before.</param>
+    /// <param name="text">The text to insert (will be parsed into nodes).</param>
+    /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
+    public SyntaxEditor InsertBefore(RedNode target, string text)
+    {
+        var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+        _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of text before each of the specified nodes.
+    /// </summary>
+    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, string text)
+    {
+        foreach (var target in targets)
+        {
+            InsertBefore(target, text);
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of text after the specified node.
+    /// </summary>
+    /// <param name="target">The node to insert after.</param>
+    /// <param name="text">The text to insert (will be parsed into nodes).</param>
+    /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
+    public SyntaxEditor InsertAfter(RedNode target, string text)
+    {
+        var pos = CreateInsertionPosition(target, InsertionPoint.After);
+        _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of text after each of the specified nodes.
+    /// </summary>
+    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, string text)
+    {
+        foreach (var target in targets)
+        {
+            InsertAfter(target, text);
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of a single node before the specified target.
+    /// </summary>
+    public SyntaxEditor InsertBefore(RedNode target, RedNode nodeToInsert)
+    {
+        return InsertBefore(target, [nodeToInsert.Green]);
+    }
+    
+    /// <summary>
+    /// Queues an insertion of a single node before the specified target.
+    /// </summary>
+    public SyntaxEditor InsertBefore(RedNode target, GreenNode nodeToInsert)
+    {
+        return InsertBefore(target, [nodeToInsert]);
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes before the specified target.
+    /// </summary>
+    public SyntaxEditor InsertBefore(RedNode target, IEnumerable<RedNode> nodesToInsert)
+    {
+        return InsertBefore(target, ToGreenNodes(nodesToInsert));
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes before the specified target.
+    /// </summary>
+    public SyntaxEditor InsertBefore(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    {
+        var nodes = nodesToInsert.ToImmutableArray();
+        var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+        _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes before each of the specified targets.
+    /// The same nodes are inserted at each target position.
+    /// </summary>
+    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<RedNode> nodesToInsert)
+    {
+        var nodes = ToGreenNodes(nodesToInsert);
+        foreach (var target in targets)
+        {
+            var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes before each of the specified targets.
+    /// The same nodes are inserted at each target position.
+    /// </summary>
+    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    {
+        var nodes = nodesToInsert.ToImmutableArray();
+        foreach (var target in targets)
+        {
+            var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of a single node after the specified target.
+    /// </summary>
+    public SyntaxEditor InsertAfter(RedNode target, RedNode nodeToInsert)
+    {
+        return InsertAfter(target, [nodeToInsert.Green]);
+    }
+    
+    /// <summary>
+    /// Queues an insertion of a single node after the specified target.
+    /// </summary>
+    public SyntaxEditor InsertAfter(RedNode target, GreenNode nodeToInsert)
+    {
+        return InsertAfter(target, [nodeToInsert]);
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes after the specified target.
+    /// </summary>
+    public SyntaxEditor InsertAfter(RedNode target, IEnumerable<RedNode> nodesToInsert)
+    {
+        return InsertAfter(target, ToGreenNodes(nodesToInsert));
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes after the specified target.
+    /// </summary>
+    public SyntaxEditor InsertAfter(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    {
+        var nodes = nodesToInsert.ToImmutableArray();
+        var pos = CreateInsertionPosition(target, InsertionPoint.After);
+        _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes after each of the specified targets.
+    /// The same nodes are inserted at each target position.
+    /// </summary>
+    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<RedNode> nodesToInsert)
+    {
+        var nodes = ToGreenNodes(nodesToInsert);
+        foreach (var target in targets)
+        {
+            var pos = CreateInsertionPosition(target, InsertionPoint.After);
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues an insertion of nodes after each of the specified targets.
+    /// The same nodes are inserted at each target position.
+    /// </summary>
+    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    {
+        var nodes = nodesToInsert.ToImmutableArray();
+        foreach (var target in targets)
+        {
+            var pos = CreateInsertionPosition(target, InsertionPoint.After);
+            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
+        }
+        return this;
+    }
+    
+    #endregion
+    
+    #region Remove (Query-based)
     
     /// <summary>
     /// Queues removal of all nodes matching the query.
@@ -98,9 +306,47 @@ public sealed class SyntaxEditor
         return this;
     }
     
+    /// <summary>
+    /// Queues removal of all nodes matching any of the queries.
+    /// </summary>
+    public SyntaxEditor Remove(IEnumerable<INodeQuery> queries)
+    {
+        foreach (var query in queries)
+        {
+            Remove(query);
+        }
+        return this;
+    }
+    
     #endregion
     
-    #region Replace
+    #region Remove (RedNode-based)
+    
+    /// <summary>
+    /// Queues removal of the specified node.
+    /// </summary>
+    public SyntaxEditor Remove(RedNode node)
+    {
+        var path = NodePath.FromNode(node);
+        _edits.Add(new RemoveEdit(path, node.Position) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues removal of all specified nodes.
+    /// </summary>
+    public SyntaxEditor Remove(IEnumerable<RedNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            Remove(node);
+        }
+        return this;
+    }
+    
+    #endregion
+    
+    #region Replace (Query-based)
     
     /// <summary>
     /// Queues replacement of all nodes matching the query with new text.
@@ -116,6 +362,18 @@ public sealed class SyntaxEditor
             _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
         }
         
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues replacement of all nodes matching any of the queries with new text.
+    /// </summary>
+    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, string text)
+    {
+        foreach (var query in queries)
+        {
+            Replace(query, text);
+        }
         return this;
     }
     
@@ -138,6 +396,18 @@ public sealed class SyntaxEditor
     }
     
     /// <summary>
+    /// Queues replacement of all nodes matching any of the queries using a transformer function.
+    /// </summary>
+    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, Func<RedNode, string> replacer)
+    {
+        foreach (var query in queries)
+        {
+            Replace(query, replacer);
+        }
+        return this;
+    }
+    
+    /// <summary>
     /// Queues replacement of all nodes matching the query with pre-built nodes.
     /// </summary>
     public SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
@@ -155,6 +425,109 @@ public sealed class SyntaxEditor
     }
     
     /// <summary>
+    /// Queues replacement of all nodes matching any of the queries with pre-built nodes.
+    /// </summary>
+    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, ImmutableArray<GreenNode> nodes)
+    {
+        foreach (var query in queries)
+        {
+            Replace(query, nodes);
+        }
+        return this;
+    }
+    
+    #endregion
+    
+    #region Replace (RedNode-based)
+    
+    /// <summary>
+    /// Queues replacement of the specified node with new text.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, string text)
+    {
+        var path = NodePath.FromNode(node);
+        var (leading, trailing) = GetTrivia(node);
+        _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues replacement of all specified nodes with new text.
+    /// </summary>
+    public SyntaxEditor Replace(IEnumerable<RedNode> nodes, string text)
+    {
+        foreach (var node in nodes)
+        {
+            Replace(node, text);
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues replacement of the specified node using a transformer function.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, Func<RedNode, string> replacer)
+    {
+        var text = replacer(node);
+        var path = NodePath.FromNode(node);
+        var (leading, trailing) = GetTrivia(node);
+        _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues replacement of all specified nodes using a transformer function.
+    /// </summary>
+    public SyntaxEditor Replace(IEnumerable<RedNode> nodes, Func<RedNode, string> replacer)
+    {
+        foreach (var node in nodes)
+        {
+            Replace(node, replacer);
+        }
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues replacement of the specified node with a single node.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, RedNode replacement)
+    {
+        return Replace(node, [replacement.Green]);
+    }
+    
+    /// <summary>
+    /// Queues replacement of the specified node with a single node.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, GreenNode replacement)
+    {
+        return Replace(node, [replacement]);
+    }
+    
+    /// <summary>
+    /// Queues replacement of the specified node with multiple nodes.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, IEnumerable<RedNode> replacements)
+    {
+        return Replace(node, ToGreenNodes(replacements));
+    }
+    
+    /// <summary>
+    /// Queues replacement of the specified node with multiple nodes.
+    /// </summary>
+    public SyntaxEditor Replace(RedNode node, IEnumerable<GreenNode> replacements)
+    {
+        var greenNodes = replacements.ToImmutableArray();
+        var path = NodePath.FromNode(node);
+        var (leading, trailing) = GetTrivia(node);
+        _edits.Add(new ReplaceNodesEdit(path, greenNodes, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    #endregion
+    
+    #region Private Helpers
+    
+    /// <summary>
     /// Extracts leading and trailing trivia from a node.
     /// </summary>
     private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(RedNode node)
@@ -168,6 +541,42 @@ public sealed class SyntaxEditor
         // For blocks/containers, we might want to preserve outer trivia
         // For now, return empty trivia for non-leaves
         return (ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+    }
+    
+    /// <summary>
+    /// Creates an InsertionPosition for inserting before or after a target node.
+    /// </summary>
+    /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
+    private static InsertionPosition CreateInsertionPosition(RedNode target, InsertionPoint point)
+    {
+        var parent = target.Parent;
+        if (parent == null)
+            throw new ArgumentException("Cannot insert relative to root node", nameof(target));
+        
+        var childIndex = target.SiblingIndex;
+        if (childIndex < 0)
+            throw new ArgumentException("Could not determine sibling index of target node", nameof(target));
+        
+        var parentPath = NodePath.FromNode(parent);
+        var targetPath = NodePath.FromNode(target);
+        var (targetLeading, targetTrailing) = GetTrivia(target);
+        
+        return point switch
+        {
+            InsertionPoint.Before => new InsertionPosition(
+                parentPath, childIndex, target.Position, point, targetPath, targetLeading, targetTrailing),
+            InsertionPoint.After => new InsertionPosition(
+                parentPath, childIndex + 1, target.EndPosition, point, targetPath, targetLeading, targetTrailing),
+            _ => throw new ArgumentException($"Unsupported insertion point: {point}", nameof(point))
+        };
+    }
+    
+    /// <summary>
+    /// Converts an enumerable of RedNodes to an ImmutableArray of their underlying GreenNodes.
+    /// </summary>
+    private static ImmutableArray<GreenNode> ToGreenNodes(IEnumerable<RedNode> redNodes)
+    {
+        return redNodes.Select(n => n.Green).ToImmutableArray();
     }
     
     #endregion
