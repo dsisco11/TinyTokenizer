@@ -409,4 +409,176 @@ public class QueryCombinatorTests
     }
 
     #endregion
+    
+    #region TaggedIdent Text Constraint Tests
+
+    [Fact]
+    public void TaggedIdent_WithTextConstraint_GreenMatching()
+    {
+        // Create schema with tag prefixes
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('#', '@')
+            .Build();
+        
+        var tree = SyntaxTree.Parse("@import \"file.txt\"", schema);
+        var root = tree.Root;
+        var greenRoot = (GreenContainer)root.Green;
+        var greenChildren = greenRoot.Children;
+        
+        // Verify we have the expected children
+        Assert.True(greenChildren.Length >= 2, $"Expected at least 2 children, got {greenChildren.Length}");
+        var firstChild = greenChildren[0];
+        Assert.Equal(NodeKind.TaggedIdent, firstChild.Kind);
+        
+        // Verify text is "@import"
+        var leaf = Assert.IsType<GreenLeaf>(firstChild);
+        Assert.Equal("@import", leaf.Text);
+        
+        // Test that Query.TaggedIdent("@import") matches at green level
+        var matchingQuery = Query.TaggedIdent("@import");
+        var greenQuery = (IGreenNodeQuery)matchingQuery;
+        Assert.True(greenQuery.MatchesGreen(firstChild), "Query.TaggedIdent(\"@import\") should match @import");
+        Assert.True(greenQuery.TryMatchGreen(greenChildren, 0, out var consumed1));
+        Assert.Equal(1, consumed1);
+        
+        // Test that Query.TaggedIdent("#version") does NOT match @import
+        var nonMatchingQuery = Query.TaggedIdent("#version");
+        var greenQuery2 = (IGreenNodeQuery)nonMatchingQuery;
+        Assert.False(greenQuery2.MatchesGreen(firstChild), "Query.TaggedIdent(\"#version\") should NOT match @import");
+        Assert.False(greenQuery2.TryMatchGreen(greenChildren, 0, out _));
+    }
+
+    [Fact]
+    public void MultipleTaggedIdentPatterns_DifferentTextConstraints()
+    {
+        // Create schema with tag prefixes
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('#', '@')
+            .Build();
+        
+        var tree = SyntaxTree.Parse("#version 330\n@import \"file.txt\"", schema);
+        var root = tree.Root;
+        var greenRoot = (GreenContainer)root.Green;
+        var greenChildren = greenRoot.Children;
+        
+        // Find the @import node
+        GreenLeaf? importNode = null;
+        GreenLeaf? versionNode = null;
+        foreach (var child in greenChildren)
+        {
+            if (child is GreenLeaf leaf && leaf.Kind == NodeKind.TaggedIdent)
+            {
+                if (leaf.Text == "@import")
+                    importNode = leaf;
+                else if (leaf.Text == "#version")
+                    versionNode = leaf;
+            }
+        }
+        
+        Assert.NotNull(versionNode);
+        Assert.NotNull(importNode);
+        
+        var importQuery = Query.TaggedIdent("@import");
+        var versionQuery = Query.TaggedIdent("#version");
+        var anyTaggedQuery = Query.AnyTaggedIdent;
+        
+        // importQuery should match @import but not #version
+        Assert.True(((IGreenNodeQuery)importQuery).MatchesGreen(importNode!));
+        Assert.False(((IGreenNodeQuery)importQuery).MatchesGreen(versionNode!));
+        
+        // versionQuery should match #version but not @import
+        Assert.True(((IGreenNodeQuery)versionQuery).MatchesGreen(versionNode!));
+        Assert.False(((IGreenNodeQuery)versionQuery).MatchesGreen(importNode!));
+        
+        // anyTaggedQuery should match both
+        Assert.True(((IGreenNodeQuery)anyTaggedQuery).MatchesGreen(importNode!));
+        Assert.True(((IGreenNodeQuery)anyTaggedQuery).MatchesGreen(versionNode!));
+    }
+
+    [Fact]
+    public void TaggedIdent_SyntaxBinding_DistinguishesByText()
+    {
+        // Create schema with two syntax definitions using different TaggedIdent patterns
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('#', '@')
+            .DefineSyntax(Syntax.Define<ImportSyntax>("Import")
+                .Match(Query.TaggedIdent("@import"), Query.Any.Until(Query.Newline))
+                .WithPriority(1)
+                .Build())
+            .DefineSyntax(Syntax.Define<DirectiveSyntax>("Directive")
+                .Match(Query.AnyTaggedIdent, Query.Any.Until(Query.Newline))
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.Parse("#version 330\n@import \"file.txt\"", schema);
+        
+        // Find all ImportSyntax nodes - should only match @import
+        var imports = tree.Select(Query.Syntax<ImportSyntax>()).ToList();
+        var directivesList = tree.Select(Query.Syntax<DirectiveSyntax>()).ToList();
+        
+        // Should have exactly 1 import and 1 directive
+        Assert.Single(imports);
+        Assert.Single(directivesList);
+        
+        // Verify content
+        var importNode = imports[0] as ImportSyntax;
+        Assert.NotNull(importNode);
+        Assert.Contains("@import", importNode!.ToString());
+        
+        var directiveNode = directivesList[0] as DirectiveSyntax;
+        Assert.NotNull(directiveNode);
+        Assert.Contains("#version", directiveNode!.ToString());
+    }
+    
+    private static string DumpGreenTree(GreenNode node, int indent)
+    {
+        var sb = new System.Text.StringBuilder();
+        var prefix = new string(' ', indent * 2);
+        
+        // Show trivia info for leaves
+        string triviaInfo = "";
+        string textContent = "";
+        if (node is GreenLeaf leaf)
+        {
+            textContent = leaf.Text.Replace("\n", "\\n").Replace("\r", "\\r");
+            var leadingNewlines = leaf.LeadingTrivia.Count(t => t.Kind == TriviaKind.Newline);
+            var trailingNewlines = leaf.TrailingTrivia.Count(t => t.Kind == TriviaKind.Newline);
+            if (leadingNewlines > 0 || trailingNewlines > 0)
+                triviaInfo = $" [lead:{leadingNewlines}NL, trail:{trailingNewlines}NL]";
+        }
+        else
+        {
+            textContent = node.ToText().Replace("\n", "\\n").Replace("\r", "\\r");
+        }
+        
+        if (textContent.Length > 30) textContent = textContent[..30] + "...";
+        
+        sb.AppendLine($"{prefix}{node.ToString("D", null)}{triviaInfo}: \"{textContent}\"");
+        
+        for (int i = 0; i < node.SlotCount; i++)
+        {
+            var child = node.GetSlot(i);
+            if (child != null)
+                sb.Append(DumpGreenTree(child, indent + 1));
+        }
+        
+        return sb.ToString();
+    }
+    
+    /// <summary>Test syntax node for @import directives.</summary>
+    public sealed class ImportSyntax : SyntaxNode
+    {
+        public ImportSyntax(CreationContext context) : base(context) { }
+    }
+    
+    /// <summary>Test syntax node for general # directives.</summary>
+    public sealed class DirectiveSyntax : SyntaxNode
+    {
+        public DirectiveSyntax(CreationContext context) : base(context) { }
+    }
+
+    #endregion
 }

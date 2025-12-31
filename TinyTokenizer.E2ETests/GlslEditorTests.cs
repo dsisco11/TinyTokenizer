@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using TinyTokenizer.Ast;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace TinyTokenizer.E2ETests;
 
@@ -13,6 +14,13 @@ namespace TinyTokenizer.E2ETests;
 /// </summary>
 public class GlslEditorTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public GlslEditorTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     #region Helpers
     
     /// <summary>
@@ -94,6 +102,29 @@ public class GlslEditorTests
         public string ArgumentsText => string.Concat(Arguments.Select(a => a.ToString()));
     }
     
+    /// <summary>
+    /// A GLSL tagged directive: #version, #define, etc.
+    /// Pattern: TaggedIdent + rest of line
+    /// </summary>
+    public sealed class GlImportNode : SyntaxNode, INamedNode
+    {
+        public GlImportNode(CreationContext context)
+            : base(context) { }
+        
+        /// <summary>The Import tag node (e.g., "#version").</summary>
+        public RedLeaf ImportNode => GetTypedChild<RedLeaf>(0);
+        
+        /// <summary>The Import name without # (e.g., "version").</summary>
+        public string Name => ImportNode.Text.TrimStart('@');
+        
+        /// <summary>
+        /// Gets the filename node (the second child).
+        /// </summary>
+        public RedLeaf? FilenameNode => GetChild(1) is RedLeaf leaf && leaf.Kind == NodeKind.String ? leaf : null;
+
+        public string? Filename => FilenameNode?.ToString();
+    }
+    
     #endregion
     
     #region Test Schema
@@ -112,8 +143,14 @@ public class GlslEditorTests
                 .Match(Query.AnyIdent, Query.AnyIdent, Query.ParenBlock, Query.BraceBlock)
                 .WithPriority(10)
                 .Build())
+            // Import: @import "filename"
+            .DefineSyntax(Syntax.Define<GlImportNode>("glImport")
+                .Match(Query.TaggedIdent("@import"), Query.Any.Until(Query.Newline))
+                .WithPriority(1)
+                .Build())
             // Directive: #tag followed by tokens until newline
             .DefineSyntax(Syntax.Define<GlDirectiveNode>("glDirective")
+                // .Match(Query.TaggedIdent("version"), Query.Any.Until(Query.Newline))
                 .Match(Query.AnyTaggedIdent, Query.Any.Until(Query.Newline))
                 .Build())
             .Build();
@@ -123,6 +160,7 @@ public class GlslEditorTests
     /// Sample GLSL shader for testing.
     /// </summary>
     private const string SampleShader = @"#version 330 core
+@import ""my-include.glsl""
 
 uniform sampler2D tex;
 in vec2 uv;
@@ -141,6 +179,19 @@ void main() {
     #endregion
     
     #region Basic Parsing Tests
+    
+    [Fact]
+    public void DumpTokenTree()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        // Use "S" format for full structure dump with trivia info
+        var dump = tree.Root.ToString("S", null);
+        // Dump text to xunit output for visual verification
+        // (In real tests, we would assert specific structure)
+        _output.WriteLine(dump);
+        Assert.NotNull(dump);
+    }
     
     [Fact]
     public void Parse_RecognizesGlslFunctions()
@@ -171,7 +222,19 @@ void main() {
         
         Assert.NotNull(versionDirective);
         // Roslyn-style: ToString() includes trailing trivia (space before next token)
-        Assert.StartsWith("#version 330", versionDirective!.ToString());
+        Assert.Equal("#version 330 core\n", NormalizeLineEndings(versionDirective!.ToString()));
+    }
+
+    [Fact]
+    public void Parse_RecognizesImportDirective()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        var importDirectiveQuery = Query.Syntax<GlImportNode>().Named("import");
+        var importDirective = tree.Select(importDirectiveQuery).FirstOrDefault() as GlImportNode;
+        Assert.NotNull(importDirective);
+        // Roslyn-style: ToString() includes trailing trivia (space before next token)
+        Assert.Equal("@import \"my-include.glsl\"\n", NormalizeLineEndings(importDirective!.ToString()));
     }
     
     #endregion
@@ -285,8 +348,9 @@ void main() {
         
         var result = NormalizeLineEndings(tree.Root.ToString());
         
-        // Verify insertion appears after #version directive and before "uniform"
-        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
+        // Verify insertion appears after #version directive
+        // The sample already contains @import, so we now have TWO imports
+        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*@import", result);
     }
     
     #endregion
@@ -344,8 +408,8 @@ void main() {
         var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify all edits with their surrounding context using patterns that match the sequence
-        // 1. Import after "core" and before "uniform"
-        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*uniform", result);
+        // 1. Import after "core" - sample already has @import so now we have two
+        Assert.Matches(@"core\s*@import \""my-include\.glsl\""\s*@import", result);
         // 2. Comment above foo (before existing comment/leading trivia)
         Assert.Contains("/* foo comment */\n\n// A helper function to sample a texture\nvec4 foo", result);
         // 3. Comment above main (before leading trivia)

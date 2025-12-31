@@ -414,21 +414,44 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
             terminatorGreen.TryMatchGreen(siblings, index, out _))
             return true;
         
-        // For newline terminators, check leading trivia
+        // For newline terminators, check both leading trivia of current node
+        // AND trailing trivia of previous node (to handle trailing-trivia model)
         if (_terminator is NewlineNodeQuery)
         {
             var greenNode = siblings[index];
-            var trivia = greenNode switch
+            
+            // Check leading trivia of current node
+            var leadingTrivia = greenNode switch
             {
                 GreenLeaf leaf => leaf.LeadingTrivia,
                 GreenBlock block => block.LeadingTrivia,
                 _ => ImmutableArray<GreenTrivia>.Empty
             };
             
-            foreach (var t in trivia)
+            foreach (var t in leadingTrivia)
             {
                 if (t.Kind == TriviaKind.Newline)
                     return true;
+            }
+            
+            // Check trailing trivia of previous node (if exists)
+            // This handles the trailing-trivia model where newlines are attached
+            // to the previous token rather than leading trivia of the next token
+            if (index > 0)
+            {
+                var prevNode = siblings[index - 1];
+                var trailingTrivia = prevNode switch
+                {
+                    GreenLeaf leaf => leaf.TrailingTrivia,
+                    GreenBlock block => block.TrailingTrivia,
+                    _ => ImmutableArray<GreenTrivia>.Empty
+                };
+                
+                foreach (var t in trailingTrivia)
+                {
+                    if (t.Kind == TriviaKind.Newline)
+                        return true;
+                }
             }
         }
         

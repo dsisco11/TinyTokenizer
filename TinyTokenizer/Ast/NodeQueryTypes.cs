@@ -13,16 +13,18 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     private readonly Func<RedNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
+    private readonly string? _textConstraint;
     
     /// <summary>Creates a query matching nodes of the specified kind.</summary>
-    public KindNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0) { }
+    public KindNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0, null) { }
     
-    private KindNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private KindNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg, string? textConstraint = null)
     {
         Kind = kind;
         _predicate = predicate;
         _mode = mode;
         _modeArg = modeArg;
+        _textConstraint = textConstraint;
     }
     
     /// <inheritdoc/>
@@ -49,16 +51,33 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     public override bool Matches(RedNode node) => 
         node.Kind == Kind && (_predicate == null || _predicate(node));
     
-    internal override bool MatchesGreen(GreenNode node) => node.Kind == Kind;
+    internal override bool MatchesGreen(GreenNode node)
+    {
+        if (node.Kind != Kind)
+            return false;
+        
+        // Check text constraint at green level for efficient pattern matching
+        if (_textConstraint != null && node is GreenLeaf leaf && leaf.Text != _textConstraint)
+            return false;
+        
+        return true;
+    }
+    
+    /// <summary>
+    /// Filters to leaf nodes with exact text match.
+    /// Overridden to enable green-level text matching for efficient pattern binding.
+    /// </summary>
+    public new KindNodeQuery WithText(string text) =>
+        new(Kind, CombinePredicates(_predicate, n => n is RedLeaf leaf && leaf.Text == text), _mode, _modeArg, text);
     
     protected override KindNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
-        new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg);
+        new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg, _textConstraint);
     
-    protected override KindNodeQuery CreateFirst() => new(Kind, _predicate, SelectionMode.First, 0);
-    protected override KindNodeQuery CreateLast() => new(Kind, _predicate, SelectionMode.Last, 0);
-    protected override KindNodeQuery CreateNth(int n) => new(Kind, _predicate, SelectionMode.Nth, n);
-    protected override KindNodeQuery CreateSkip(int count) => new(Kind, _predicate, SelectionMode.Skip, count);
-    protected override KindNodeQuery CreateTake(int count) => new(Kind, _predicate, SelectionMode.Take, count);
+    protected override KindNodeQuery CreateFirst() => new(Kind, _predicate, SelectionMode.First, 0, _textConstraint);
+    protected override KindNodeQuery CreateLast() => new(Kind, _predicate, SelectionMode.Last, 0, _textConstraint);
+    protected override KindNodeQuery CreateNth(int n) => new(Kind, _predicate, SelectionMode.Nth, n, _textConstraint);
+    protected override KindNodeQuery CreateSkip(int count) => new(Kind, _predicate, SelectionMode.Skip, count, _textConstraint);
+    protected override KindNodeQuery CreateTake(int count) => new(Kind, _predicate, SelectionMode.Take, count, _textConstraint);
     
     private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
