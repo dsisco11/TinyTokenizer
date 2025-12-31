@@ -379,6 +379,8 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues replacement of all nodes matching the query using a transformer function.
+    /// The transformer receives the full RedNode, allowing access to content including trivia.
+    /// Use <see cref="Edit(INodeQuery, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
     public SyntaxEditor Replace(INodeQuery query, Func<RedNode, string> replacer)
     {
@@ -397,6 +399,8 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues replacement of all nodes matching any of the queries using a transformer function.
+    /// The transformer receives the full RedNode, allowing access to content including trivia.
+    /// Use <see cref="Edit(IEnumerable{INodeQuery}, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
     public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, Func<RedNode, string> replacer)
     {
@@ -465,6 +469,8 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues replacement of the specified node using a transformer function.
+    /// The transformer receives the full RedNode, allowing access to content including trivia.
+    /// Use <see cref="Edit(RedNode, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
     public SyntaxEditor Replace(RedNode node, Func<RedNode, string> replacer)
     {
@@ -477,6 +483,8 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues replacement of all specified nodes using a transformer function.
+    /// The transformer receives the full RedNode, allowing access to content including trivia.
+    /// Use <see cref="Edit(IEnumerable{RedNode}, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
     public SyntaxEditor Replace(IEnumerable<RedNode> nodes, Func<RedNode, string> replacer)
     {
@@ -525,7 +533,112 @@ public sealed class SyntaxEditor
     
     #endregion
     
+    #region Edit (Query-based)
+    
+    /// <summary>
+    /// Queues a transformation edit of all nodes matching the query.
+    /// The transformer receives the node's content WITHOUT trivia, and trivia is automatically preserved.
+    /// </summary>
+    /// <param name="query">Query to select nodes to edit.</param>
+    /// <param name="transformer">Function that transforms the node's content (without trivia).</param>
+    public SyntaxEditor Edit(INodeQuery query, Func<string, string> transformer)
+    {
+        var nodes = query.Select(_tree).ToList();
+        
+        foreach (var node in nodes)
+        {
+            var path = NodePath.FromNode(node);
+            var (leading, trailing) = GetTrivia(node);
+            var contentWithoutTrivia = GetContentWithoutTrivia(node);
+            var newText = transformer(contentWithoutTrivia);
+            _edits.Add(new ReplaceEdit(path, newText, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        }
+        
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues a transformation edit of all nodes matching any of the queries.
+    /// The transformer receives the node's content WITHOUT trivia, and trivia is automatically preserved.
+    /// </summary>
+    public SyntaxEditor Edit(IEnumerable<INodeQuery> queries, Func<string, string> transformer)
+    {
+        foreach (var query in queries)
+        {
+            Edit(query, transformer);
+        }
+        return this;
+    }
+    
+    #endregion
+    
+    #region Edit (RedNode-based)
+    
+    /// <summary>
+    /// Queues a transformation edit of the specified node.
+    /// The transformer receives the node's content WITHOUT trivia, and trivia is automatically preserved.
+    /// </summary>
+    /// <param name="node">The node to edit.</param>
+    /// <param name="transformer">Function that transforms the node's content (without trivia).</param>
+    public SyntaxEditor Edit(RedNode node, Func<string, string> transformer)
+    {
+        var path = NodePath.FromNode(node);
+        var (leading, trailing) = GetTrivia(node);
+        var contentWithoutTrivia = GetContentWithoutTrivia(node);
+        var newText = transformer(contentWithoutTrivia);
+        _edits.Add(new ReplaceEdit(path, newText, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        return this;
+    }
+    
+    /// <summary>
+    /// Queues a transformation edit of all specified nodes.
+    /// The transformer receives each node's content WITHOUT trivia, and trivia is automatically preserved.
+    /// </summary>
+    public SyntaxEditor Edit(IEnumerable<RedNode> nodes, Func<string, string> transformer)
+    {
+        foreach (var node in nodes)
+        {
+            Edit(node, transformer);
+        }
+        return this;
+    }
+    
+    #endregion
+    
     #region Private Helpers
+    
+    /// <summary>
+    /// Gets the content of a node without its leading and trailing trivia.
+    /// For leaves, returns the token text. For blocks, returns the full content minus outer trivia.
+    /// </summary>
+    private static string GetContentWithoutTrivia(RedNode node)
+    {
+        if (node is RedLeaf leaf)
+        {
+            return leaf.Text;
+        }
+        
+        if (node is RedBlock block)
+        {
+            // For blocks, we want the full content minus leading/trailing trivia
+            var fullText = node.ToText();
+            var leadingWidth = block.LeadingTriviaWidth;
+            var trailingWidth = block.TrailingTriviaWidth;
+            
+            if (leadingWidth == 0 && trailingWidth == 0)
+                return fullText;
+            
+            var contentLength = fullText.Length - leadingWidth - trailingWidth;
+            if (contentLength <= 0)
+                return string.Empty;
+            
+            return fullText.Substring(leadingWidth, contentLength);
+        }
+        
+        // For other node types (containers), return full text
+        // They typically don't have trivia directly attached
+        return node.ToText();
+    }
     
     /// <summary>
     /// Extracts leading and trailing trivia from a node.
@@ -538,8 +651,12 @@ public sealed class SyntaxEditor
             return (greenLeaf.LeadingTrivia, greenLeaf.TrailingTrivia);
         }
         
-        // For blocks/containers, we might want to preserve outer trivia
-        // For now, return empty trivia for non-leaves
+        if (node is RedBlock block)
+        {
+            return (block.LeadingTrivia, block.TrailingTrivia);
+        }
+        
+        // For other containers, return empty trivia
         return (ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
     }
     

@@ -1363,4 +1363,301 @@ public class SyntaxEditorTests
     }
     
     #endregion
+    
+    #region Edit Operations (Content Transformation)
+    
+    [Fact]
+    public void Edit_SingleNode_TransformsContent()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content => content.ToUpper())
+            .Commit();
+        
+        Assert.Equal("HELLO", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_WithTrivia_PreservesTrivia()
+    {
+        // "  foo" has leading whitespace trivia on the identifier
+        var tree = SyntaxTree.Parse("  foo");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content => content.ToUpper())
+            .Commit();
+        
+        // Leading trivia should be preserved, content transformed
+        Assert.Equal("  FOO", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_TransformerReceivesContentWithoutTrivia()
+    {
+        var tree = SyntaxTree.Parse("  hello  ");
+        string? capturedContent = null;
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content =>
+            {
+                capturedContent = content;
+                return content.ToUpper();
+            })
+            .Commit();
+        
+        // Transformer should receive "hello" without surrounding whitespace
+        Assert.Equal("hello", capturedContent);
+    }
+    
+    [Fact]
+    public void Edit_MultipleNodes_TransformsAll()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent, content => $"[{content}]")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("[foo]", text);
+        Assert.Contains("[bar]", text);
+        Assert.Contains("[baz]", text);
+    }
+    
+    [Fact]
+    public void Edit_MultipleNodes_PreservesAllTrivia()
+    {
+        var tree = SyntaxTree.Parse("foo  bar   baz");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent, content => content.ToUpper())
+            .Commit();
+        
+        // Should preserve the spacing between tokens
+        Assert.Equal("FOO  BAR   BAZ", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_WithQuery_OnlyAffectsMatchingNodes()
+    {
+        var tree = SyntaxTree.Parse("foo bar foo");
+        
+        tree.CreateEditor()
+            .Edit(Q.Ident("foo"), content => "X")
+            .Commit();
+        
+        Assert.Equal("X bar X", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_NoMatches_LeavesTreeUnchanged()
+    {
+        var tree = SyntaxTree.Parse("foo bar");
+        
+        tree.CreateEditor()
+            .Edit(Q.Ident("nonexistent"), content => "X")
+            .Commit();
+        
+        Assert.Equal("foo bar", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_RedNode_DirectNodeTransform()
+    {
+        var tree = SyntaxTree.Parse("hello world");
+        var firstIdent = Q.AnyIdent.First().Select(tree).First();
+        
+        tree.CreateEditor()
+            .Edit(firstIdent, content => content.ToUpper())
+            .Commit();
+        
+        Assert.Equal("HELLO world", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_RedNode_PreservesTrivia()
+    {
+        var tree = SyntaxTree.Parse("  hello  ");
+        var ident = Q.AnyIdent.First().Select(tree).First();
+        
+        tree.CreateEditor()
+            .Edit(ident, content => "WORLD")
+            .Commit();
+        
+        // Leading and trailing trivia should be preserved
+        Assert.Equal("  WORLD  ", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_MultipleRedNodes_TransformsAll()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        var idents = Q.AnyIdent.Select(tree).ToList();
+        
+        tree.CreateEditor()
+            .Edit(idents, content => $"({content})")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("(foo)", text);
+        Assert.Contains("(bar)", text);
+        Assert.Contains("(baz)", text);
+    }
+    
+    [Fact]
+    public void Edit_WithMultipleQueries_TransformsAllMatches()
+    {
+        var tree = SyntaxTree.Parse("foo bar baz");
+        var queries = new INodeQuery[]
+        {
+            Q.Ident("foo"),
+            Q.Ident("baz")
+        };
+        
+        tree.CreateEditor()
+            .Edit(queries, content => $"[{content}]")
+            .Commit();
+        
+        var text = tree.ToFullString();
+        Assert.Contains("[foo]", text);
+        Assert.Contains("bar", text);
+        Assert.Contains("[baz]", text);
+        Assert.DoesNotContain("[bar]", text);
+    }
+    
+    [Fact]
+    public void Edit_VsReplace_EditExcludesTrivia()
+    {
+        // This test demonstrates the difference between Edit and Replace
+        var tree1 = SyntaxTree.Parse("  hello  ");
+        var tree2 = SyntaxTree.Parse("  hello  ");
+        
+        // Edit: transformer receives "hello" (no trivia), trivia preserved
+        tree1.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content =>
+            {
+                // content is "hello", not "  hello  "
+                Assert.Equal("hello", content);
+                return content.ToUpper();
+            })
+            .Commit();
+        
+        // Replace with transformer: receives full RedNode, can access trivia
+        tree2.CreateEditor()
+            .Replace(Q.AnyIdent.First(), node =>
+            {
+                var leaf = (RedLeaf)node;
+                // Text property gives content without trivia
+                Assert.Equal("hello", leaf.Text);
+                // But we have access to trivia via the node
+                Assert.True(leaf.LeadingTriviaWidth > 0);
+                return leaf.Text.ToUpper();
+            })
+            .Commit();
+        
+        // Both should produce the same result in this case
+        Assert.Equal("  HELLO  ", tree1.ToFullString());
+        Assert.Equal("  HELLO  ", tree2.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_Block_TransformsBlockContent()
+    {
+        var tree = SyntaxTree.Parse("{inner}");
+        
+        tree.CreateEditor()
+            .Edit(Q.BraceBlock.First(), content => content.ToUpper())
+            .Commit();
+        
+        Assert.Equal("{INNER}", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_Block_PreservesBlockTrivia()
+    {
+        // When a block has trivia attached directly to it (not separate whitespace nodes),
+        // the Edit method should preserve that trivia
+        var tree = SyntaxTree.Parse("foo {inner}");
+        
+        tree.CreateEditor()
+            .Edit(Q.BraceBlock.First(), content =>
+            {
+                // Content should be the block without leading trivia (space before {)
+                Assert.StartsWith("{", content);
+                Assert.EndsWith("}", content);
+                return "{EDITED}";
+            })
+            .Commit();
+        
+        // The space before the block (leading trivia) should be preserved
+        Assert.Equal("foo {EDITED}", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_NumericContent_TransformsNumber()
+    {
+        var tree = SyntaxTree.Parse("x = 42");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyNumeric.First(), content =>
+            {
+                var num = int.Parse(content);
+                return (num * 2).ToString();
+            })
+            .Commit();
+        
+        Assert.Equal("x = 84", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_Chained_MultipleEditsApplied()
+    {
+        var tree = SyntaxTree.Parse("foo 123 bar");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent, content => content.ToUpper())
+            .Edit(Q.AnyNumeric.First(), content => (int.Parse(content) * 2).ToString())
+            .Commit();
+        
+        Assert.Equal("FOO 246 BAR", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_PendingEditCount_IncrementsCorrectly()
+    {
+        var tree = SyntaxTree.Parse("a b c");
+        var editor = tree.CreateEditor();
+        
+        Assert.Equal(0, editor.PendingEditCount);
+        Assert.False(editor.HasPendingEdits);
+        
+        editor.Edit(Q.AnyIdent, content => content.ToUpper());
+        
+        // Should have 3 pending edits (one for each identifier)
+        Assert.Equal(3, editor.PendingEditCount);
+        Assert.True(editor.HasPendingEdits);
+        
+        editor.Commit();
+        
+        Assert.Equal(0, editor.PendingEditCount);
+        Assert.False(editor.HasPendingEdits);
+    }
+    
+    [Fact]
+    public void Edit_Rollback_DiscardsEdits()
+    {
+        var tree = SyntaxTree.Parse("hello");
+        var editor = tree.CreateEditor();
+        
+        editor.Edit(Q.AnyIdent.First(), content => content.ToUpper());
+        Assert.True(editor.HasPendingEdits);
+        
+        editor.Rollback();
+        
+        Assert.False(editor.HasPendingEdits);
+        Assert.Equal("hello", tree.ToFullString()); // Tree unchanged
+    }
+    
+    #endregion
 }
