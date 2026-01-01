@@ -7,7 +7,7 @@ namespace TinyTokenizer.Ast;
 /// Wraps a green tree and provides lazy red node creation.
 /// Supports undo via green root history.
 /// </summary>
-public class SyntaxTree
+public class SyntaxTree : IFormattable
 {
     private GreenNode _greenRoot;
     private RedNode? _redRoot;
@@ -424,6 +424,9 @@ public class SyntaxTree
         AppendTo(builder, _greenRoot);
         return builder.ToString();
     }
+    
+    /// <inheritdoc />
+    public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
     
     private static void AppendTo(System.Text.StringBuilder builder, GreenNode node)
     {
