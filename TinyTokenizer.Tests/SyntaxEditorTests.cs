@@ -771,8 +771,7 @@ public class SyntaxEditorTests
     public void Insert_BeforeAndAfterMultipleFunctions_HandlesCorrectly()
     {
         // Simulates: inserting around multiple function definitions
-        // Roslyn-style trivia: space after {first} is trailing trivia for {first}
-        // So {second} has no leading trivia to transfer
+        // Block trailing trivia (space after closer) is kept with the block, not attached to inner content
         var tree = SyntaxTree.Parse("{first} {second}");
         
         tree.CreateEditor()
@@ -780,9 +779,9 @@ public class SyntaxEditorTests
             .Commit();
         
         var text = tree.ToFullString();
-        // First block: "/* fn */{first }" (space is {first}'s trailing)
-        // Second block: "/* fn */{second}" (no leading trivia)
-        Assert.Equal("/* fn */{first }/* fn */{second}", text);
+        // First block: "{first} " (space is block's trailing trivia)
+        // Second block: "{second}" (no leading trivia)
+        Assert.Equal("/* fn */{first} /* fn */{second}", text);
     }
 
     [Fact]
@@ -937,9 +936,9 @@ public class SyntaxEditorTests
             .Commit();
         
         // Assert: the function call should now be commented out
-        // Note: trivia from the removed block is transferred, causing the space before )*/
+        // Note: trivia from the removed block stays with the block (after closer)
         var result = tree.ToFullString();
-        Assert.Equal("setup(); /* doSomething(x, y )*/; cleanup();", result);
+        Assert.Equal("setup(); /* doSomething(x, y) */; cleanup();", result);
     }
 
     [Fact]
@@ -1002,9 +1001,9 @@ public class SyntaxEditorTests
             .Commit();
         
         // Assert: the call should be commented out
-        // Note: trivia from the removed block is transferred, causing space before )*/
+        // Note: trivia from the removed block stays with the block (after closer)
         var result = tree.ToFullString();
-        Assert.Equal("before(); /* log(msg )*/; after();", result);
+        Assert.Equal("before(); /* log(msg) */; after();", result);
     }
 
     #endregion

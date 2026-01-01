@@ -441,6 +441,8 @@ public class SyntaxTree
                 foreach (var trivia in block.LeadingTrivia)
                     builder.Append(trivia.Text);
                 builder.Append(block.Opener);
+                foreach (var trivia in block.InnerTrivia)
+                    builder.Append(trivia.Text);
                 for (int i = 0; i < block.SlotCount; i++)
                 {
                     var child = block.GetSlot(i);
