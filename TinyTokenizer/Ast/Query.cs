@@ -115,6 +115,133 @@ public static class Query
     /// </summary>
     public static NewlineNodeQuery NotNewline => new NewlineNodeQuery(negated: true);
     
+    /// <summary>
+    /// Zero-width assertion matching nodes at the beginning of the file.
+    /// Matches when the node is the first child of the root.
+    /// </summary>
+    public static BeginningOfFileQuery BOF => new BeginningOfFileQuery();
+    
+    /// <summary>
+    /// Zero-width assertion matching nodes at the end of the file.
+    /// Matches when the node is the last child of the root.
+    /// </summary>
+    public static EndOfFileQuery EOF => new EndOfFileQuery();
+    
+    #endregion
+    
+    #region Composition Queries
+    
+    /// <summary>
+    /// Creates a query that matches if any of the provided queries match (variadic OR).
+    /// Short-circuits on first match for efficiency.
+    /// </summary>
+    /// <param name="queries">The queries to try in order.</param>
+    /// <returns>A query that matches any of the provided queries.</returns>
+    /// <example>
+    /// <code>
+    /// // Match identifier OR numeric
+    /// Query.AnyOf(Query.AnyIdent, Query.AnyNumeric)
+    /// </code>
+    /// </example>
+    public static AnyOfQuery AnyOf(params INodeQuery[] queries) => new AnyOfQuery(queries);
+    
+    /// <summary>
+    /// Creates a query that matches if any of the provided queries match.
+    /// </summary>
+    public static AnyOfQuery AnyOf(IEnumerable<INodeQuery> queries) => new AnyOfQuery(queries);
+    
+    /// <summary>
+    /// Creates a query that matches if none of the provided queries match.
+    /// Consumes 1 node when all inner queries fail.
+    /// </summary>
+    /// <param name="queries">The queries that must all NOT match.</param>
+    /// <returns>A query that matches when none of the provided queries match.</returns>
+    /// <example>
+    /// <code>
+    /// // Match any token that is not an identifier or operator
+    /// Query.NoneOf(Query.AnyIdent, Query.AnyOperator)
+    /// </code>
+    /// </example>
+    public static NoneOfQuery NoneOf(params INodeQuery[] queries) => new NoneOfQuery(queries);
+    
+    /// <summary>
+    /// Creates a query that matches if none of the provided queries match.
+    /// </summary>
+    public static NoneOfQuery NoneOf(IEnumerable<INodeQuery> queries) => new NoneOfQuery(queries);
+    
+    /// <summary>
+    /// Creates a zero-width negative lookahead assertion.
+    /// Succeeds when the inner query does NOT match, without consuming any nodes.
+    /// </summary>
+    /// <param name="query">The query that must NOT match.</param>
+    /// <returns>A zero-width negative assertion query.</returns>
+    /// <example>
+    /// <code>
+    /// // Match any identifier that is NOT "if"
+    /// Query.Sequence(Query.Not(Query.Ident("if")), Query.AnyIdent)
+    /// </code>
+    /// </example>
+    public static NotQuery Not(INodeQuery query) => new NotQuery(query);
+    
+    /// <summary>
+    /// Creates a query that matches content between a start and end pattern.
+    /// Consumes all nodes from start through end (inclusive).
+    /// </summary>
+    /// <param name="start">The starting delimiter/pattern.</param>
+    /// <param name="end">The ending delimiter/pattern.</param>
+    /// <param name="inclusive">If true (default), includes start/end in consumed count.</param>
+    /// <returns>A query matching the content between start and end.</returns>
+    /// <example>
+    /// <code>
+    /// // Match content between parentheses
+    /// Query.Between(Query.Symbol("("), Query.Symbol(")"))
+    /// </code>
+    /// </example>
+    public static BetweenQuery Between(INodeQuery start, INodeQuery end, bool inclusive = true) => 
+        new BetweenQuery(start, end, inclusive);
+    
+    #endregion
+    
+    #region Navigation Queries
+    
+    /// <summary>
+    /// Creates a query that matches a sibling at a relative offset.
+    /// Zero-width - navigates without consuming the current node.
+    /// </summary>
+    /// <param name="offset">Relative offset: +1 for next sibling, -1 for previous sibling.</param>
+    /// <returns>A sibling navigation query.</returns>
+    /// <example>
+    /// <code>
+    /// Query.Sibling(1)  // Matches next sibling
+    /// Query.Sibling(-1) // Matches previous sibling
+    /// </code>
+    /// </example>
+    public static SiblingQuery Sibling(int offset) => new SiblingQuery(offset);
+    
+    /// <summary>
+    /// Creates a query that matches a sibling at a relative offset if it matches the inner query.
+    /// </summary>
+    public static SiblingQuery Sibling(int offset, INodeQuery innerQuery) => new SiblingQuery(offset, innerQuery);
+    
+    /// <summary>
+    /// Creates a query that matches the direct parent of the current node.
+    /// Zero-width query for vertical tree navigation.
+    /// </summary>
+    public static ParentQuery Parent() => new ParentQuery();
+    
+    /// <summary>
+    /// Creates a query that matches the parent if it satisfies the inner query.
+    /// </summary>
+    public static ParentQuery Parent(INodeQuery innerQuery) => new ParentQuery(innerQuery);
+    
+    /// <summary>
+    /// Creates a query that matches any ancestor satisfying the inner query.
+    /// Walks up the tree until finding a match or reaching the root.
+    /// </summary>
+    /// <param name="innerQuery">The query that an ancestor must satisfy.</param>
+    /// <returns>An ancestor navigation query.</returns>
+    public static AncestorQuery Ancestor(INodeQuery innerQuery) => new AncestorQuery(innerQuery);
+    
     #endregion
     
     #region Syntax Queries

@@ -2,6 +2,191 @@ using System.Collections.Immutable;
 
 namespace TinyTokenizer.Ast;
 
+#region Not Query
+
+/// <summary>
+/// Zero-width negative lookahead assertion.
+/// Succeeds when the inner query does NOT match the current node.
+/// Never consumes any nodes (consumedCount = 0).
+/// </summary>
+/// <remarks>
+/// Use this in sequences to assert absence without consuming:
+/// <code>Query.Sequence(Query.Not(Query.Ident("if")), Query.AnyIdent)</code>
+/// This matches any identifier that is NOT "if".
+/// </remarks>
+public sealed record NotQuery : INodeQuery, IGreenNodeQuery
+{
+    private readonly INodeQuery _inner;
+    
+    /// <summary>Creates a negative lookahead assertion.</summary>
+    public NotQuery(INodeQuery inner) => _inner = inner;
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (!_inner.Matches(node))
+                yield return node;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node) => !_inner.Matches(node);
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width assertion - never consumes
+        consumedCount = 0;
+        return !_inner.TryMatch(startNode, out _);
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        if (_inner is IGreenNodeQuery greenQuery)
+            return !greenQuery.MatchesGreen(node);
+        return true; // If inner doesn't support green, assume it doesn't match
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        consumedCount = 0;
+        if (_inner is IGreenNodeQuery greenQuery)
+            return !greenQuery.TryMatchGreen(siblings, startIndex, out _);
+        return true; // If inner doesn't support green, assume it doesn't match
+    }
+}
+
+#endregion
+
+#region Between Query
+
+/// <summary>
+/// Matches and captures content between a start and end query/delimiter.
+/// Consumes all nodes from start through end (inclusive of delimiters).
+/// </summary>
+/// <remarks>
+/// Useful for extracting content between matching patterns:
+/// <code>Query.Between(Query.Symbol("("), Query.Symbol(")"))</code>
+/// </remarks>
+public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
+{
+    private readonly INodeQuery _start;
+    private readonly INodeQuery _end;
+    private readonly bool _inclusive;
+    
+    /// <summary>Creates a query matching content between start and end.</summary>
+    /// <param name="start">The starting delimiter/pattern.</param>
+    /// <param name="end">The ending delimiter/pattern.</param>
+    /// <param name="inclusive">If true, includes start/end in consumed count; if false, only content between.</param>
+    public BetweenQuery(INodeQuery start, INodeQuery end, bool inclusive = true)
+    {
+        _start = start;
+        _end = end;
+        _inclusive = inclusive;
+    }
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (TryMatch(node, out _))
+                yield return node;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node) => TryMatch(node, out _);
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        consumedCount = 0;
+        
+        // First, check if start matches
+        if (!_start.TryMatch(startNode, out var startConsumed))
+            return false;
+        
+        // Navigate past start
+        var current = startNode;
+        for (int i = 0; i < startConsumed && current != null; i++)
+            current = current.NextSibling();
+        
+        int totalConsumed = startConsumed;
+        
+        // Look for end
+        while (current != null)
+        {
+            if (_end.TryMatch(current, out var endConsumed))
+            {
+                totalConsumed += endConsumed;
+                consumedCount = _inclusive ? totalConsumed : totalConsumed - startConsumed - endConsumed;
+                return true;
+            }
+            
+            totalConsumed++;
+            current = current.NextSibling();
+        }
+        
+        // End not found
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        // Check if start matches the first node
+        return _start is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node);
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        consumedCount = 0;
+        
+        if (_start is not IGreenNodeQuery startGreen || _end is not IGreenNodeQuery endGreen)
+            return false;
+        
+        // Check start matches
+        if (!startGreen.TryMatchGreen(siblings, startIndex, out var startConsumed))
+            return false;
+        
+        int currentIndex = startIndex + startConsumed;
+        int totalConsumed = startConsumed;
+        
+        // Look for end
+        while (currentIndex < siblings.Count)
+        {
+            if (endGreen.TryMatchGreen(siblings, currentIndex, out var endConsumed))
+            {
+                totalConsumed += endConsumed;
+                consumedCount = _inclusive ? totalConsumed : totalConsumed - startConsumed - endConsumed;
+                return true;
+            }
+            
+            totalConsumed++;
+            currentIndex++;
+        }
+        
+        // End not found
+        return false;
+    }
+}
+
+#endregion
+
 #region Sequence Query
 
 /// <summary>

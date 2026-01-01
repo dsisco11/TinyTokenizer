@@ -552,6 +552,493 @@ public sealed record IntersectionNodeQuery : INodeQuery
 
 #endregion
 
+#region AnyOf Query
+
+/// <summary>
+/// Matches nodes that satisfy any of the provided queries (variadic OR).
+/// Short-circuits on first match for efficiency.
+/// </summary>
+public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
+{
+    private readonly IReadOnlyList<INodeQuery> _queries;
+    
+    /// <summary>Creates a query that matches any of the specified queries.</summary>
+    public AnyOfQuery(params INodeQuery[] queries) => _queries = queries;
+    
+    /// <summary>Creates a query that matches any of the specified queries.</summary>
+    public AnyOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        
+        foreach (var query in _queries)
+        {
+            foreach (var node in query.Select(root))
+            {
+                if (seen.Add(node))
+                    yield return node;
+            }
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        foreach (var query in _queries)
+        {
+            if (query.Matches(node))
+                return true;
+        }
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Try each query in order (first match wins)
+        foreach (var query in _queries)
+        {
+            if (query.TryMatch(startNode, out consumedCount))
+                return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        foreach (var query in _queries)
+        {
+            if (query is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node))
+                return true;
+        }
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        foreach (var query in _queries)
+        {
+            if (query is IGreenNodeQuery greenQuery && 
+                greenQuery.TryMatchGreen(siblings, startIndex, out consumedCount))
+                return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+}
+
+#endregion
+
+#region NoneOf Query
+
+/// <summary>
+/// Matches nodes that do NOT satisfy any of the provided queries.
+/// Inverse of AnyOf - consumes 1 node when all inner queries fail.
+/// </summary>
+public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
+{
+    private readonly IReadOnlyList<INodeQuery> _queries;
+    
+    /// <summary>Creates a query that matches when none of the specified queries match.</summary>
+    public NoneOfQuery(params INodeQuery[] queries) => _queries = queries;
+    
+    /// <summary>Creates a query that matches when none of the specified queries match.</summary>
+    public NoneOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (Matches(node))
+                yield return node;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        foreach (var query in _queries)
+        {
+            if (query.Matches(node))
+                return false;
+        }
+        return true;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Fails if any query matches
+        foreach (var query in _queries)
+        {
+            if (query.TryMatch(startNode, out _))
+            {
+                consumedCount = 0;
+                return false;
+            }
+        }
+        // None matched, consume 1
+        consumedCount = 1;
+        return true;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        foreach (var query in _queries)
+        {
+            if (query is IGreenNodeQuery greenQuery && greenQuery.MatchesGreen(node))
+                return false;
+        }
+        return true;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if (startIndex >= siblings.Count)
+        {
+            consumedCount = 0;
+            return false;
+        }
+        
+        foreach (var query in _queries)
+        {
+            if (query is IGreenNodeQuery greenQuery && 
+                greenQuery.TryMatchGreen(siblings, startIndex, out _))
+            {
+                consumedCount = 0;
+                return false;
+            }
+        }
+        // None matched, consume 1
+        consumedCount = 1;
+        return true;
+    }
+}
+
+#endregion
+
+#region BOF Query
+
+/// <summary>
+/// Zero-width assertion that matches when the node is at the beginning of the file.
+/// Matches when the node is the first child of the root (SiblingIndex == 0 at root level).
+/// </summary>
+public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
+{
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        // BOF only matches the first node in the file
+        var firstChild = root.Children.FirstOrDefault();
+        if (firstChild != null)
+            yield return firstChild;
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        // Node is at BOF if it's the first child of its parent and parent is root
+        if (node.SiblingIndex != 0)
+            return false;
+        
+        // Check if parent is the root (no grandparent)
+        var parent = node.Parent;
+        return parent != null && parent.Parent == null;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width assertion - never consumes
+        consumedCount = 0;
+        return Matches(startNode);
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        // At green level, we can't determine position - always return true
+        // The red-level check will handle the actual verification
+        return true;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        consumedCount = 0;
+        return startIndex == 0; // First in the sibling list
+    }
+}
+
+#endregion
+
+#region EOF Query
+
+/// <summary>
+/// Zero-width assertion that matches when the node is at the end of the file.
+/// Matches when the node is the last child of the root (no following siblings at root level).
+/// </summary>
+public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
+{
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        // EOF only matches the last node in the file
+        var lastChild = root.Children.LastOrDefault();
+        if (lastChild != null)
+            yield return lastChild;
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        // Node is at EOF if it has no next sibling and parent is root
+        if (node.NextSibling() != null)
+            return false;
+        
+        // Check if parent is the root (no grandparent)
+        var parent = node.Parent;
+        return parent != null && parent.Parent == null;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width assertion - never consumes
+        consumedCount = 0;
+        return Matches(startNode);
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.MatchesGreen(GreenNode node)
+    {
+        // At green level, we can't determine position - always return true
+        return true;
+    }
+    
+    /// <inheritdoc/>
+    bool IGreenNodeQuery.TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        consumedCount = 0;
+        return startIndex == siblings.Count - 1; // Last in the sibling list
+    }
+}
+
+#endregion
+
+#region Sibling Query
+
+/// <summary>
+/// Navigates to a sibling at a relative offset from the current node.
+/// Zero-width query - navigates but doesn't consume the current node.
+/// </summary>
+public sealed record SiblingQuery : INodeQuery
+{
+    private readonly int _offset;
+    private readonly INodeQuery? _innerQuery;
+    
+    /// <summary>Creates a query that matches the sibling at the specified offset.</summary>
+    /// <param name="offset">Relative offset: +1 for next sibling, -1 for previous sibling, etc.</param>
+    public SiblingQuery(int offset) : this(offset, null) { }
+    
+    /// <summary>Creates a query that matches the sibling at the specified offset if it matches the inner query.</summary>
+    public SiblingQuery(int offset, INodeQuery? innerQuery)
+    {
+        _offset = offset;
+        _innerQuery = innerQuery;
+    }
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            var sibling = GetSiblingAtOffset(node);
+            if (sibling != null && (_innerQuery == null || _innerQuery.Matches(sibling)))
+                yield return sibling;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        var sibling = GetSiblingAtOffset(node);
+        if (sibling == null)
+            return false;
+        return _innerQuery == null || _innerQuery.Matches(sibling);
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width - navigates without consuming
+        consumedCount = 0;
+        return Matches(startNode);
+    }
+    
+    private RedNode? GetSiblingAtOffset(RedNode node)
+    {
+        if (_offset == 0)
+            return node;
+        
+        var current = node;
+        if (_offset > 0)
+        {
+            for (int i = 0; i < _offset && current != null; i++)
+                current = current.NextSibling();
+        }
+        else
+        {
+            for (int i = 0; i < -_offset && current != null; i++)
+                current = current.PreviousSibling();
+        }
+        return current;
+    }
+}
+
+#endregion
+
+#region Parent Query
+
+/// <summary>
+/// Matches the direct parent of the current node.
+/// Zero-width query for vertical tree navigation.
+/// </summary>
+public sealed record ParentQuery : INodeQuery
+{
+    private readonly INodeQuery? _innerQuery;
+    
+    /// <summary>Creates a query that matches the parent node.</summary>
+    public ParentQuery() => _innerQuery = null;
+    
+    /// <summary>Creates a query that matches the parent if it satisfies the inner query.</summary>
+    public ParentQuery(INodeQuery? innerQuery) => _innerQuery = innerQuery;
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var walker = new TreeWalker(root);
+        
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            var parent = node.Parent;
+            if (parent != null && seen.Add(parent))
+            {
+                if (_innerQuery == null || _innerQuery.Matches(parent))
+                    yield return parent;
+            }
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        var parent = node.Parent;
+        if (parent == null)
+            return false;
+        return _innerQuery == null || _innerQuery.Matches(parent);
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width - navigates without consuming
+        consumedCount = 0;
+        return Matches(startNode);
+    }
+}
+
+#endregion
+
+#region Ancestor Query
+
+/// <summary>
+/// Matches any ancestor of the current node that satisfies the inner query.
+/// Walks up the tree until finding a match or reaching the root.
+/// Zero-width query for vertical tree navigation.
+/// </summary>
+public sealed record AncestorQuery : INodeQuery
+{
+    private readonly INodeQuery _innerQuery;
+    
+    /// <summary>Creates a query that matches the first ancestor satisfying the inner query.</summary>
+    public AncestorQuery(INodeQuery innerQuery) => _innerQuery = innerQuery;
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<RedNode> Select(RedNode root)
+    {
+        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var walker = new TreeWalker(root);
+        
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            var ancestor = FindMatchingAncestor(node);
+            if (ancestor != null && seen.Add(ancestor))
+                yield return ancestor;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(RedNode node)
+    {
+        return FindMatchingAncestor(node) != null;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(RedNode startNode, out int consumedCount)
+    {
+        // Zero-width - navigates without consuming
+        consumedCount = 0;
+        return Matches(startNode);
+    }
+    
+    private RedNode? FindMatchingAncestor(RedNode node)
+    {
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (_innerQuery.Matches(current))
+                return current;
+            current = current.Parent;
+        }
+        return null;
+    }
+}
+
+#endregion
+
 #region Exact Node Query
 
 /// <summary>

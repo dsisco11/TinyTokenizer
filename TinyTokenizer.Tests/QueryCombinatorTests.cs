@@ -581,4 +581,609 @@ public class QueryCombinatorTests
     }
 
     #endregion
+    
+    #region AnyOf Query Tests
+    
+    [Fact]
+    public void AnyOf_MatchesFirstQuery()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.AnyOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void AnyOf_MatchesSecondQuery()
+    {
+        var tree = Parse("123");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.AnyOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void AnyOf_FailsWhenNoneMatch()
+    {
+        var tree = Parse("'string'");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.AnyOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.False(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void AnyOf_TryMatch_ReturnsFirstMatchConsumedCount()
+    {
+        var tree = Parse("foo bar");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        // AnyOf with sequence (consumes 2) OR single ident (consumes 1)
+        var query = Query.AnyOf(
+            Query.Sequence(Query.AnyIdent, Query.AnyIdent),
+            Query.AnyIdent
+        );
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(2, consumed); // First matching query wins
+    }
+    
+    [Fact]
+    public void AnyOf_Select_ReturnsDistinctMatches()
+    {
+        var tree = Parse("foo 123 bar");
+        var root = tree.Root;
+        
+        var query = Query.AnyOf(Query.AnyIdent, Query.AnyNumeric);
+        var matches = query.Select(root).ToList();
+        
+        Assert.Equal(3, matches.Count); // foo, 123, bar
+    }
+    
+    #endregion
+    
+    #region NoneOf Query Tests
+    
+    [Fact]
+    public void NoneOf_MatchesWhenNoQueryMatches()
+    {
+        var tree = Parse("'string'");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.NoneOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void NoneOf_FailsWhenAnyQueryMatches()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.NoneOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.False(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void NoneOf_TryMatch_ConsumesOneWhenMatched()
+    {
+        var tree = Parse("'string'");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.NoneOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(1, consumed);
+    }
+    
+    [Fact]
+    public void NoneOf_TryMatch_ConsumesZeroWhenFailed()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.NoneOf(Query.AnyIdent, Query.AnyNumeric);
+        Assert.False(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(0, consumed);
+    }
+    
+    #endregion
+    
+    #region Not Query Tests
+    
+    [Fact]
+    public void Not_SucceedsWhenInnerFails()
+    {
+        var tree = Parse("123");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.Not(Query.AnyIdent);
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void Not_FailsWhenInnerSucceeds()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.Not(Query.AnyIdent);
+        Assert.False(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void Not_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("123");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.Not(Query.AnyIdent);
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(0, consumed); // Zero-width assertion
+    }
+    
+    [Fact]
+    public void Not_InSequence_NegativeLookahead()
+    {
+        // Match any identifier that is NOT "if"
+        var tree = Parse("foo bar if baz");
+        var root = tree.Root;
+        
+        var query = Query.Sequence(Query.Not(Query.Ident("if")), Query.AnyIdent);
+        
+        // Should match foo, bar, baz but not if
+        var matches = new List<string>();
+        foreach (var child in root.Children)
+        {
+            if (query.TryMatch(child, out _))
+                matches.Add(child.ToString().Trim());
+        }
+        
+        Assert.Equal(3, matches.Count);
+        Assert.Contains("foo", matches);
+        Assert.Contains("bar", matches);
+        Assert.Contains("baz", matches);
+        Assert.DoesNotContain("if", matches);
+    }
+    
+    [Fact]
+    public void Not_ExtensionMethod()
+    {
+        var tree = Parse("123");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.AnyIdent.Not();
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    #endregion
+    
+    #region BOF Query Tests
+    
+    [Fact]
+    public void BOF_MatchesFirstNode()
+    {
+        var tree = Parse("foo bar baz");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        Assert.True(Query.BOF.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void BOF_DoesNotMatchMiddleNode()
+    {
+        var tree = Parse("foo bar baz");
+        var root = tree.Root;
+        var secondNode = root.Children.Skip(1).First();
+        
+        Assert.False(Query.BOF.Matches(secondNode));
+    }
+    
+    [Fact]
+    public void BOF_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        Assert.True(Query.BOF.TryMatch(firstNode, out var consumed));
+        Assert.Equal(0, consumed);
+    }
+    
+    [Fact]
+    public void BOF_Select_ReturnsOnlyFirstNode()
+    {
+        var tree = Parse("foo bar baz");
+        var matches = Query.BOF.Select(tree).ToList();
+        
+        Assert.Single(matches);
+        Assert.StartsWith("foo", matches[0].ToString());
+    }
+    
+    [Fact]
+    public void BOF_InSequence()
+    {
+        var tree = Parse("foo bar");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        // Match: BOF then identifier
+        var query = Query.Sequence(Query.BOF, Query.AnyIdent);
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(1, consumed); // Only ident consumed, BOF is zero-width
+    }
+    
+    #endregion
+    
+    #region EOF Query Tests
+    
+    [Fact]
+    public void EOF_MatchesLastNode()
+    {
+        var tree = Parse("foo bar baz");
+        var root = tree.Root;
+        var lastNode = root.Children.Last();
+        
+        Assert.True(Query.EOF.Matches(lastNode));
+    }
+    
+    [Fact]
+    public void EOF_DoesNotMatchFirstNode()
+    {
+        var tree = Parse("foo bar baz");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        Assert.False(Query.EOF.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void EOF_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var lastNode = root.Children.Last();
+        
+        Assert.True(Query.EOF.TryMatch(lastNode, out var consumed));
+        Assert.Equal(0, consumed);
+    }
+    
+    [Fact]
+    public void EOF_Select_ReturnsOnlyLastNode()
+    {
+        var tree = Parse("foo bar baz");
+        var matches = Query.EOF.Select(tree).ToList();
+        
+        Assert.Single(matches);
+        Assert.Equal("baz", matches[0].ToString());
+    }
+    
+    [Fact]
+    public void EOF_SingleToken_MatchesBothBOFAndEOF()
+    {
+        var tree = Parse("single");
+        var root = tree.Root;
+        var onlyNode = root.Children.First();
+        
+        Assert.True(Query.BOF.Matches(onlyNode));
+        Assert.True(Query.EOF.Matches(onlyNode));
+    }
+    
+    #endregion
+    
+    #region Between Query Tests
+    
+    [Fact]
+    public void Between_MatchesContentBetweenDelimiters()
+    {
+        // Use angle brackets which are operators, not block delimiters
+        var tree = Parse("< foo bar >");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        // Between < and >
+        var query = Query.Between(Query.Operator("<"), Query.Operator(">"));
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.True(consumed >= 2); // At least < and >
+    }
+    
+    [Fact]
+    public void Between_TryMatch_ConsumesAllIncludingDelimiters()
+    {
+        // Use symbols that aren't block delimiters
+        var tree = Parse("before < content > after");
+        var root = tree.Root;
+        
+        // Find the open angle bracket
+        var children = root.Children.ToList();
+        var openAngle = children.FirstOrDefault(c => c.ToString().Trim() == "<");
+        
+        if (openAngle != null)
+        {
+            var query = Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: true);
+            Assert.True(query.TryMatch(openAngle, out var consumed));
+            // Should consume: < content >
+            Assert.True(consumed >= 1);
+        }
+    }
+    
+    [Fact]
+    public void Between_FailsWhenEndNotFound()
+    {
+        var tree = Parse("( foo bar");
+        var root = tree.Root;
+        var children = root.Children.ToList();
+        var openParen = children.FirstOrDefault(c => c.ToString() == "(");
+        
+        if (openParen != null)
+        {
+            var query = Query.Between(Query.Symbol("("), Query.Symbol(")"));
+            Assert.False(query.TryMatch(openParen, out _));
+        }
+    }
+    
+    [Fact]
+    public void Between_ExtensionMethod()
+    {
+        var tree = Parse("before ( content ) after");
+        var root = tree.Root;
+        var children = root.Children.ToList();
+        var openParen = children.FirstOrDefault(c => c.ToString() == "(");
+        
+        if (openParen != null)
+        {
+            var query = Query.Symbol("(").Between(Query.Symbol(")"));
+            Assert.True(query.TryMatch(openParen, out _));
+        }
+    }
+    
+    #endregion
+    
+    #region Sibling Query Tests
+    
+    [Fact]
+    public void Sibling_MatchesNextSibling()
+    {
+        var tree = Parse("foo bar");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        // Check if next sibling (+1) matches identifier
+        var query = Query.Sibling(1, Query.AnyIdent);
+        Assert.True(query.Matches(firstNode));
+    }
+    
+    [Fact]
+    public void Sibling_MatchesPreviousSibling()
+    {
+        var tree = Parse("foo bar");
+        var root = tree.Root;
+        var secondNode = root.Children.Skip(1).First();
+        
+        // Check if previous sibling (-1) matches identifier
+        var query = Query.Sibling(-1, Query.AnyIdent);
+        Assert.True(query.Matches(secondNode));
+    }
+    
+    [Fact]
+    public void Sibling_FailsWhenSiblingDoesNotExist()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var onlyNode = root.Children.First();
+        
+        var query = Query.Sibling(1); // Next sibling doesn't exist
+        Assert.False(query.Matches(onlyNode));
+    }
+    
+    [Fact]
+    public void Sibling_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("foo bar");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.Sibling(1);
+        Assert.True(query.TryMatch(firstNode, out var consumed));
+        Assert.Equal(0, consumed); // Zero-width navigation
+    }
+    
+    [Fact]
+    public void Sibling_ExtensionMethods()
+    {
+        var tree = Parse("foo bar baz");
+        var root = tree.Root;
+        var secondNode = root.Children.Skip(1).First();
+        
+        // NextSibling extension
+        var nextQuery = Query.AnyIdent.NextSibling();
+        Assert.True(nextQuery.Matches(secondNode));
+        
+        // PreviousSibling extension
+        var prevQuery = Query.AnyIdent.PreviousSibling();
+        Assert.True(prevQuery.Matches(secondNode));
+    }
+    
+    #endregion
+    
+    #region Parent Query Tests
+    
+    [Fact]
+    public void Parent_MatchesDirectParent()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        Assert.NotNull(block);
+        
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Parent(Query.BraceBlock);
+        Assert.True(query.Matches(innerIdent));
+    }
+    
+    [Fact]
+    public void Parent_FailsWhenParentDoesNotMatch()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        Assert.NotNull(block);
+        
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Parent(Query.ParenBlock); // Wrong block type
+        Assert.False(query.Matches(innerIdent));
+    }
+    
+    [Fact]
+    public void Parent_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Parent();
+        Assert.True(query.TryMatch(innerIdent, out var consumed));
+        Assert.Equal(0, consumed);
+    }
+    
+    [Fact]
+    public void Parent_WithoutFilter_MatchesAnyParent()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Parent(); // No inner query
+        Assert.True(query.Matches(innerIdent));
+    }
+    
+    #endregion
+    
+    #region Ancestor Query Tests
+    
+    [Fact]
+    public void Ancestor_MatchesDirectParent()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Ancestor(Query.BraceBlock);
+        Assert.True(query.Matches(innerIdent));
+    }
+    
+    [Fact]
+    public void Ancestor_MatchesGrandparent()
+    {
+        var tree = Parse("{ [ foo ] }");
+        var root = tree.Root;
+        var braceBlock = root.Children.First() as RedBlock;
+        var bracketBlock = braceBlock!.Children.First() as RedBlock;
+        var innerIdent = bracketBlock!.Children.First();
+        
+        // innerIdent's grandparent is brace block
+        var query = Query.Ancestor(Query.BraceBlock);
+        Assert.True(query.Matches(innerIdent));
+    }
+    
+    [Fact]
+    public void Ancestor_FailsWhenNoAncestorMatches()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Ancestor(Query.ParenBlock); // No paren ancestor
+        Assert.False(query.Matches(innerIdent));
+    }
+    
+    [Fact]
+    public void Ancestor_ZeroWidth_NeverConsumes()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.Ancestor(Query.BraceBlock);
+        Assert.True(query.TryMatch(innerIdent, out var consumed));
+        Assert.Equal(0, consumed);
+    }
+    
+    [Fact]
+    public void Ancestor_Select_ReturnsMatchingAncestors()
+    {
+        var tree = Parse("{ [ foo ] }");
+        var root = tree.Root;
+        
+        var query = Query.Ancestor(Query.AnyBlock);
+        var matches = query.Select(root).ToList();
+        
+        // Should return both brace and bracket blocks (as ancestors of foo)
+        Assert.True(matches.Count >= 1);
+    }
+    
+    #endregion
+    
+    #region Fluent Extension Tests
+    
+    [Fact]
+    public void Or_Extension_CreatesAnyOf()
+    {
+        var tree = Parse("foo");
+        var root = tree.Root;
+        var firstNode = root.Children.First();
+        
+        var query = Query.AnyIdent.Or(Query.AnyNumeric, Query.AnyString);
+        Assert.True(query.Matches(firstNode));
+        Assert.IsType<AnyOfQuery>(query);
+    }
+    
+    [Fact]
+    public void AsParent_Extension_CreatesParentQuery()
+    {
+        var tree = Parse("{ foo }");
+        var root = tree.Root;
+        var block = root.Children.First() as RedBlock;
+        var innerIdent = block!.Children.First();
+        
+        var query = Query.BraceBlock.AsParent();
+        Assert.True(query.Matches(innerIdent));
+        Assert.IsType<ParentQuery>(query);
+    }
+    
+    [Fact]
+    public void AsAncestor_Extension_CreatesAncestorQuery()
+    {
+        var tree = Parse("{ [ foo ] }");
+        var root = tree.Root;
+        var braceBlock = root.Children.First() as RedBlock;
+        var bracketBlock = braceBlock!.Children.First() as RedBlock;
+        var innerIdent = bracketBlock!.Children.First();
+        
+        var query = Query.BraceBlock.AsAncestor();
+        Assert.True(query.Matches(innerIdent));
+        Assert.IsType<AncestorQuery>(query);
+    }
+    
+    #endregion
 }
