@@ -418,11 +418,16 @@ public class SyntaxTree : IFormattable
     /// <summary>
     /// Reconstructs the source text from the tree.
     /// </summary>
-    [Obsolete("Use ToString() instead.")]
+    [Obsolete("Use Serialize() instead.")]
     public string ToFullString() => Root.ToString();
     
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
-    public override string ToString() => Root.ToString(null, null);
+    public override string ToString() => Root.ToString("D", null);
+    /// <summary>
+    /// Serializes the tree to a string representation.
+    /// </summary>
+    /// <returns></returns>
+    public string Serialize() => Root.ToString(null, null);
     #endregion
 }

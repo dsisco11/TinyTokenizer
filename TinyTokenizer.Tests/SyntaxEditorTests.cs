@@ -21,7 +21,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.First(), "bar")
             .Commit();
         
-        Assert.Equal("bar", tree.ToString());
+        Assert.Equal("bar", tree.Serialize());
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.First(), n => ((RedLeaf)n).Text.ToUpper())
             .Commit();
         
-        Assert.Equal("HELLO", tree.ToString());
+        Assert.Equal("HELLO", tree.Serialize());
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("a"), "X")
             .Commit();
         
-        Assert.Equal("X b X", tree.ToString());
+        Assert.Equal("X b X", tree.Serialize());
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.First(), newNodes)
             .Commit();
         
-        Assert.Equal("new", tree.ToString());
+        Assert.Equal("new", tree.Serialize());
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("nonexistent"), "replacement")
             .Commit();
         
-        Assert.Equal("foo bar", tree.ToString());
+        Assert.Equal("foo bar", tree.Serialize());
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class SyntaxEditorTests
             .Commit();
         
         Assert.Equal("test", capturedText);
-        Assert.Equal("replaced", tree.ToString());
+        Assert.Equal("replaced", tree.Serialize());
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class SyntaxEditorTests
             .Replace(Q.BraceBlock.First(), "{new}")
             .Commit();
         
-        Assert.Equal("{new}", tree.ToString());
+        Assert.Equal("{new}", tree.Serialize());
     }
 
     #endregion
@@ -117,7 +117,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.WithText("b"))
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.DoesNotContain("b", text);
     }
 
@@ -130,7 +130,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.WithText("a"))
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.DoesNotContain("a", text);
         Assert.Contains("b", text);
         Assert.Contains("c", text);
@@ -145,7 +145,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.WithText("nonexistent"))
             .Commit();
         
-        Assert.Equal("foo bar", tree.ToString());
+        Assert.Equal("foo bar", tree.Serialize());
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class SyntaxEditorTests
             .Remove(Q.BraceBlock.First())
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.DoesNotContain("{", text);
         Assert.DoesNotContain("content", text);
     }
@@ -171,7 +171,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.First())
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.DoesNotContain("a", text);
         Assert.Contains("b", text);
         Assert.Contains("c", text);
@@ -190,7 +190,7 @@ public class SyntaxEditorTests
             .Insert(Q.AnyIdent.First().Before(), "hello ")
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public class SyntaxEditorTests
             .Insert(Q.AnyIdent.First().After(), " world")
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "a ")
             .Commit();
         
-        Assert.Equal("{a b}", tree.ToString());
+        Assert.Equal("{a b}", tree.Serialize());
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerEnd(), " b")
             .Commit();
         
-        Assert.Equal("{a b}", tree.ToString());
+        Assert.Equal("{a b}", tree.Serialize());
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public class SyntaxEditorTests
             .Insert(Q.AnyIdent.First().After(), nodes)
             .Commit();
         
-        Assert.Equal("x inserted", tree.ToString());
+        Assert.Equal("x inserted", tree.Serialize());
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class SyntaxEditorTests
         
         // With leading trivia transfer: inserted content takes target's leading trivia
         // " b" has leading space, so "_" takes the space, becoming " _b"
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("_a", text);  // Before 'a' (no leading trivia)
         Assert.Contains("_b", text);  // '_' took the space from 'b', so it's now " _b" 
         Assert.Contains("_c", text);  // Same for 'c'
@@ -270,7 +270,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "content")
             .Commit();
         
-        Assert.Equal("{content}", tree.ToString());
+        Assert.Equal("{content}", tree.Serialize());
     }
 
     #endregion
@@ -342,7 +342,7 @@ public class SyntaxEditorTests
         editor.Replace(Q.AnyIdent.First(), "changed");
         editor.Rollback();
         
-        Assert.Equal("original", tree.ToString());
+        Assert.Equal("original", tree.Serialize());
     }
 
     [Fact]
@@ -357,7 +357,7 @@ public class SyntaxEditorTests
         editor.Replace(Q.AnyIdent.First(), "new");
         editor.Commit();
         
-        Assert.Equal("new", tree.ToString());
+        Assert.Equal("new", tree.Serialize());
     }
 
     #endregion
@@ -373,11 +373,11 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.First(), "changed")
             .Commit();
         
-        Assert.Equal("changed", tree.ToString());
+        Assert.Equal("changed", tree.Serialize());
         Assert.True(tree.CanUndo);
         
         tree.Undo();
-        Assert.Equal("original", tree.ToString());
+        Assert.Equal("original", tree.Serialize());
     }
 
     [Fact]
@@ -387,7 +387,7 @@ public class SyntaxEditorTests
         
         tree.CreateEditor().Commit();
         
-        Assert.Equal("unchanged", tree.ToString());
+        Assert.Equal("unchanged", tree.Serialize());
         Assert.False(tree.CanUndo);
     }
 
@@ -401,11 +401,11 @@ public class SyntaxEditorTests
             .Commit();
         
         tree.Undo();
-        Assert.Equal("original", tree.ToString());
+        Assert.Equal("original", tree.Serialize());
         Assert.True(tree.CanRedo);
         
         tree.Redo();
-        Assert.Equal("changed", tree.ToString());
+        Assert.Equal("changed", tree.Serialize());
     }
 
     [Fact]
@@ -416,13 +416,13 @@ public class SyntaxEditorTests
         tree.CreateEditor().Replace(Q.AnyIdent.First(), "b").Commit();
         tree.CreateEditor().Replace(Q.AnyIdent.First(), "c").Commit();
         
-        Assert.Equal("c", tree.ToString());
+        Assert.Equal("c", tree.Serialize());
         
         tree.Undo();
-        Assert.Equal("b", tree.ToString());
+        Assert.Equal("b", tree.Serialize());
         
         tree.Undo();
-        Assert.Equal("a", tree.ToString());
+        Assert.Equal("a", tree.Serialize());
     }
 
     #endregion
@@ -440,7 +440,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("c"), "Z")
             .Commit();
         
-        Assert.Equal("X Y Z", tree.ToString());
+        Assert.Equal("X Y Z", tree.Serialize());
     }
 
     [Fact]
@@ -456,7 +456,7 @@ public class SyntaxEditorTests
         
         // All three changes should undo in one step
         tree.Undo();
-        Assert.Equal("a b c", tree.ToString());
+        Assert.Equal("a b c", tree.Serialize());
     }
 
     [Fact]
@@ -470,7 +470,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("c"), "z")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.DoesNotContain("a", text.Split(' ').First()); // 'a' removed from start
         Assert.Contains("extra", text);
         Assert.Contains("z", text);
@@ -507,7 +507,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Note: The order of operations may affect result
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("start", text);
         Assert.Contains("end", text);
     }
@@ -525,7 +525,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.First())
             .Commit();
         
-        Assert.Equal("", tree.ToString());
+        Assert.Equal("", tree.Serialize());
     }
 
     [Fact]
@@ -537,7 +537,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("deep"), "replaced")
             .Commit();
         
-        Assert.Equal("{{{replaced}}}", tree.ToString());
+        Assert.Equal("{{{replaced}}}", tree.Serialize());
     }
 
     [Fact]
@@ -550,7 +550,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyOperator.First(), "-")
             .Commit();
         
-        Assert.Equal("a - b", tree.ToString());
+        Assert.Equal("a - b", tree.Serialize());
     }
 
     [Fact]
@@ -563,7 +563,7 @@ public class SyntaxEditorTests
             .Insert(Q.AnyIdent.First().After(), "B")
             .Commit();
         
-        Assert.Equal("AxB", tree.ToString());
+        Assert.Equal("AxB", tree.Serialize());
     }
 
     [Fact]
@@ -575,7 +575,7 @@ public class SyntaxEditorTests
             .Remove(Q.AnyIdent.First())
             .Commit();
         
-        Assert.Equal("", tree.ToString());
+        Assert.Equal("", tree.Serialize());
     }
 
     #endregion
@@ -592,7 +592,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // All idents and numbers removed, only whitespace remains
-        var text = tree.ToString().Trim();
+        var text = tree.Serialize().Trim();
         Assert.DoesNotContain("foo", text);
         Assert.DoesNotContain("42", text);
         Assert.DoesNotContain("bar", text);
@@ -607,7 +607,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.Where(n => n is RedLeaf l && l.Text.Length > 5), "X")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("short", text);
         Assert.Contains("X", text);
         Assert.Contains("tiny", text);
@@ -623,7 +623,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.Nth(2), "X")
             .Commit();
         
-        Assert.Equal("a b X d e", tree.ToString());
+        Assert.Equal("a b X d e", tree.Serialize());
     }
 
     #endregion
@@ -639,7 +639,7 @@ public class SyntaxEditorTests
             .Insert(Q.BracketBlock.First().InnerStart(), "a ")
             .Commit();
         
-        Assert.Equal("[a b]", tree.ToString());
+        Assert.Equal("[a b]", tree.Serialize());
     }
 
     [Fact]
@@ -651,7 +651,7 @@ public class SyntaxEditorTests
             .Insert(Q.ParenBlock.First().InnerEnd(), " b")
             .Commit();
         
-        Assert.Equal("(a b)", tree.ToString());
+        Assert.Equal("(a b)", tree.Serialize());
     }
 
     #endregion
@@ -670,7 +670,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // /* comment */ takes the space from {, so result is: "function /* comment */{body}"
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Equal("function /* comment */{body}", text);
     }
 
@@ -684,7 +684,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
             .Commit();
         
-        Assert.Equal("function {first; existing}", tree.ToString());
+        Assert.Equal("function {first; existing}", tree.Serialize());
     }
 
     [Fact]
@@ -697,7 +697,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerEnd(), " return")
             .Commit();
         
-        Assert.Equal("function {existing return}", tree.ToString());
+        Assert.Equal("function {existing return}", tree.Serialize());
     }
 
     [Fact]
@@ -710,7 +710,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().After(), " nextFunction")
             .Commit();
         
-        Assert.Equal("function {body} nextFunction", tree.ToString());
+        Assert.Equal("function {body} nextFunction", tree.Serialize());
     }
 
     [Fact]
@@ -726,7 +726,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().After(), " /* after */")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("/* before */", text);
         Assert.Contains("{start;", text);
         Assert.Contains("end;}", text);
@@ -744,7 +744,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Equal("function {first; outer {inner}}", text);
     }
 
@@ -763,7 +763,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.Nth(1).InnerStart(), "nested; ")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("{nested; inner}", text);
     }
 
@@ -778,7 +778,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.Before(), "/* fn */")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         // First block: "{first} " (space is block's trailing trivia)
         // Second block: "{second}" (no leading trivia)
         Assert.Equal("/* fn */{first} /* fn */{second}", text);
@@ -794,7 +794,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "statement;")
             .Commit();
         
-        Assert.Equal("function {statement;}", tree.ToString());
+        Assert.Equal("function {statement;}", tree.Serialize());
     }
 
     [Fact]
@@ -807,7 +807,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().InnerStart(), "new; ")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("{new;", text);
         Assert.Contains("body", text);
     }
@@ -821,7 +821,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().Before(), "prefix ")
             .Commit();
         
-        Assert.Equal("prefix {only}", tree.ToString());
+        Assert.Equal("prefix {only}", tree.Serialize());
     }
 
     [Fact]
@@ -833,7 +833,7 @@ public class SyntaxEditorTests
             .Insert(Q.BraceBlock.First().After(), " suffix")
             .Commit();
         
-        Assert.Equal("{only} suffix", tree.ToString());
+        Assert.Equal("{only} suffix", tree.Serialize());
     }
 
     #endregion
@@ -850,7 +850,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("a"), "replaced")
             .Commit();
         
-        Assert.Equal("{replaced}", tree.ToString());
+        Assert.Equal("{replaced}", tree.Serialize());
     }
     
     [Fact]
@@ -867,7 +867,7 @@ public class SyntaxEditorTests
             .Replace(Q.AnyIdent.WithText("inner"), "replaced")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("outer", text);
         Assert.Contains("replaced", text);
         Assert.DoesNotContain("inner", text);
@@ -937,7 +937,7 @@ public class SyntaxEditorTests
         
         // Assert: the function call should now be commented out
         // Note: trivia from the removed block stays with the block (after closer)
-        var result = tree.ToString();
+        var result = tree.Serialize();
         Assert.Equal("setup(); /* doSomething(x, y) */; cleanup();", result);
     }
 
@@ -959,7 +959,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Assert: the identifier is replaced but arguments remain
-        var result = tree.ToString();
+        var result = tree.Serialize();
         Assert.Equal("before(); renamed(a); after();", result);
     }
 
@@ -979,7 +979,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Assert: only the identifier is wrapped, args remain
-        var result = tree.ToString();
+        var result = tree.Serialize();
         Assert.Equal("/* log */(message);", result);
     }
 
@@ -1002,7 +1002,7 @@ public class SyntaxEditorTests
         
         // Assert: the call should be commented out
         // Note: trivia from the removed block stays with the block (after closer)
-        var result = tree.ToString();
+        var result = tree.Serialize();
         Assert.Equal("before(); /* log(msg) */; after();", result);
     }
 
@@ -1049,7 +1049,7 @@ public class SyntaxEditorTests
             .Replace(bNode, "X")
             .Commit();
         
-        Assert.Equal("a X c", tree.ToString());
+        Assert.Equal("a X c", tree.Serialize());
     }
     
     [Fact]
@@ -1063,7 +1063,7 @@ public class SyntaxEditorTests
             .Replace(worldNode, n => ((RedLeaf)n).Text.ToUpper())
             .Commit();
         
-        Assert.Equal("hello WORLD", tree.ToString());
+        Assert.Equal("hello WORLD", tree.Serialize());
     }
     
     [Fact]
@@ -1076,7 +1076,7 @@ public class SyntaxEditorTests
             .Replace(nodes, "X")
             .Commit();
         
-        Assert.Equal("X X X", tree.ToString());
+        Assert.Equal("X X X", tree.Serialize());
     }
     
     [Fact]
@@ -1092,7 +1092,7 @@ public class SyntaxEditorTests
         // When replacing a token, its leading trivia is transferred to the replacement.
         // The replacement text "[x]" doesn't include the space, so the space (leading trivia)
         // goes before the bracket.
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("[a]", text);
         Assert.Contains("[b]", text);
         Assert.Contains("[c]", text);
@@ -1109,7 +1109,7 @@ public class SyntaxEditorTests
             .Remove(bNode)
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         // After removal, the trivia (space before b) might remain or be gone depending on trivia attachment
         // The key assertion is that "b" is removed
         Assert.DoesNotContain("b", text.Replace(" ", "").Replace("  ", "")); // ignore whitespace for this test
@@ -1127,7 +1127,7 @@ public class SyntaxEditorTests
             .Remove(identNodes)
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         var textWithoutSpaces = text.Replace(" ", "");
         Assert.DoesNotContain("a", textWithoutSpaces);
         Assert.DoesNotContain("b", textWithoutSpaces);
@@ -1144,7 +1144,7 @@ public class SyntaxEditorTests
             .InsertBefore(worldNode, "hello ")
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
     
     [Fact]
@@ -1157,7 +1157,7 @@ public class SyntaxEditorTests
             .InsertAfter(helloNode, " world")
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
     
     [Fact]
@@ -1172,7 +1172,7 @@ public class SyntaxEditorTests
         
         // When inserting before a token, the insertion goes before the token's position.
         // The token retains its leading trivia (whitespace), so we get "[]a []b []c".
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Equal("[]a []b []c", text);
     }
     
@@ -1188,7 +1188,7 @@ public class SyntaxEditorTests
         
         // When inserting after a token, the insertion goes after the token's text.
         // Whitespace (leading trivia of next token) comes after our insertion.
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Equal("a ]b ]c]", text);
     }
     
@@ -1204,7 +1204,7 @@ public class SyntaxEditorTests
             .InsertBefore(worldNode, nodesToInsert.AsEnumerable())
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
     
     [Fact]
@@ -1219,7 +1219,7 @@ public class SyntaxEditorTests
             .InsertAfter(helloNode, nodesToInsert.AsEnumerable())
             .Commit();
         
-        Assert.Equal("hello world", tree.ToString());
+        Assert.Equal("hello world", tree.Serialize());
     }
     
     [Fact]
@@ -1236,7 +1236,7 @@ public class SyntaxEditorTests
             .Replace(oldNode, newRedNode)
             .Commit();
         
-        Assert.Equal("new", tree.ToString());
+        Assert.Equal("new", tree.Serialize());
     }
     
     [Fact]
@@ -1251,7 +1251,7 @@ public class SyntaxEditorTests
             .Replace(oldNode, newGreenNode)
             .Commit();
         
-        Assert.Equal("new", tree.ToString());
+        Assert.Equal("new", tree.Serialize());
     }
     
     [Fact]
@@ -1268,7 +1268,7 @@ public class SyntaxEditorTests
             .Replace(xNode, replacements)
             .Commit();
         
-        Assert.Equal("a b c", tree.ToString());
+        Assert.Equal("a b c", tree.Serialize());
     }
     
     [Fact]
@@ -1297,7 +1297,7 @@ public class SyntaxEditorTests
             .Replace(Q.Exact(bNode), "X")
             .Commit();
         
-        Assert.Equal("a X c", tree.ToString());
+        Assert.Equal("a X c", tree.Serialize());
     }
     
     [Fact]
@@ -1314,7 +1314,7 @@ public class SyntaxEditorTests
             .Remove(queries)
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         var textNoSpaces = text.Replace(" ", "");
         Assert.DoesNotContain("a1", textNoSpaces);
         Assert.DoesNotContain("c3", textNoSpaces);
@@ -1335,7 +1335,7 @@ public class SyntaxEditorTests
             .Replace(queries, "X")
             .Commit();
         
-        Assert.Equal("X bar X", tree.ToString());
+        Assert.Equal("X bar X", tree.Serialize());
     }
     
     [Fact]
@@ -1355,7 +1355,7 @@ public class SyntaxEditorTests
         // Trivia behavior: "foo" has no leading trivia, "bar" has leading space, "baz" has leading space.
         // When we replace "foo" with "[foo]", the original token had no leading trivia.
         // When we replace "baz" with "[baz]", its leading trivia (space) is preserved before the replacement.
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("[foo]", text);
         Assert.Contains("bar", text);
         Assert.Contains("[baz]", text);
@@ -1374,7 +1374,7 @@ public class SyntaxEditorTests
             .Edit(Q.AnyIdent.First(), content => content.ToUpper())
             .Commit();
         
-        Assert.Equal("HELLO", tree.ToString());
+        Assert.Equal("HELLO", tree.Serialize());
     }
     
     [Fact]
@@ -1388,7 +1388,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Leading trivia should be preserved, content transformed
-        Assert.Equal("  FOO", tree.ToString());
+        Assert.Equal("  FOO", tree.Serialize());
     }
     
     [Fact]
@@ -1418,7 +1418,7 @@ public class SyntaxEditorTests
             .Edit(Q.AnyIdent, content => $"[{content}]")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("[foo]", text);
         Assert.Contains("[bar]", text);
         Assert.Contains("[baz]", text);
@@ -1434,7 +1434,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Should preserve the spacing between tokens
-        Assert.Equal("FOO  BAR   BAZ", tree.ToString());
+        Assert.Equal("FOO  BAR   BAZ", tree.Serialize());
     }
     
     [Fact]
@@ -1446,7 +1446,7 @@ public class SyntaxEditorTests
             .Edit(Q.Ident("foo"), content => "X")
             .Commit();
         
-        Assert.Equal("X bar X", tree.ToString());
+        Assert.Equal("X bar X", tree.Serialize());
     }
     
     [Fact]
@@ -1458,7 +1458,7 @@ public class SyntaxEditorTests
             .Edit(Q.Ident("nonexistent"), content => "X")
             .Commit();
         
-        Assert.Equal("foo bar", tree.ToString());
+        Assert.Equal("foo bar", tree.Serialize());
     }
     
     [Fact]
@@ -1471,7 +1471,7 @@ public class SyntaxEditorTests
             .Edit(firstIdent, content => content.ToUpper())
             .Commit();
         
-        Assert.Equal("HELLO world", tree.ToString());
+        Assert.Equal("HELLO world", tree.Serialize());
     }
     
     [Fact]
@@ -1485,7 +1485,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // Leading and trailing trivia should be preserved
-        Assert.Equal("  WORLD  ", tree.ToString());
+        Assert.Equal("  WORLD  ", tree.Serialize());
     }
     
     [Fact]
@@ -1498,7 +1498,7 @@ public class SyntaxEditorTests
             .Edit(idents, content => $"({content})")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("(foo)", text);
         Assert.Contains("(bar)", text);
         Assert.Contains("(baz)", text);
@@ -1518,7 +1518,7 @@ public class SyntaxEditorTests
             .Edit(queries, content => $"[{content}]")
             .Commit();
         
-        var text = tree.ToString();
+        var text = tree.Serialize();
         Assert.Contains("[foo]", text);
         Assert.Contains("bar", text);
         Assert.Contains("[baz]", text);
@@ -1556,8 +1556,8 @@ public class SyntaxEditorTests
             .Commit();
         
         // Both should produce the same result in this case
-        Assert.Equal("  HELLO  ", tree1.ToString());
-        Assert.Equal("  HELLO  ", tree2.ToString());
+        Assert.Equal("  HELLO  ", tree1.Serialize());
+        Assert.Equal("  HELLO  ", tree2.Serialize());
     }
     
     [Fact]
@@ -1569,7 +1569,7 @@ public class SyntaxEditorTests
             .Edit(Q.BraceBlock.First(), content => content.ToUpper())
             .Commit();
         
-        Assert.Equal("{INNER}", tree.ToString());
+        Assert.Equal("{INNER}", tree.Serialize());
     }
     
     [Fact]
@@ -1590,7 +1590,7 @@ public class SyntaxEditorTests
             .Commit();
         
         // The space before the block (leading trivia) should be preserved
-        Assert.Equal("foo {EDITED}", tree.ToString());
+        Assert.Equal("foo {EDITED}", tree.Serialize());
     }
     
     [Fact]
@@ -1606,7 +1606,7 @@ public class SyntaxEditorTests
             })
             .Commit();
         
-        Assert.Equal("x = 84", tree.ToString());
+        Assert.Equal("x = 84", tree.Serialize());
     }
     
     [Fact]
@@ -1619,7 +1619,7 @@ public class SyntaxEditorTests
             .Edit(Q.AnyNumeric.First(), content => (int.Parse(content) * 2).ToString())
             .Commit();
         
-        Assert.Equal("FOO 246 BAR", tree.ToString());
+        Assert.Equal("FOO 246 BAR", tree.Serialize());
     }
     
     [Fact]
@@ -1655,7 +1655,7 @@ public class SyntaxEditorTests
         editor.Rollback();
         
         Assert.False(editor.HasPendingEdits);
-        Assert.Equal("hello", tree.ToString()); // Tree unchanged
+        Assert.Equal("hello", tree.Serialize()); // Tree unchanged
     }
     
     [Fact]
@@ -1676,7 +1676,7 @@ public class SyntaxEditorTests
         // Transformer should receive "foo" not "  foo"
         Assert.Equal("foo", capturedContent);
         // Result should preserve the leading trivia before the replacement
-        Assert.Equal("  BAR", tree.ToString());
+        Assert.Equal("  BAR", tree.Serialize());
     }
     
     [Fact]
@@ -1691,7 +1691,7 @@ public class SyntaxEditorTests
         
         // The "  " between a and b is leading trivia on b
         // After edit, should still be exactly "  " not "    "
-        Assert.Equal("A  B", tree.ToString());
+        Assert.Equal("A  B", tree.Serialize());
     }
     
     [Fact]
@@ -1705,7 +1705,7 @@ public class SyntaxEditorTests
             .Edit(Q.AnyIdent.First(), content => "X")
             .Commit();
         
-        var result = tree.ToString();
+        var result = tree.Serialize();
         // Original: "  hello  " (9 chars)
         // Expected: "  X  " (5 chars) - same trivia, shorter content
         Assert.Equal("  X  ", result);
@@ -1735,7 +1735,7 @@ public class SyntaxEditorTests
             })
             .Commit();
         
-        var result = tree.ToString();
+        var result = tree.Serialize();
         // The leading trivia (newline) should be preserved before the replacement
         Assert.Contains("before\n// @tag", result);
     }
