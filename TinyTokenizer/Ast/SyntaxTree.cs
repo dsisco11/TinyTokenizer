@@ -418,55 +418,10 @@ public class SyntaxTree : IFormattable
     /// <summary>
     /// Reconstructs the source text from the tree.
     /// </summary>
-    public string ToFullString()
-    {
-        var builder = new System.Text.StringBuilder(_greenRoot.Width);
-        AppendTo(builder, _greenRoot);
-        return builder.ToString();
-    }
+    public string ToFullString() => Root.ToString();
     
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
-    
-    private static void AppendTo(System.Text.StringBuilder builder, GreenNode node)
-    {
-        switch (node)
-        {
-            case GreenLeaf leaf:
-                foreach (var trivia in leaf.LeadingTrivia)
-                    builder.Append(trivia.Text);
-                builder.Append(leaf.Text);
-                foreach (var trivia in leaf.TrailingTrivia)
-                    builder.Append(trivia.Text);
-                break;
-                
-            case GreenBlock block:
-                foreach (var trivia in block.LeadingTrivia)
-                    builder.Append(trivia.Text);
-                builder.Append(block.Opener);
-                foreach (var trivia in block.InnerTrivia)
-                    builder.Append(trivia.Text);
-                for (int i = 0; i < block.SlotCount; i++)
-                {
-                    var child = block.GetSlot(i);
-                    if (child != null)
-                        AppendTo(builder, child);
-                }
-                builder.Append(block.Closer);
-                foreach (var trivia in block.TrailingTrivia)
-                    builder.Append(trivia.Text);
-                break;
-                
-            case GreenList list:
-                for (int i = 0; i < list.SlotCount; i++)
-                {
-                    var child = list.GetSlot(i);
-                    if (child != null)
-                        AppendTo(builder, child);
-                }
-                break;
-        }
-    }
     
     #endregion
 }
