@@ -418,6 +418,7 @@ public class SyntaxTree : IFormattable
     /// <summary>
     /// Reconstructs the source text from the tree.
     /// </summary>
+    [Obsolete("Use ToString() instead.")]
     public string ToFullString() => Root.ToString();
     
     /// <inheritdoc />
