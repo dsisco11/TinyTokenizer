@@ -1659,5 +1659,95 @@ public class SyntaxEditorTests
         Assert.Equal("hello", tree.ToFullString()); // Tree unchanged
     }
     
+    [Fact]
+    public void Edit_LeadingTrivia_NotDuplicatedInContent()
+    {
+        // Regression test: leading trivia should not appear in the transformer's input
+        var tree = SyntaxTree.Parse("  foo");
+        string? capturedContent = null;
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content =>
+            {
+                capturedContent = content;
+                return "BAR";
+            })
+            .Commit();
+        
+        // Transformer should receive "foo" not "  foo"
+        Assert.Equal("foo", capturedContent);
+        // Result should preserve the leading trivia before the replacement
+        Assert.Equal("  BAR", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_LeadingTrivia_NotDuplicatedInOutput()
+    {
+        // Regression test: when Edit preserves trivia, it should not double the whitespace
+        var tree = SyntaxTree.Parse("a  b");
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent, content => content.ToUpper())
+            .Commit();
+        
+        // The "  " between a and b is leading trivia on b
+        // After edit, should still be exactly "  " not "    "
+        Assert.Equal("A  B", tree.ToFullString());
+    }
+    
+    [Fact]
+    public void Edit_ResultLengthMatchesExpected()
+    {
+        // Verify the exact string length to catch trivia duplication
+        var original = "  hello  ";
+        var tree = SyntaxTree.Parse(original);
+        
+        tree.CreateEditor()
+            .Edit(Q.AnyIdent.First(), content => "X")
+            .Commit();
+        
+        var result = tree.ToFullString();
+        // Original: "  hello  " (9 chars)
+        // Expected: "  X  " (5 chars) - same trivia, shorter content
+        Assert.Equal("  X  ", result);
+        Assert.Equal(5, result.Length);
+    }
+    
+    [Fact]
+    public void Edit_SyntaxNode_ExtractsFirstChildTrivia()
+    {
+        // Regression test: for syntax nodes (containers), trivia should be extracted
+        // from the first/last children, not from the syntax node itself
+        var schema = Schema.Create()
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.Parse("before\n@tag \"value\"", schema);
+        
+        tree.CreateEditor()
+            .Edit(Q.Syntax<TestTaggedNode>(), content =>
+            {
+                // Content should NOT include the leading newline
+                Assert.DoesNotContain("\n", content.Split('@')[0]); // Nothing before @
+                return $"// {content}";
+            })
+            .Commit();
+        
+        var result = tree.ToFullString();
+        // The leading trivia (newline) should be preserved before the replacement
+        Assert.Contains("before\n// @tag", result);
+    }
+    
+    /// <summary>
+    /// Test syntax node for Edit tests.
+    /// </summary>
+    private sealed class TestTaggedNode : SyntaxNode
+    {
+        public TestTaggedNode(CreationContext context) : base(context) { }
+    }
+    
     #endregion
 }

@@ -610,6 +610,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Gets the content of a node without its leading and trailing trivia.
     /// For leaves, returns the token text. For blocks, returns the full content minus outer trivia.
+    /// For syntax nodes (containers), returns full content minus the trivia from first/last children.
     /// </summary>
     private static string GetContentWithoutTrivia(RedNode node)
     {
@@ -635,13 +636,29 @@ public sealed class SyntaxEditor
             return fullText.Substring(leadingWidth, contentLength);
         }
         
-        // For other node types (containers), return full text
-        // They typically don't have trivia directly attached
-        return node.ToText();
+        // For syntax nodes and other containers, check first/last children for trivia
+        var (leadingTrivia, trailingTrivia) = GetTrivia(node);
+        if (leadingTrivia.IsEmpty && trailingTrivia.IsEmpty)
+        {
+            return node.ToText();
+        }
+        
+        var text = node.ToText();
+        var leadingTriviaWidth = leadingTrivia.Sum(t => t.Width);
+        var trailingTriviaWidth = trailingTrivia.Sum(t => t.Width);
+        
+        var contentLen = text.Length - leadingTriviaWidth - trailingTriviaWidth;
+        if (contentLen <= 0)
+            return string.Empty;
+        
+        return text.Substring(leadingTriviaWidth, contentLen);
     }
     
     /// <summary>
     /// Extracts leading and trailing trivia from a node.
+    /// For leaves, returns the leaf's trivia.
+    /// For blocks, returns the block's trivia.
+    /// For syntax nodes (containers), returns trivia from the first child (leading) and last child (trailing).
     /// </summary>
     private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(RedNode node)
     {
@@ -656,8 +673,33 @@ public sealed class SyntaxEditor
             return (block.LeadingTrivia, block.TrailingTrivia);
         }
         
-        // For other containers, return empty trivia
-        return (ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+        // For syntax nodes and other containers, get trivia from first/last children
+        var leading = ImmutableArray<GreenTrivia>.Empty;
+        var trailing = ImmutableArray<GreenTrivia>.Empty;
+        
+        // Get leading trivia from first child
+        var firstChild = node.Children.FirstOrDefault();
+        if (firstChild != null)
+        {
+            var (childLeading, _) = GetTrivia(firstChild);
+            leading = childLeading;
+        }
+        
+        // Get trailing trivia from last child
+        var lastChild = node.Children.LastOrDefault();
+        if (lastChild != null && !ReferenceEquals(lastChild, firstChild))
+        {
+            var (_, childTrailing) = GetTrivia(lastChild);
+            trailing = childTrailing;
+        }
+        else if (firstChild != null)
+        {
+            // Only one child - get trailing from that same child
+            var (_, childTrailing) = GetTrivia(firstChild);
+            trailing = childTrailing;
+        }
+        
+        return (leading, trailing);
     }
     
     /// <summary>

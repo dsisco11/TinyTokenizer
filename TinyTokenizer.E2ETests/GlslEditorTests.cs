@@ -160,6 +160,7 @@ public class GlslEditorTests
     /// Sample GLSL shader for testing.
     /// </summary>
     private const string SampleShader = @"#version 330 core
+
 @import ""my-include.glsl""
 
 uniform sampler2D tex;
@@ -234,7 +235,7 @@ void main() {
         var importDirective = tree.Select(importDirectiveQuery).FirstOrDefault() as GlImportNode;
         Assert.NotNull(importDirective);
         // Roslyn-style: ToString() includes trailing trivia (space before next token)
-        Assert.Equal("@import \"my-include.glsl\"\n", NormalizeLineEndings(importDirective!.ToString()));
+        Assert.Equal("\n@import \"my-include.glsl\"\n", NormalizeLineEndings(importDirective!.ToString()));
     }
     
     #endregion
@@ -557,7 +558,8 @@ void main() {
         var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify that the import directive is now commented out
-        Assert.Contains("#version 330 core\n// @import \"my-include.glsl\"", NormalizeLineEndings(result));
+        // Note: The blank line between #version and @import is preserved (leading trivia)
+        Assert.Contains("#version 330 core\n\n// @import \"my-include.glsl\"", NormalizeLineEndings(result));
     }
     
     #endregion
