@@ -329,7 +329,8 @@ void main() {
         var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify insertion appears after main's closing brace
-        Assert.Contains("}\n// End of main function\n", result);
+        // Block trailing trivia (newline after }) comes before the inserted content
+        Assert.Contains("}\n\n// End of main function\n", result);
     }
     
     #endregion
@@ -419,8 +420,8 @@ void main() {
         Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
         // 5. fragColor at inner end of main body (shows context: last stmt + inserted + close brace)
         Assert.Matches(@"foo\(uv\);\s*fragColor = sample;\s*}", result);
-        // 6. Comment after main (shows closing brace + inserted content)
-        Assert.Contains("}\n// End of main function\n", result);
+        // 6. Comment after main (shows closing brace + trailing trivia + inserted content)
+        Assert.Contains("}\n\n// End of main function\n", result);
     }
     
     #endregion

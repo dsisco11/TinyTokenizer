@@ -224,13 +224,25 @@ internal sealed class GreenLexer
             
             if (token.Type == closerType)
             {
-                // Found closer - any remaining trivia goes to last child as trailing
-                if (!childLeading.IsEmpty && children.Count > 0)
+                // Found closer
+                if (children.Count > 0)
                 {
-                    children[^1] = AttachTrailingTrivia(children[^1], childLeading);
+                    // Has children - remaining trivia goes to last child as trailing
+                    // Use the "deep" version to handle nested blocks correctly
+                    if (!childLeading.IsEmpty)
+                    {
+                        children[^1] = AttachTrailingTriviaToDeepestChild(children[^1], childLeading);
+                    }
+                    reader.Advance();
+                    return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
                 }
-                reader.Advance();
-                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
+                else
+                {
+                    // Empty block - store trivia as inner trivia to preserve "{ }" spacing
+                    reader.Advance();
+                    return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, 
+                        trailingTrivia: default, innerTrivia: childLeading);
+                }
             }
             
             // Parse child node with its leading trivia
@@ -247,10 +259,19 @@ internal sealed class GreenLexer
             childLeading = CollectLeadingTrivia(ref reader);
         }
         
-        // Unclosed block - attach any remaining trivia to last child
-        if (!childLeading.IsEmpty && children.Count > 0)
+        // Unclosed block - attach any remaining trivia to last child or as inner trivia
+        if (!childLeading.IsEmpty)
         {
-            children[^1] = AttachTrailingTrivia(children[^1], childLeading);
+            if (children.Count > 0)
+            {
+                children[^1] = AttachTrailingTriviaToDeepestChild(children[^1], childLeading);
+                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
+            }
+            else
+            {
+                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, 
+                    trailingTrivia: default, innerTrivia: childLeading);
+            }
         }
         
         return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
@@ -561,15 +582,11 @@ internal sealed class GreenLexer
                 leaf.LeadingTrivia, 
                 leaf.TrailingTrivia.AddRange(trivia)),
             
-            GreenBlock block when block.SlotCount > 0 => 
-                // Attach to last child of block
-                block.WithSlot(block.SlotCount - 1, 
-                    AttachTrailingTrivia(block.GetSlot(block.SlotCount - 1)!, trivia)),
-            
+            // Block nodes: trailing trivia goes to the block's TrailingTrivia (after closer)
+            // This is for trivia OUTSIDE the block, not "inside before closer"
             GreenBlock block => 
-                // Empty block - attach as block's trailing trivia
-                new GreenBlock(block.Opener, ImmutableArray<GreenNode>.Empty, 
-                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia)),
+                new GreenBlock(block.Opener, block.Children, 
+                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia), block.InnerTrivia),
             
             GreenList list when list.SlotCount > 0 => 
                 list.WithSlot(list.SlotCount - 1, 
@@ -579,6 +596,46 @@ internal sealed class GreenLexer
                 new GreenSyntaxNode(syntax.Kind, syntax.RedType, 
                     syntax.Children.SetItem(syntax.Children.Length - 1, 
                         AttachTrailingTrivia(syntax.GetSlot(syntax.Children.Length - 1)!, trivia))),
+            
+            _ => node // Unknown node type or empty container, return unchanged
+        };
+    }
+    
+    /// <summary>
+    /// Attaches trivia to the deepest last child of a node.
+    /// Used for "before closer" trivia inside blocks that should go to the last token.
+    /// </summary>
+    private static GreenNode AttachTrailingTriviaToDeepestChild(GreenNode node, ImmutableArray<GreenTrivia> trivia)
+    {
+        if (trivia.IsEmpty)
+            return node;
+        
+        return node switch
+        {
+            GreenLeaf leaf => new GreenLeaf(
+                leaf.Kind, 
+                leaf.Text, 
+                leaf.LeadingTrivia, 
+                leaf.TrailingTrivia.AddRange(trivia)),
+            
+            GreenBlock block when block.SlotCount > 0 => 
+                // Recursively attach to last child of block
+                block.WithSlot(block.SlotCount - 1, 
+                    AttachTrailingTriviaToDeepestChild(block.GetSlot(block.SlotCount - 1)!, trivia)),
+            
+            GreenBlock block => 
+                // Empty block - attach as block's trailing trivia
+                new GreenBlock(block.Opener, ImmutableArray<GreenNode>.Empty, 
+                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia), block.InnerTrivia),
+            
+            GreenList list when list.SlotCount > 0 => 
+                list.WithSlot(list.SlotCount - 1, 
+                    AttachTrailingTriviaToDeepestChild(list.GetSlot(list.SlotCount - 1)!, trivia)),
+            
+            GreenSyntaxNode syntax when syntax.SlotCount > 0 =>
+                new GreenSyntaxNode(syntax.Kind, syntax.RedType, 
+                    syntax.Children.SetItem(syntax.Children.Length - 1, 
+                        AttachTrailingTriviaToDeepestChild(syntax.GetSlot(syntax.Children.Length - 1)!, trivia))),
             
             _ => node // Unknown node type or empty container, return unchanged
         };

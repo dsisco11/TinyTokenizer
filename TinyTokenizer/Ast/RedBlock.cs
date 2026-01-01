@@ -34,11 +34,17 @@ public sealed class RedBlock : RedNode
     /// <summary>Leading trivia before the opening delimiter.</summary>
     internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
     
+    /// <summary>Inner trivia after opener when block is empty (for blocks like "{ }").</summary>
+    internal ImmutableArray<GreenTrivia> InnerTrivia => Green.InnerTrivia;
+    
     /// <summary>Trailing trivia after the closing delimiter.</summary>
     internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
     
     /// <summary>Width of leading trivia.</summary>
     public int LeadingTriviaWidth => Green.LeadingTriviaWidth;
+    
+    /// <summary>Width of inner trivia.</summary>
+    public int InnerTriviaWidth => Green.InnerTriviaWidth;
     
     /// <summary>Width of trailing trivia.</summary>
     public int TrailingTriviaWidth => Green.TrailingTriviaWidth;
@@ -54,9 +60,9 @@ public sealed class RedBlock : RedNode
     public int CloserPosition => EndPosition - Green.TrailingTriviaWidth - 1;
     
     /// <summary>
-    /// Position of the inner content (after opener).
+    /// Position of the inner content (after opener and inner trivia).
     /// </summary>
-    public int InnerStartPosition => OpenerPosition + 1;
+    public int InnerStartPosition => OpenerPosition + 1 + Green.InnerTriviaWidth;
     
     /// <summary>
     /// End position of the inner content (before closer).

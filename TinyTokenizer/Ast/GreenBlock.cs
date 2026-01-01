@@ -10,6 +10,7 @@ namespace TinyTokenizer.Ast;
 /// <remarks>
 /// Uses leading-preferred trivia model:
 /// - LeadingTrivia: trivia before the opening delimiter
+/// - InnerTrivia: trivia after the opener when block is empty (for blocks like "{ }")
 /// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
 /// </remarks>
 internal sealed record GreenBlock : GreenContainer
@@ -30,6 +31,9 @@ internal sealed record GreenBlock : GreenContainer
     /// <summary>Trivia before the opening delimiter.</summary>
     public ImmutableArray<GreenTrivia> LeadingTrivia { get; }
     
+    /// <summary>Trivia inside empty blocks (after opener, before closer when no children).</summary>
+    public ImmutableArray<GreenTrivia> InnerTrivia { get; }
+    
     /// <summary>Trivia after the closing delimiter.</summary>
     public ImmutableArray<GreenTrivia> TrailingTrivia { get; }
     
@@ -38,6 +42,9 @@ internal sealed record GreenBlock : GreenContainer
     
     /// <summary>Total width of leading trivia.</summary>
     public int LeadingTriviaWidth { get; }
+    
+    /// <summary>Total width of inner trivia.</summary>
+    public int InnerTriviaWidth { get; }
     
     /// <summary>Total width of trailing trivia.</summary>
     public int TrailingTriviaWidth { get; }
@@ -49,30 +56,33 @@ internal sealed record GreenBlock : GreenContainer
         char opener,
         ImmutableArray<GreenNode> children,
         ImmutableArray<GreenTrivia> leadingTrivia = default,
-        ImmutableArray<GreenTrivia> trailingTrivia = default)
+        ImmutableArray<GreenTrivia> trailingTrivia = default,
+        ImmutableArray<GreenTrivia> innerTrivia = default)
     {
         Opener = opener;
         Closer = GetMatchingCloser(opener);
         Kind = GetBlockKind(opener);
         _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
         LeadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
+        InnerTrivia = innerTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : innerTrivia;
         TrailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
         
         LeadingTriviaWidth = ComputeTriviaWidth(LeadingTrivia);
+        InnerTriviaWidth = ComputeTriviaWidth(InnerTrivia);
         TrailingTriviaWidth = ComputeTriviaWidth(TrailingTrivia);
         
-        // Compute width: leading trivia + opener(1) + children + closer(1) + trailing trivia
+        // Compute width: leading trivia + opener(1) + inner trivia + children + closer(1) + trailing trivia
         int childrenWidth = 0;
         foreach (var child in _children)
             childrenWidth += child.Width;
         
-        _width = LeadingTriviaWidth + 1 + childrenWidth + 1 + TrailingTriviaWidth;
+        _width = LeadingTriviaWidth + 1 + InnerTriviaWidth + childrenWidth + 1 + TrailingTriviaWidth;
         
         // Pre-compute child offsets for large blocks
         if (_children.Length >= 10)
         {
             _childOffsets = new int[_children.Length];
-            int offset = LeadingTriviaWidth + 1; // After leading trivia and opener
+            int offset = LeadingTriviaWidth + 1 + InnerTriviaWidth; // After leading trivia, opener, and inner trivia
             for (int i = 0; i < _children.Length; i++)
             {
                 _childOffsets[i] = offset;
@@ -95,14 +105,14 @@ internal sealed record GreenBlock : GreenContainer
             return _childOffsets[index]; // O(1)
         
         // O(index) for small blocks
-        int offset = LeadingTriviaWidth + 1; // After leading trivia and opener
+        int offset = LeadingTriviaWidth + 1 + InnerTriviaWidth; // After leading trivia, opener, and inner trivia
         for (int i = 0; i < index; i++)
             offset += _children[i].Width;
         return offset;
     }
     
     /// <inheritdoc/>
-    protected override int GetLeadingWidth() => LeadingTriviaWidth + 1; // Leading trivia + opener
+    protected override int GetLeadingWidth() => LeadingTriviaWidth + 1 + InnerTriviaWidth; // Leading trivia + opener + inner trivia
     
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position)
@@ -114,6 +124,8 @@ internal sealed record GreenBlock : GreenContainer
         foreach (var trivia in LeadingTrivia)
             builder.Append(trivia.Text);
         builder.Append(Opener);
+        foreach (var trivia in InnerTrivia)
+            builder.Append(trivia.Text);
         foreach (var child in _children)
             child.WriteTo(builder);
         builder.Append(Closer);
@@ -130,12 +142,12 @@ internal sealed record GreenBlock : GreenContainer
             throw new ArgumentOutOfRangeException(nameof(index));
         
         var newChildren = _children.SetItem(index, newChild);
-        return new GreenBlock(Opener, newChildren, LeadingTrivia, TrailingTrivia);
+        return new GreenBlock(Opener, newChildren, LeadingTrivia, TrailingTrivia, InnerTrivia);
     }
     
     /// <inheritdoc/>
     public override GreenBlock WithChildren(ImmutableArray<GreenNode> newChildren)
-        => new(Opener, newChildren, LeadingTrivia, TrailingTrivia);
+        => new(Opener, newChildren, LeadingTrivia, TrailingTrivia, InnerTrivia);
     
     /// <inheritdoc/>
     public override GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
@@ -145,7 +157,7 @@ internal sealed record GreenBlock : GreenContainer
         
         var builder = _children.ToBuilder();
         builder.InsertRange(index, nodes);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
+        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
     }
     
     /// <inheritdoc/>
@@ -156,7 +168,7 @@ internal sealed record GreenBlock : GreenContainer
         
         var builder = _children.ToBuilder();
         builder.RemoveRange(index, count);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
+        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
     }
     
     /// <inheritdoc/>
@@ -168,20 +180,26 @@ internal sealed record GreenBlock : GreenContainer
         var builder = _children.ToBuilder();
         builder.RemoveRange(index, count);
         builder.InsertRange(index, replacement);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia);
+        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
     }
     
     /// <summary>
     /// Creates a new block with different leading trivia.
     /// </summary>
     public GreenBlock WithLeadingTrivia(ImmutableArray<GreenTrivia> trivia)
-        => new(Opener, _children, trivia, TrailingTrivia);
+        => new(Opener, _children, trivia, TrailingTrivia, InnerTrivia);
     
     /// <summary>
     /// Creates a new block with different trailing trivia.
     /// </summary>
     public GreenBlock WithTrailingTrivia(ImmutableArray<GreenTrivia> trivia)
-        => new(Opener, _children, LeadingTrivia, trivia);
+        => new(Opener, _children, LeadingTrivia, trivia, InnerTrivia);
+    
+    /// <summary>
+    /// Creates a new block with different inner trivia.
+    /// </summary>
+    public GreenBlock WithInnerTrivia(ImmutableArray<GreenTrivia> trivia)
+        => new(Opener, _children, LeadingTrivia, TrailingTrivia, trivia);
     
     #endregion
     
