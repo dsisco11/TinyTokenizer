@@ -557,7 +557,7 @@ void main() {
         var result = NormalizeLineEndings(tree.Root.ToString());
         
         // Verify that the import directive is now commented out
-        Assert.Contains("// @import \"my-include.glsl\"", result);
+        Assert.Contains("#version 330 core\n// @import \"my-include.glsl\"", NormalizeLineEndings(result));
     }
     
     #endregion
