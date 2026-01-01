@@ -423,6 +423,6 @@ public class SyntaxTree : IFormattable
     
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
-    
+    public override string ToString() => Root.ToString(null, null);
     #endregion
 }
