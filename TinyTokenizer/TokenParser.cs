@@ -567,7 +567,7 @@ public sealed partial class TokenParser
     private CommentToken ParseSingleLineComment(SimpleTokenReader reader)
     {
         using var contentBuilder = new ArrayPoolBufferWriter<char>();
-        long startPosition = 0;
+        int startPosition = 0;
 
         // Consume first slash
         if (reader.TryPeek(out var slash1))
@@ -601,7 +601,7 @@ public sealed partial class TokenParser
     private Token ParseMultiLineComment(SimpleTokenReader reader)
     {
         using var contentBuilder = new ArrayPoolBufferWriter<char>();
-        long startPosition = 0;
+        int startPosition = 0;
 
         // Consume /
         if (reader.TryPeek(out var slash))

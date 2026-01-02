@@ -34,7 +34,7 @@ public interface ITokenDefinition
     /// <param name="combinedContent">The combined content of all matched tokens.</param>
     /// <param name="position">The position of the first matched token.</param>
     /// <returns>A new composite token.</returns>
-    CompositeToken CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, long position);
+    CompositeToken CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, int position);
 }
 
 /// <summary>
@@ -69,7 +69,7 @@ public sealed record TokenDefinition<T> : ITokenDefinition where T : CompositeTo
     public int Priority { get; init; } = 0;
 
     /// <inheritdoc/>
-    CompositeToken ITokenDefinition.CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, long position)
+    CompositeToken ITokenDefinition.CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, int position)
     {
         return CreateToken(matchedTokens, combinedContent, position);
     }
@@ -82,7 +82,7 @@ public sealed record TokenDefinition<T> : ITokenDefinition where T : CompositeTo
     /// <param name="combinedContent">The combined content of all matched tokens.</param>
     /// <param name="position">The position of the first matched token.</param>
     /// <returns>A new composite token of type T.</returns>
-    public T CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, long position)
+    public T CreateToken(ImmutableArray<Token> matchedTokens, ReadOnlyMemory<char> combinedContent, int position)
     {
         return new T
         {

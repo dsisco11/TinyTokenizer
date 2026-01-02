@@ -5,7 +5,7 @@ namespace TinyTokenizer.Tests;
 /// </summary>
 public class TokenFormattableTests
 {
-    private static IdentToken CreateToken(string content, long position) =>
+    private static IdentToken CreateToken(string content, int position) =>
         new() { Content = content.AsMemory(), Position = position };
 
     #region Format Specifier Tests

@@ -27,7 +27,11 @@ public abstract record Token : ITextSerializable
     /// <summary>
     /// Gets or sets the absolute position in the source where this token starts.
     /// </summary>
-    public long Position { get; init; }
+    /// <remarks>
+    /// Uses <c>int</c> rather than <c>long</c> for memory efficiency and alignment with
+    /// .NET's string and array length limits. This supports files up to ~2GB in size.
+    /// </remarks>
+    public int Position { get; init; }
 
     /// <summary>
     /// Gets the content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.

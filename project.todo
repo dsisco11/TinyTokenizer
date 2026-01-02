@@ -98,18 +98,18 @@ Timeline: 1-2 weeks | Breaking Changes: Minor (internal APIs only)
     [x] Add unit tests for OperatorTrie
     [x] Benchmark with 50+ operators to confirm improvement
 
-[ ] 2.3 Standardize Position Types (2 hrs) ⚠️ BREAKING
+[x] 2.3 Standardize Position Types (2 hrs) ⚠️ BREAKING ✓ DONE
     Files: SimpleToken.cs, Token.cs, all derived types
-    [ ] Update SimpleToken.cs
-        [ ] Change Position parameter: long → int
-    [ ] Update Token.cs
-        [ ] Change Position parameter: long → int
-    [ ] Update all derived token types (if any explicit Position usage)
-    [ ] Update Lexer.cs position tracking
-    [ ] Update TokenParser.cs position handling
-    [ ] Search codebase for all long position usages and update
-    [ ] Add XML doc noting 2GB file size practical limit
-    [ ] Update all tests with position assertions
+    [x] Update SimpleToken.cs
+        [x] Change Position parameter: long → int
+    [x] Update Token.cs
+        [x] Change Position parameter: long → int
+    [x] Update all derived token types (if any explicit Position usage)
+    [x] Update Lexer.cs position tracking
+    [x] Update TokenParser.cs position handling
+    [x] Search codebase for all long position usages and update
+    [x] Add XML doc noting 2GB file size practical limit
+    [x] Update all tests with position assertions
     [ ] Document breaking change in CHANGELOG
 
 [ ] 2.4 Pre-sort Operators in TokenizerOptions (1 hr)
