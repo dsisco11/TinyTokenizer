@@ -265,22 +265,22 @@ Timeline: Continuous
 
 [ ] 4.1 Error Recovery Test Suite (4 hrs)
     File: new TinyTokenizer.Tests/ErrorRecoveryTests.cs
-    [ ] Create ErrorRecoveryTests.cs file
-    [ ] Unclosed block tests
-        [ ] Test "{" produces ErrorToken
-        [ ] Test "[" produces ErrorToken
-        [ ] Test "(" produces ErrorToken
-        [ ] Test "{ { }" (nested unclosed) produces ErrorToken
-    [ ] Mismatched delimiter tests
-        [ ] Test "{]" produces ErrorToken
-        [ ] Test "[)" produces ErrorToken
-        [ ] Test "(}" produces ErrorToken
-    [ ] Unclosed string tests
-        [ ] Test "\"hello" produces ErrorToken or Symbol
-        [ ] Test "'world" produces ErrorToken or Symbol
-        [ ] Test "\"test\nmore\"" handles newline in string
-    [ ] Recovery tests
-        [ ] Test tokenizer continues after error token
+    [x] Create ErrorRecoveryTests.cs file
+    [x] Unclosed block tests
+        [x] Test "{" produces ErrorToken
+        [x] Test "[" produces ErrorToken
+        [x] Test "(" produces ErrorToken
+        [x] Test "{ { }" (nested unclosed) produces ErrorToken
+    [x] Mismatched delimiter tests
+        [x] Test "{]" produces ErrorToken
+        [x] Test "[)" produces ErrorToken
+        [x] Test "(}" produces ErrorToken
+    [x] Unclosed string tests
+        [x] Test "\"hello" produces ErrorToken or Symbol
+        [x] Test "'world" produces ErrorToken or Symbol
+        [x] Test "\"test\nmore\"" handles newline in string
+    [x] Recovery tests
+        [x] Test tokenizer continues after error token
 
 [ ] 4.2 Unicode Test Suite (3 hrs)
     File: new TinyTokenizer.Tests/UnicodeTests.cs
