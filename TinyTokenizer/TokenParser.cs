@@ -83,7 +83,7 @@ public sealed partial class TokenParser
             yield break;
 
         // Check for unexpected closing delimiter
-        if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
+        if (TokenizerCore.IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
             yield return new ErrorToken
@@ -96,7 +96,7 @@ public sealed partial class TokenParser
         }
 
         // Opening delimiter - parse block
-        if (IsOpeningDelimiter(token.Type))
+        if (TokenizerCore.IsOpeningDelimiter(token.Type))
         {
             var block = ParseBlock(reader);
             yield return block;
@@ -242,13 +242,13 @@ public sealed partial class TokenParser
         }
 
         // Check if this is an operator-capable token type (includes Symbol)
-        if (IsOperatorCapableToken(token.Type))
+        if (TokenizerCore.IsOperatorCapableToken(token.Type))
         {
             // First check if it could be a tagged identifier
             // Get the character for this token type
             char? tokenChar = token.Type == SimpleTokenType.Symbol && token.Content.Length == 1
                 ? token.Content.Span[0]
-                : GetTokenChar(token.Type);
+                : TokenizerCore.GetOperatorChar(token.Type);
             
             if (tokenChar.HasValue && _options.TagPrefixes.Contains(tokenChar.Value))
             {
@@ -285,59 +285,6 @@ public sealed partial class TokenParser
     }
 
     /// <summary>
-    /// Checks if a SimpleTokenType represents a character that could be part of an operator.
-    /// </summary>
-    private static bool IsOperatorCapableToken(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.Symbol
-            or SimpleTokenType.Equals
-            or SimpleTokenType.Plus
-            or SimpleTokenType.Minus
-            or SimpleTokenType.LessThan
-            or SimpleTokenType.GreaterThan
-            or SimpleTokenType.Pipe
-            or SimpleTokenType.Ampersand
-            or SimpleTokenType.Percent
-            or SimpleTokenType.Caret
-            or SimpleTokenType.Tilde
-            or SimpleTokenType.Question
-            or SimpleTokenType.Exclamation
-            or SimpleTokenType.Colon
-            or SimpleTokenType.At;
-    }
-
-    /// <summary>
-    /// Gets the character representation of a SimpleTokenType for operator matching.
-    /// </summary>
-    private static char? GetTokenChar(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.Equals => '=',
-            SimpleTokenType.Plus => '+',
-            SimpleTokenType.Minus => '-',
-            SimpleTokenType.LessThan => '<',
-            SimpleTokenType.GreaterThan => '>',
-            SimpleTokenType.Pipe => '|',
-            SimpleTokenType.Ampersand => '&',
-            SimpleTokenType.Percent => '%',
-            SimpleTokenType.Caret => '^',
-            SimpleTokenType.Tilde => '~',
-            SimpleTokenType.Question => '?',
-            SimpleTokenType.Exclamation => '!',
-            SimpleTokenType.Colon => ':',
-            SimpleTokenType.Hash => '#',
-            SimpleTokenType.At => '@',
-            SimpleTokenType.Slash => '/',
-            SimpleTokenType.Asterisk => '*',
-            SimpleTokenType.Dot => '.',
-            SimpleTokenType.Comma => ',',
-            SimpleTokenType.Semicolon => ';',
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// Tries to parse an operator starting from the current position.
     /// Uses trie-based greedy matching for O(k) lookup where k is operator length.
     /// </summary>
@@ -353,7 +300,7 @@ public sealed partial class TokenParser
 
         while (reader.TryPeek(charCount, out var peekToken))
         {
-            var tokenChar = GetTokenChar(peekToken.Type);
+            var tokenChar = TokenizerCore.GetOperatorChar(peekToken.Type);
             if (tokenChar == null)
             {
                 // For Symbol type, get the actual character
@@ -437,8 +384,8 @@ public sealed partial class TokenParser
         reader.TryPeek(out var openToken);
         reader.Advance();
 
-        var closerType = GetMatchingCloser(openToken.Type);
-        var blockType = GetBlockTokenType(openToken.Type);
+        var closerType = TokenizerCore.GetMatchingCloser(openToken.Type);
+        var blockType = TokenizerCore.GetBlockTokenType(openToken.Type);
         var startPosition = openToken.Position;
 
         var children = ImmutableArray.CreateBuilder<Token>();
@@ -735,38 +682,6 @@ public sealed partial class TokenParser
         var destination = buffer.GetSpan(1);
         destination[0] = c;
         buffer.Advance(1);
-    }
-
-    private static bool IsOpeningDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.OpenBrace or SimpleTokenType.OpenBracket or SimpleTokenType.OpenParen;
-    }
-
-    private static bool IsClosingDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.CloseBrace or SimpleTokenType.CloseBracket or SimpleTokenType.CloseParen;
-    }
-
-    private static SimpleTokenType GetMatchingCloser(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => SimpleTokenType.CloseBrace,
-            SimpleTokenType.OpenBracket => SimpleTokenType.CloseBracket,
-            SimpleTokenType.OpenParen => SimpleTokenType.CloseParen,
-            _ => throw new ArgumentException($"Not an opening delimiter: {opener}")
-        };
-    }
-
-    private static TokenType GetBlockTokenType(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => TokenType.BraceBlock,
-            SimpleTokenType.OpenBracket => TokenType.BracketBlock,
-            SimpleTokenType.OpenParen => TokenType.ParenthesisBlock,
-            _ => throw new ArgumentException($"Not an opening delimiter: {opener}")
-        };
     }
 
     #endregion

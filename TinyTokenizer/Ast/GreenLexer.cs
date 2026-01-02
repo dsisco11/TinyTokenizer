@@ -143,7 +143,7 @@ internal sealed class GreenLexer
             return null;
         
         // Check for unexpected closing delimiter
-        if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
+        if (TokenizerCore.IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
             // Leading-only trivia model: no trailing trivia
@@ -151,7 +151,7 @@ internal sealed class GreenLexer
         }
         
         // Opening delimiter - parse block
-        if (IsOpeningDelimiter(token.Type))
+        if (TokenizerCore.IsOpeningDelimiter(token.Type))
         {
             return ParseBlock(ref reader, leadingTrivia);
         }
@@ -230,7 +230,7 @@ internal sealed class GreenLexer
         reader.Advance();
         
         var opener = openToken.FirstChar;
-        var closerType = GetMatchingCloser(openToken.Type);
+        var closerType = TokenizerCore.GetMatchingCloser(openToken.Type);
         var closerChar = GetMatchingCloserChar(opener);
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -457,7 +457,7 @@ internal sealed class GreenLexer
         
         while (reader.TryPeek(offset, out var token))
         {
-            var c = GetOperatorChar(token.Type);
+            var c = TokenizerCore.GetOperatorChar(token.Type);
             if (c == null)
             {
                 if (token.Type == SimpleTokenType.Symbol && token.Content.Length == 1)
@@ -733,27 +733,6 @@ internal sealed class GreenLexer
         return _options.TagPrefixes.Contains(token.FirstChar);
     }
     
-    private static bool IsOpeningDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.OpenBrace or SimpleTokenType.OpenBracket or SimpleTokenType.OpenParen;
-    }
-    
-    private static bool IsClosingDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.CloseBrace or SimpleTokenType.CloseBracket or SimpleTokenType.CloseParen;
-    }
-    
-    private static SimpleTokenType GetMatchingCloser(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => SimpleTokenType.CloseBrace,
-            SimpleTokenType.OpenBracket => SimpleTokenType.CloseBracket,
-            SimpleTokenType.OpenParen => SimpleTokenType.CloseParen,
-            _ => throw new ArgumentException($"Not an opener: {opener}")
-        };
-    }
-    
     private static NodeKind GetLeafKind(SimpleTokenType type)
     {
         return type switch
@@ -762,30 +741,6 @@ internal sealed class GreenLexer
             SimpleTokenType.Digits => NodeKind.Numeric,
             SimpleTokenType.Symbol => NodeKind.Symbol,
             _ => NodeKind.Symbol
-        };
-    }
-    
-    private static char? GetOperatorChar(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.Equals => '=',
-            SimpleTokenType.Plus => '+',
-            SimpleTokenType.Minus => '-',
-            SimpleTokenType.LessThan => '<',
-            SimpleTokenType.GreaterThan => '>',
-            SimpleTokenType.Pipe => '|',
-            SimpleTokenType.Ampersand => '&',
-            SimpleTokenType.Percent => '%',
-            SimpleTokenType.Caret => '^',
-            SimpleTokenType.Tilde => '~',
-            SimpleTokenType.Question => '?',
-            SimpleTokenType.Exclamation => '!',
-            SimpleTokenType.Colon => ':',
-            SimpleTokenType.Slash => '/',
-            SimpleTokenType.Asterisk => '*',
-            SimpleTokenType.Dot => '.',
-            _ => null
         };
     }
     

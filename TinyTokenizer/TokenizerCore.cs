@@ -176,4 +176,114 @@ public static class TokenizerCore
     public const int LargeTokenThreshold = 4096;
 
     #endregion
+
+    #region SimpleToken Type Classification
+
+    /// <summary>
+    /// Checks if a SimpleTokenType represents a character that could be part of an operator.
+    /// </summary>
+    /// <param name="type">The SimpleTokenType to check.</param>
+    /// <returns>True if the token type can be part of an operator.</returns>
+    public static bool IsOperatorCapableToken(SimpleTokenType type)
+    {
+        return type is SimpleTokenType.Symbol
+            or SimpleTokenType.Equals
+            or SimpleTokenType.Plus
+            or SimpleTokenType.Minus
+            or SimpleTokenType.LessThan
+            or SimpleTokenType.GreaterThan
+            or SimpleTokenType.Pipe
+            or SimpleTokenType.Ampersand
+            or SimpleTokenType.Percent
+            or SimpleTokenType.Caret
+            or SimpleTokenType.Tilde
+            or SimpleTokenType.Question
+            or SimpleTokenType.Exclamation
+            or SimpleTokenType.Colon
+            or SimpleTokenType.At;
+    }
+
+    /// <summary>
+    /// Gets the character representation of a SimpleTokenType for operator matching.
+    /// Returns null for token types that don't map to a single character.
+    /// </summary>
+    /// <param name="type">The SimpleTokenType to convert.</param>
+    /// <returns>The corresponding character, or null if not applicable.</returns>
+    public static char? GetOperatorChar(SimpleTokenType type)
+    {
+        return type switch
+        {
+            SimpleTokenType.Equals => '=',
+            SimpleTokenType.Plus => '+',
+            SimpleTokenType.Minus => '-',
+            SimpleTokenType.LessThan => '<',
+            SimpleTokenType.GreaterThan => '>',
+            SimpleTokenType.Pipe => '|',
+            SimpleTokenType.Ampersand => '&',
+            SimpleTokenType.Percent => '%',
+            SimpleTokenType.Caret => '^',
+            SimpleTokenType.Tilde => '~',
+            SimpleTokenType.Question => '?',
+            SimpleTokenType.Exclamation => '!',
+            SimpleTokenType.Colon => ':',
+            SimpleTokenType.Hash => '#',
+            SimpleTokenType.At => '@',
+            SimpleTokenType.Slash => '/',
+            SimpleTokenType.Asterisk => '*',
+            SimpleTokenType.Dot => '.',
+            SimpleTokenType.Comma => ',',
+            SimpleTokenType.Semicolon => ';',
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the closing delimiter SimpleTokenType for an opening delimiter SimpleTokenType.
+    /// </summary>
+    /// <param name="opener">The opening delimiter token type.</param>
+    /// <returns>The corresponding closing delimiter token type.</returns>
+    public static SimpleTokenType GetMatchingCloser(SimpleTokenType opener)
+    {
+        return opener switch
+        {
+            SimpleTokenType.OpenBrace => SimpleTokenType.CloseBrace,
+            SimpleTokenType.OpenBracket => SimpleTokenType.CloseBracket,
+            SimpleTokenType.OpenParen => SimpleTokenType.CloseParen,
+            _ => throw new ArgumentException($"Not an opening delimiter: {opener}", nameof(opener))
+        };
+    }
+
+    /// <summary>
+    /// Gets the TokenType for a block opened by the given SimpleTokenType.
+    /// </summary>
+    /// <param name="opener">The opening delimiter token type.</param>
+    /// <returns>The corresponding block TokenType.</returns>
+    public static TokenType GetBlockTokenType(SimpleTokenType opener)
+    {
+        return opener switch
+        {
+            SimpleTokenType.OpenBrace => TokenType.BraceBlock,
+            SimpleTokenType.OpenBracket => TokenType.BracketBlock,
+            SimpleTokenType.OpenParen => TokenType.ParenthesisBlock,
+            _ => throw new ArgumentException($"Not an opening delimiter: {opener}", nameof(opener))
+        };
+    }
+
+    /// <summary>
+    /// Checks if a SimpleTokenType represents an opening delimiter.
+    /// </summary>
+    public static bool IsOpeningDelimiter(SimpleTokenType type)
+    {
+        return type is SimpleTokenType.OpenBrace or SimpleTokenType.OpenBracket or SimpleTokenType.OpenParen;
+    }
+
+    /// <summary>
+    /// Checks if a SimpleTokenType represents a closing delimiter.
+    /// </summary>
+    public static bool IsClosingDelimiter(SimpleTokenType type)
+    {
+        return type is SimpleTokenType.CloseBrace or SimpleTokenType.CloseBracket or SimpleTokenType.CloseParen;
+    }
+
+    #endregion
 }

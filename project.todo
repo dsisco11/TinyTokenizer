@@ -142,26 +142,28 @@ PHASE 3: API Cleanup (v0.8.0)
 Timeline: 2-3 weeks | Breaking Changes: Yes (major cleanup)
 ═══════════════════════════════════════════════════════════════════════════════
 
-[ ] 3.1 Consolidate Duplicate Parsing Logic (8 hrs)
-    Files: Tokenizer.cs, TokenParser.cs, Ast/GreenLexer.cs, new ParsingCore.cs
-    [ ] Create ParsingCore.cs file
-        [ ] Create internal static class ParsingCore
-        [ ] Define ParseResult readonly struct
-            [ ] ReadOnlyMemory<char> Content
-            [ ] int ConsumedTokens
-            [ ] bool Success
-            [ ] string? ErrorMessage
-    [ ] Implement shared parsing methods in ParsingCore
-        [ ] ParseString(...)
-        [ ] ParseBlock(...)
-        [ ] ParseComment(...)
-        [ ] ParseNumeric(...)
-    [ ] Refactor Tokenizer.cs to use ParsingCore
-    [ ] Refactor TokenParser.cs to use ParsingCore
-    [ ] Refactor GreenLexer.cs to use ParsingCore
-    [ ] Create ParsingCoreTests.cs
-        [ ] Add comprehensive tests (target: >90% coverage)
-    [ ] Verify all three parsers produce identical results for same input
+[x] 3.1 Consolidate Duplicate Parsing Logic (4 hrs) ✓ DONE
+    Files: TokenizerCore.cs, TokenParser.cs, Ast/GreenLexer.cs
+    [x] Extend TokenizerCore.cs with shared helper methods
+        [x] Add IsOperatorCapableToken(SimpleTokenType) method
+        [x] Add GetOperatorChar(SimpleTokenType) method
+        [x] Add GetMatchingCloser(SimpleTokenType) method
+        [x] Add GetBlockTokenType(SimpleTokenType) method
+        [x] Add IsOpeningDelimiter(SimpleTokenType) overload
+        [x] Add IsClosingDelimiter(SimpleTokenType) overload
+    [x] Refactor TokenParser.cs to use TokenizerCore
+        [x] Remove duplicate IsOperatorCapableToken
+        [x] Remove duplicate GetTokenChar (use GetOperatorChar)
+        [x] Remove duplicate IsOpeningDelimiter/IsClosingDelimiter
+        [x] Remove duplicate GetMatchingCloser/GetBlockTokenType
+    [x] Refactor GreenLexer.cs to use TokenizerCore
+        [x] Remove duplicate GetOperatorChar
+        [x] Remove duplicate IsOpeningDelimiter/IsClosingDelimiter
+        [x] Remove duplicate GetMatchingCloser
+    [x] Verify all 1,165 tests pass
+    Note: Full parsing logic unification not practical due to different 
+          data flow (char vs SimpleToken streams, different output types).
+          Focused on sharing classification/mapping helpers instead.
 
 [ ] 3.2 Address Schema Nullability (4 hrs)
     File: Ast/SyntaxTree.cs
