@@ -97,6 +97,10 @@ Query.BracketBlock             // All [ ] blocks
 Query.ParenBlock               // All ( ) blocks
 Query.AnyBlock                 // Any block type
 
+// Boundary assertions
+Query.BOF                      // Beginning of file (first token at root)
+Query.EOF                      // End of file (last token at root)
+
 // Filters (use .WithText* when you need to filter an any-kind query)
 Query.AnyIdent.WithText("foo")              // Same as Query.Ident("foo") but on any-kind
 Query.AnyIdent.WithTextContaining("test")   // Contains substring
@@ -111,6 +115,15 @@ Query.AnyIdent.Nth(2)          // Third match (0-indexed)
 // Composition
 Query.AnyIdent | Query.AnyNumeric    // Union (OR)
 Query.AnyIdent & Query.Leaf          // Intersection (AND)
+Query.AnyOf(Query.AnyIdent, Query.AnyNumeric, Query.AnyString)  // Variadic OR
+Query.NoneOf(Query.Ident("if"), Query.Ident("else"))           // Match when none match
+
+// Negation (zero-width)
+Query.Not(Query.Ident("if"))         // Negative lookahead assertion
+Query.AnyIdent.Not()                 // Fluent syntax
+
+// Content matching
+Query.Between(Query.Operator("<"), Query.Operator(">"))  // Match between delimiters
 
 // Sequence combinators
 Query.Sequence(Query.AnyIdent, Query.ParenBlock)  // Match ident then paren block
@@ -127,6 +140,17 @@ Query.Any.Until(Query.Newline)   // Repeat until terminator (not consumed)
 // Lookahead assertions
 Query.AnyIdent.FollowedBy(Query.ParenBlock)     // Positive lookahead
 Query.Ident.NotFollowedBy(Query.ParenBlock)  // Negative lookahead
+
+// Navigation queries (zero-width)
+Query.Sibling(1)                       // Next sibling exists
+Query.Sibling(-1)                      // Previous sibling exists
+Query.Sibling(1, Query.AnyIdent)       // Next sibling is identifier
+Query.AnyIdent.NextSibling()           // Fluent: check next sibling
+Query.AnyIdent.PreviousSibling()       // Fluent: check previous sibling
+Query.Parent(Query.BraceBlock)         // Parent is a brace block
+Query.Ancestor(Query.BraceBlock)       // Any ancestor is a brace block
+Query.BraceBlock.AsParent()            // Fluent: match nodes with this parent
+Query.BraceBlock.AsAncestor()          // Fluent: match nodes with this ancestor
 
 // Exact node reference (when you have a specific RedNode)
 Query.Exact(myRedNode)           // Match this specific node instance

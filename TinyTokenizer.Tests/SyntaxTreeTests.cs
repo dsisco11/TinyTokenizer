@@ -19,7 +19,7 @@ public class SyntaxTreeTests
         
         Assert.NotNull(tree.Root);
         Assert.Equal(5, tree.Width);
-        Assert.Equal("a + b", tree.ToString());
+        Assert.Equal("a + b", tree.Serialize());
     }
     
     [Fact]
@@ -28,7 +28,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("{ x }");
         
         Assert.NotNull(tree.Root);
-        Assert.Equal("{ x }", tree.ToString());
+        Assert.Equal("{ x }", tree.Serialize());
         
         // Root should be a list containing a block
         var root = tree.Root;
@@ -42,7 +42,7 @@ public class SyntaxTreeTests
         
         Assert.NotNull(tree.Root);
         Assert.Equal(0, tree.Width);
-        Assert.Equal("", tree.ToString());
+        Assert.Equal("", tree.Serialize());
     }
     
     #endregion
@@ -172,7 +172,7 @@ public class SyntaxTreeTests
     public void SyntaxTree_Edit_CreatesNewVersion()
     {
         var tree = SyntaxTree.Parse("{ a }");
-        var originalText = tree.ToString();
+        var originalText = tree.Serialize();
         
         tree.Edit(builder =>
         {
@@ -180,14 +180,14 @@ public class SyntaxTreeTests
             return builder.InsertAt(Array.Empty<int>(), 0, ImmutableArray.Create<GreenNode>(newLeaf));
         });
         
-        Assert.NotEqual(originalText, tree.ToString());
+        Assert.NotEqual(originalText, tree.Serialize());
     }
     
     [Fact]
     public void SyntaxTree_Undo_RestoresPrevious()
     {
         var tree = SyntaxTree.Parse("{ a }");
-        var originalText = tree.ToString();
+        var originalText = tree.Serialize();
         
         tree.Edit(builder =>
         {
@@ -198,7 +198,7 @@ public class SyntaxTreeTests
         Assert.True(tree.CanUndo);
         tree.Undo();
         
-        Assert.Equal(originalText, tree.ToString());
+        Assert.Equal(originalText, tree.Serialize());
     }
     
     [Fact]
@@ -212,13 +212,13 @@ public class SyntaxTreeTests
             return builder.InsertAt(Array.Empty<int>(), 0, ImmutableArray.Create<GreenNode>(newLeaf));
         });
         
-        var afterEdit = tree.ToString();
+        var afterEdit = tree.Serialize();
         
         tree.Undo();
         Assert.True(tree.CanRedo);
         
         tree.Redo();
-        Assert.Equal(afterEdit, tree.ToString());
+        Assert.Equal(afterEdit, tree.Serialize());
     }
     
     #endregion
@@ -318,7 +318,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer();
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
     }
     
     [Fact]
@@ -329,7 +329,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer();
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
     }
     
     [Fact]
@@ -341,7 +341,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer(options);
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
     }
     
     [Fact]
@@ -352,7 +352,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer();
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
         
         var stringLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.String);
         Assert.NotNull(stringLeaf);
@@ -381,7 +381,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer(options);
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
         
         var opLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.Operator);
         Assert.NotNull(opLeaf);
@@ -397,7 +397,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer(options);
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
         
         var tagLeaf = tree.Leaves.FirstOrDefault(l => l.Kind == NodeKind.TaggedIdent);
         Assert.NotNull(tagLeaf);
@@ -419,7 +419,7 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer(options);
         var tree = lexer.Parse(source);
         
-        Assert.Equal(source, tree.ToString());
+        Assert.Equal(source, tree.Serialize());
     }
     
     #endregion
@@ -1044,11 +1044,11 @@ public class SyntaxTreeTests
             .Commit();
         
         tree.Undo();
-        Assert.Equal("original", tree.ToString());
+        Assert.Equal("original", tree.Serialize());
         Assert.True(tree.CanRedo);
         
         tree.Redo();
-        Assert.Equal("changed", tree.ToString());
+        Assert.Equal("changed", tree.Serialize());
     }
     
     [Fact]
@@ -1098,11 +1098,11 @@ public class SyntaxTreeTests
         
         tree.SetRoot(newTree.GreenRoot);
         
-        Assert.Equal("replaced", tree.ToString());
+        Assert.Equal("replaced", tree.Serialize());
         Assert.True(tree.CanUndo);
         
         tree.Undo();
-        Assert.Equal("original", tree.ToString());
+        Assert.Equal("original", tree.Serialize());
     }
     
     #endregion

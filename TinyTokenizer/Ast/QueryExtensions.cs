@@ -74,6 +74,90 @@ public static class QueryExtensions
     
     #endregion
     
+    #region Negation
+    
+    /// <summary>
+    /// Creates a zero-width negative lookahead assertion.
+    /// Succeeds when this query does NOT match, without consuming any nodes.
+    /// </summary>
+    /// <remarks>
+    /// Use in sequences to assert absence:
+    /// <code>Query.AnyIdent.Not().Then(Query.AnyIdent)</code>
+    /// </remarks>
+    public static NotQuery Not(this INodeQuery query) => new(query);
+    
+    #endregion
+    
+    #region AnyOf / NoneOf
+    
+    /// <summary>
+    /// Creates a query that matches this query OR any of the provided queries.
+    /// </summary>
+    public static AnyOfQuery Or(this INodeQuery query, params INodeQuery[] others)
+    {
+        var all = new INodeQuery[others.Length + 1];
+        all[0] = query;
+        Array.Copy(others, 0, all, 1, others.Length);
+        return new AnyOfQuery(all);
+    }
+    
+    /// <summary>
+    /// Creates a query that matches if this query AND all others do NOT match.
+    /// Consumes 1 node when all queries fail.
+    /// </summary>
+    public static NoneOfQuery ExceptFor(this INodeQuery query, params INodeQuery[] others)
+    {
+        var all = new INodeQuery[others.Length + 1];
+        all[0] = query;
+        Array.Copy(others, 0, all, 1, others.Length);
+        return new NoneOfQuery(all);
+    }
+    
+    #endregion
+    
+    #region Between
+    
+    /// <summary>
+    /// Creates a query matching content between this query (start) and the end query.
+    /// Consumes all nodes from start through end (inclusive).
+    /// </summary>
+    public static BetweenQuery Between(this INodeQuery start, INodeQuery end, bool inclusive = true) =>
+        new(start, end, inclusive);
+    
+    #endregion
+    
+    #region Navigation
+    
+    /// <summary>
+    /// Creates a query that checks the sibling at the specified offset.
+    /// Zero-width - navigates without consuming the current node.
+    /// </summary>
+    /// <param name="query">The query to use for matching the sibling.</param>
+    /// <param name="offset">Relative offset: +1 for next, -1 for previous.</param>
+    public static SiblingQuery AtSibling(this INodeQuery query, int offset) => new(offset, query);
+    
+    /// <summary>
+    /// Creates a query that checks the next sibling (+1 offset).
+    /// </summary>
+    public static SiblingQuery NextSibling(this INodeQuery query) => new(1, query);
+    
+    /// <summary>
+    /// Creates a query that checks the previous sibling (-1 offset).
+    /// </summary>
+    public static SiblingQuery PreviousSibling(this INodeQuery query) => new(-1, query);
+    
+    /// <summary>
+    /// Creates a query that checks if the parent matches this query.
+    /// </summary>
+    public static ParentQuery AsParent(this INodeQuery query) => new(query);
+    
+    /// <summary>
+    /// Creates a query that checks if any ancestor matches this query.
+    /// </summary>
+    public static AncestorQuery AsAncestor(this INodeQuery query) => new(query);
+    
+    #endregion
+    
     #region Sequence Building (Then)
     
     /// <summary>
