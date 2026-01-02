@@ -11,6 +11,8 @@ public sealed partial class TokenParser
 {
     private readonly TokenizerOptions _options;
     private readonly ImmutableArray<string> _sortedOperators;
+    private readonly bool _hasCSingleLineComment;
+    private readonly bool _hasCMultiLineComment;
 
     /// <summary>
     /// Initializes a new instance of <see cref="TokenParser"/> with default options.
@@ -29,6 +31,10 @@ public sealed partial class TokenParser
         _sortedOperators = options.Operators
             .OrderByDescending(op => op.Length)
             .ToImmutableArray();
+        
+        // Pre-compute comment style flags to avoid LINQ allocation on each TryParseComment call
+        _hasCSingleLineComment = options.CommentStyles.Any(s => s.Start == "//");
+        _hasCMultiLineComment = options.CommentStyles.Any(s => s.Start == "/*");
     }
 
     #region Public API
@@ -538,18 +544,14 @@ public sealed partial class TokenParser
 
     private Token? TryParseComment(SimpleTokenReader reader, SimpleToken slashToken, SimpleToken nextToken)
     {
-        // Check for C-style comments
-        var hasCSingleLine = _options.CommentStyles.Any(s => s.Start == "//");
-        var hasCMultiLine = _options.CommentStyles.Any(s => s.Start == "/*");
-
         // Single-line comment: //
-        if (hasCSingleLine && nextToken.Type == SimpleTokenType.Slash)
+        if (_hasCSingleLineComment && nextToken.Type == SimpleTokenType.Slash)
         {
             return ParseSingleLineComment(reader);
         }
 
         // Multi-line comment: /*
-        if (hasCMultiLine && nextToken.Type == SimpleTokenType.Asterisk)
+        if (_hasCMultiLineComment && nextToken.Type == SimpleTokenType.Asterisk)
         {
             return ParseMultiLineComment(reader);
         }

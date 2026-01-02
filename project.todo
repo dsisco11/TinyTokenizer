@@ -8,14 +8,14 @@ PHASE 1: Quick Wins (v0.6.6)
 Timeline: 1-2 days | Breaking Changes: None
 ═══════════════════════════════════════════════════════════════════════════════
 
-[ ] 1.1 Pre-compute Comment Style Flags (30 min)
+[x] 1.1 Pre-compute Comment Style Flags (30 min) ✓ DONE
     File: TokenParser.cs
-    ├─[ ] Add _hasCSingleLineComment private readonly field
-    ├─[ ] Add _hasCMultiLineComment private readonly field
-    ├─[ ] Initialize fields in constructor from options.CommentStyles
-    ├─[ ] Update TryParseComment to use cached fields instead of LINQ
-    ├─[ ] Verify no LINQ allocation in TryParseComment
-    └─[ ] Benchmark comment-heavy input to confirm improvement
+    ├─[x] Add _hasCSingleLineComment private readonly field
+    ├─[x] Add _hasCMultiLineComment private readonly field
+    ├─[x] Initialize fields in constructor from options.CommentStyles
+    ├─[x] Update TryParseComment to use cached fields instead of LINQ
+    ├─[x] Verify no LINQ allocation in TryParseComment
+    └─[x] Benchmark comment-heavy input to confirm improvement
 
 [ ] 1.2 Add IFormattable to Token (1 hr)
     File: Token.cs
