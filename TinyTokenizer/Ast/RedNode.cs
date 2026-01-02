@@ -16,6 +16,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     private readonly GreenNode _green;
     private readonly RedNode? _parent;
     private readonly int _position;
+    private readonly int _siblingIndex;
 
     /// <summary>
     /// Gets the debugger display string for this node.
@@ -41,11 +42,16 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Creates a new red node wrapping a green node.
     /// </summary>
-    internal RedNode(GreenNode green, RedNode? parent, int position)
+    /// <param name="green">The underlying green node.</param>
+    /// <param name="parent">The parent red node, or null if this is the root.</param>
+    /// <param name="position">The absolute position in source text.</param>
+    /// <param name="siblingIndex">The index of this node within its parent's children, or -1 if root.</param>
+    internal RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1)
     {
         _green = green;
         _parent = parent;
         _position = position;
+        _siblingIndex = siblingIndex;
     }
     
     /// <summary>The underlying green node containing the actual data.</summary>
@@ -94,7 +100,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
             return null;
         
         var childPosition = _position + _green.GetSlotOffset(slot);
-        var redChild = (T)greenChild.CreateRed(this, childPosition);
+        var redChild = (T)greenChild.CreateRed(this, childPosition, slot);
         
         Interlocked.CompareExchange(ref field, redChild, null);
         return field;
@@ -177,21 +183,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Gets the index of this node within its parent's children, or -1 if root.
     /// </summary>
-    public int SiblingIndex
-    {
-        get
-        {
-            if (_parent == null)
-                return -1;
-            
-            for (int i = 0; i < _parent.SlotCount; i++)
-            {
-                if (ReferenceEquals(_parent.GetChild(i), this))
-                    return i;
-            }
-            return -1;
-        }
-    }
+    public int SiblingIndex => _siblingIndex;
     
     /// <summary>
     /// Gets the next sibling node, or null if this is the last child.

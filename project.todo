@@ -36,15 +36,15 @@ Timeline: 1-2 days | Breaking Changes: None
     [x] Verify single capacity allocation instead of multiple resizes
     [x] Run all parsing tests to confirm no regressions
 
-[ ] 1.4 Cache SiblingIndex in RedNode (1 hr)
+[x] 1.4 Cache SiblingIndex in RedNode (1 hr) ✓ DONE
     File: Ast/RedNode.cs
-    [ ] Add private readonly int _siblingIndex field
-    [ ] Update internal constructor to accept siblingIndex parameter (default -1)
-    [ ] Update GetRedChild<T> to pass slot index when creating red child
-    [ ] Update CreateRed method signature to accept siblingIndex
-    [ ] Change SiblingIndex property to return _siblingIndex directly
-    [ ] Verify O(1) access time
-    [ ] Test NextSibling() and PreviousSibling() still work correctly
+    [x] Add private readonly int _siblingIndex field
+    [x] Update internal constructor to accept siblingIndex parameter (default -1)
+    [x] Update GetRedChild<T> to pass slot index when creating red child
+    [x] Update CreateRed method signature to accept siblingIndex
+    [x] Change SiblingIndex property to return _siblingIndex directly
+    [x] Verify O(1) access time
+    [x] Test NextSibling() and PreviousSibling() still work correctly
 
 [ ] 1.5 Phase 1 Release
     [ ] Run full test suite (dotnet test)

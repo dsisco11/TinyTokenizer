@@ -72,8 +72,8 @@ internal sealed record GreenList : GreenContainer
     }
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position)
-        => new RedList(this, parent, position);
+    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1)
+        => new RedList(this, parent, position, siblingIndex);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)
@@ -149,8 +149,8 @@ public sealed class RedList : RedNode
     /// <summary>
     /// Creates a new red list.
     /// </summary>
-    internal RedList(GreenList green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal RedList(GreenList green, RedNode? parent, int position, int siblingIndex = -1)
+        : base(green, parent, position, siblingIndex)
     {
     }
     
@@ -176,7 +176,7 @@ public sealed class RedList : RedNode
             return null;
         
         var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition);
+        var redChild = greenChild.CreateRed(this, childPosition, index);
         
         Interlocked.CompareExchange(ref _children[index], redChild, null);
         return _children[index];

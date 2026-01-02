@@ -82,8 +82,8 @@ internal sealed record GreenSyntaxNode : GreenContainer
     }
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position) =>
-        SyntaxRedFactory.Create(this, parent, position);
+    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1) =>
+        SyntaxRedFactory.Create(this, parent, position, siblingIndex);
     
     #region Structural Sharing Mutations
     
@@ -138,10 +138,10 @@ internal static class SyntaxRedFactory
     /// <summary>
     /// Creates a red syntax node of the appropriate type for the green node.
     /// </summary>
-    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position)
+    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position, int siblingIndex = -1)
     {
         var factory = GetOrCreateFactory(green.RedType);
-        var context = new SyntaxNode.CreationContext(green, parent, position);
+        var context = new SyntaxNode.CreationContext(green, parent, position, siblingIndex);
         return factory(context);
     }
     

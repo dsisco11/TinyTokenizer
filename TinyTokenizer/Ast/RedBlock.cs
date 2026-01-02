@@ -24,8 +24,8 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1)
+        : base(green, parent, position, siblingIndex)
     {
     }
     
@@ -122,7 +122,7 @@ public sealed class RedBlock : RedNode
         
         // Compute position and create red child
         var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition);
+        var redChild = greenChild.CreateRed(this, childPosition, index);
         
         // Cache with thread-safe exchange
         Interlocked.CompareExchange(ref _children[index], redChild, null);
