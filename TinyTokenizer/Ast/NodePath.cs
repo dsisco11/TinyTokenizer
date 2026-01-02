@@ -111,6 +111,32 @@ public readonly struct NodePath : IEquatable<NodePath>
     }
     
     /// <summary>
+    /// Finds the common ancestor path between this path and another.
+    /// Returns the longest shared prefix of both paths.
+    /// </summary>
+    public NodePath CommonAncestor(NodePath other)
+    {
+        int minLen = Math.Min(Depth, other.Depth);
+        int commonLen = 0;
+        
+        for (int i = 0; i < minLen; i++)
+        {
+            if (Indices[i] != other.Indices[i])
+                break;
+            commonLen++;
+        }
+        
+        if (commonLen == 0)
+            return Root;
+        if (commonLen == Depth)
+            return this;
+        if (commonLen == other.Depth)
+            return other;
+        
+        return new NodePath(Indices.Take(commonLen).ToImmutableArray());
+    }
+    
+    /// <summary>
     /// Gets the index at the specified depth.
     /// </summary>
     public int this[int depth] => Indices[depth];

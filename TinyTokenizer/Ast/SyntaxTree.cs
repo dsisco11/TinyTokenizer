@@ -262,16 +262,65 @@ public class SyntaxTree : IFormattable
         return new SyntaxTree(boundRoot, schema);
     }
     
+    /// <summary>
+    /// Re-applies syntax binding to this tree in-place after mutations.
+    /// This is called automatically by SyntaxEditor.Commit().
+    /// </summary>
+    internal void Rebind()
+    {
+        if (Schema == null)
+            return;
+        
+        var definitions = Schema.SyntaxDefinitions;
+        if (definitions.IsDefaultOrEmpty)
+            return;
+        
+        var binder = new SyntaxBinder(Schema);
+        _greenRoot = binder.Bind(_greenRoot);
+        _redRoot = null; // Invalidate red cache
+    }
+    
+    /// <summary>
+    /// Re-applies syntax binding to a subtree rooted at the specified path.
+    /// More efficient than full rebinding for localized edits.
+    /// </summary>
+    /// <param name="path">Path to the subtree root to rebind.</param>
+    internal void RebindAt(NodePath path)
+    {
+        if (Schema == null)
+            return;
+        
+        var definitions = Schema.SyntaxDefinitions;
+        if (definitions.IsDefaultOrEmpty)
+            return;
+        
+        // For root path or shallow paths, just do a full rebind
+        // The overhead of navigating isn't worth it for small trees
+        if (path.IsRoot || path.Depth <= 1)
+        {
+            Rebind();
+            return;
+        }
+        
+        var binder = new SyntaxBinder(Schema);
+        _greenRoot = binder.BindAtPath(_greenRoot, path);
+        _redRoot = null; // Invalidate red cache
+    }
+    
     #endregion
     
     #region Editor
     
     /// <summary>
     /// Creates a new SyntaxEditor for making batched mutations to this tree.
+    /// If the tree has an attached schema, uses its tokenizer options automatically
+    /// so inserted text is lexed consistently with the original tree.
     /// </summary>
+    /// <param name="options">Optional tokenizer options override. If null, uses the schema's options (if available) or TokenizerOptions.Default.</param>
     public SyntaxEditor CreateEditor(TokenizerOptions? options = null)
     {
-        return new SyntaxEditor(this, options);
+        var effectiveOptions = options ?? Schema?.ToTokenizerOptions() ?? TokenizerOptions.Default;
+        return new SyntaxEditor(this, effectiveOptions);
     }
     
     #endregion

@@ -1740,6 +1740,30 @@ public class SyntaxEditorTests
         Assert.Contains("before\n// @tag", result);
     }
     
+    [Fact]
+    public void Insert_WithSchemaCommentStyles_InsertsComment()
+    {
+        // Test that comment insertion works when schema has comment styles
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.Parse("before\n@tag \"value\"", schema);
+        
+        tree.CreateEditor()
+            .Insert(Q.Syntax<TestTaggedNode>().Before(), "// comment\n")
+            .Commit();
+        
+        var result = tree.Serialize();
+        // The comment should be inserted before @tag (after "before\n")
+        Assert.Contains("// comment", result);
+        Assert.Contains("@tag \"value\"", result);
+    }
+    
     /// <summary>
     /// Test syntax node for Edit tests.
     /// </summary>

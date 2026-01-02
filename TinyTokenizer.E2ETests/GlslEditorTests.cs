@@ -593,12 +593,9 @@ void main() {
         var serialized = NormalizeLineEndings(tree.Root.ToString());
         Assert.Contains("@import \"utils.glsl\"", serialized);
         
-        // Re-parse the modified content to apply syntax binding
-        // (syntax binding only happens at parse time, not during edits)
-        var reparsedTree = SyntaxTree.Parse(serialized, schema);
-        
-        // Now verify the new import can be queried as a GlImportNode
-        var importsAfter = reparsedTree.Select(importQuery).Cast<GlImportNode>().ToList();
+        // Incremental rebinding happens automatically in Commit(),
+        // so the new import is immediately queryable without re-parsing
+        var importsAfter = tree.Select(importQuery).Cast<GlImportNode>().ToList();
         Assert.Single(importsAfter);
         
         var insertedImport = importsAfter[0];

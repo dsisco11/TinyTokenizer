@@ -745,11 +745,19 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Applies all pending edits atomically.
     /// The tree's undo stack is updated, allowing Undo() to revert.
+    /// Automatically performs incremental syntax rebinding at the lowest common ancestor
+    /// of all affected paths if the tree has a schema with syntax definitions.
     /// </summary>
     public void Commit()
     {
         if (_edits.Count == 0)
             return;
+        
+        // Collect affected paths before sorting (for incremental rebinding)
+        var affectedPaths = _edits
+            .Select(e => e.AffectedPath)
+            .Where(p => !p.IsRoot)
+            .ToList();
         
         // Sort edits by document position descending (process from end to start).
         // For same position, use sequence number descending (later queued edits first for same position).
@@ -776,6 +784,26 @@ public sealed class SyntaxEditor
         
         _edits.Clear();
         _sequenceNumber = 0;
+        
+        // Perform incremental rebinding at the lowest common ancestor of all affected paths
+        if (affectedPaths.Count > 0)
+        {
+            // Find LCA of all affected paths
+            var lca = affectedPaths[0];
+            for (int i = 1; i < affectedPaths.Count; i++)
+            {
+                lca = lca.CommonAncestor(affectedPaths[i]);
+                if (lca.IsRoot)
+                    break; // Already at root, no point continuing
+            }
+            
+            _tree.RebindAt(lca);
+        }
+        else
+        {
+            // All edits affect root level - do full rebind
+            _tree.Rebind();
+        }
     }
     
     /// <summary>
@@ -799,6 +827,12 @@ internal abstract class PendingEdit
     public abstract int Position { get; }
     
     /// <summary>
+    /// The path to the parent node affected by this edit.
+    /// Used for incremental rebinding.
+    /// </summary>
+    public abstract NodePath AffectedPath { get; }
+    
+    /// <summary>
     /// Sequence number for stable sorting of same-position edits.
     /// </summary>
     public int SequenceNumber { get; init; }
@@ -818,6 +852,8 @@ internal sealed class InsertEdit : PendingEdit
     }
     
     public override int Position => _insertPos.Position;
+    
+    public override NodePath AffectedPath => _insertPos.ParentPath;
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
@@ -844,6 +880,8 @@ internal sealed class InsertNodesEdit : PendingEdit
     
     public override int Position => _insertPos.Position;
     
+    public override NodePath AffectedPath => _insertPos.ParentPath;
+    
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
         return builder.InsertAt(_insertPos.ParentPath.ToArray(), _insertPos.ChildIndex, _nodes);
@@ -862,6 +900,8 @@ internal sealed class RemoveEdit : PendingEdit
     }
     
     public override int Position => _position;
+    
+    public override NodePath AffectedPath => _path.Parent();
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
@@ -891,6 +931,8 @@ internal sealed class ReplaceEdit : PendingEdit
     }
     
     public override int Position => _position;
+    
+    public override NodePath AffectedPath => _path.Parent();
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {
@@ -964,6 +1006,8 @@ internal sealed class ReplaceNodesEdit : PendingEdit
     }
     
     public override int Position => _position;
+    
+    public override NodePath AffectedPath => _path.Parent();
     
     public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
     {

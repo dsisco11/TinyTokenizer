@@ -44,6 +44,71 @@ public sealed class SyntaxBinder
     }
     
     /// <summary>
+    /// Incrementally binds a subtree at the specified path.
+    /// More efficient than full binding for localized changes.
+    /// </summary>
+    /// <param name="root">The root of the entire tree.</param>
+    /// <param name="path">Path to the subtree to rebind.</param>
+    /// <returns>A new tree with only the affected subtree rebound.</returns>
+    internal GreenNode BindAtPath(GreenNode root, NodePath path)
+    {
+        if (path.IsRoot)
+            return Bind(root);
+        
+        return BindAtPathRecursive(root, path, 0);
+    }
+    
+    /// <summary>
+    /// Recursively navigates to the target path and rebinds the subtree.
+    /// </summary>
+    private GreenNode BindAtPathRecursive(GreenNode node, NodePath path, int depth)
+    {
+        // Reached the target depth - rebind this subtree
+        if (depth >= path.Depth)
+        {
+            return BindNode(node);
+        }
+        
+        // Navigate deeper
+        var childIndex = path[depth];
+        if (childIndex >= node.SlotCount)
+            return node; // Invalid path, return unchanged
+        
+        var child = node.GetSlot(childIndex);
+        if (child == null)
+            return node; // Invalid path, return unchanged
+        
+        // Recursively bind at the target child
+        var newChild = BindAtPathRecursive(child, path, depth + 1);
+        
+        // If child unchanged, return original node
+        if (ReferenceEquals(newChild, child))
+            return node;
+        
+        // Rebuild node with the updated child
+        return RebuildNodeWithUpdatedChild(node, childIndex, newChild);
+    }
+    
+    /// <summary>
+    /// Rebuilds a node with a single updated child.
+    /// </summary>
+    private static GreenNode RebuildNodeWithUpdatedChild(GreenNode original, int childIndex, GreenNode newChild)
+    {
+        var builder = ImmutableArray.CreateBuilder<GreenNode>(original.SlotCount);
+        for (int i = 0; i < original.SlotCount; i++)
+        {
+            var slot = original.GetSlot(i);
+            if (slot != null)
+            {
+                builder.Add(i == childIndex ? newChild : slot);
+            }
+        }
+        
+        var newChildren = builder.ToImmutable();
+        return RebuildNode(original, newChildren);
+    }
+    
+    /// <summary>
     /// Binds a single node and its descendants.
     /// </summary>
     private GreenNode BindNode(GreenNode node)
