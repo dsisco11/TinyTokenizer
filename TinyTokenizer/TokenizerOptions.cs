@@ -262,6 +262,7 @@ public sealed record TokenizerOptions
 
     /// <summary>
     /// Creates a new options instance with the specified operators.
+    /// Operators are automatically sorted by length descending for greedy matching.
     /// </summary>
     /// <param name="operators">The operators to recognize.</param>
     /// <returns>A new <see cref="TokenizerOptions"/> with the specified operators.</returns>

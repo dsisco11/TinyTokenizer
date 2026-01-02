@@ -112,16 +112,19 @@ Timeline: 1-2 weeks | Breaking Changes: Minor (internal APIs only)
     [x] Update all tests with position assertions
     [ ] Document breaking change in CHANGELOG
 
-[ ] 2.4 Pre-sort Operators in TokenizerOptions (1 hr)
-    File: TokenizerOptions.cs
-    [ ] Change Operators property type: ImmutableHashSet<string> → ImmutableArray<string>
-    [ ] Update Default static property initialization
-    [ ] Update WithOperators method
-        [ ] Apply Distinct() to remove duplicates
-        [ ] Apply OrderByDescending(op => op.Length)
-        [ ] Convert to ImmutableArray
-    [ ] Remove sorting from TokenParser constructor
-    [ ] Verify existing public API behavior unchanged
+[x] 2.4 Unify Operator Matching with OperatorTrie (1 hr) ✓ DONE
+    Files: Tokenizer.cs, Ast/GreenLexer.cs
+    [x] Update Tokenizer.cs to use OperatorTrie instead of sorted array
+        [x] Replace _sortedOperators field with _operatorTrie
+        [x] Build trie in constructor from options.Operators
+        [x] Update TryParseOperator to use trie-based O(k) matching
+    [x] Update GreenLexer.cs to use OperatorTrie
+        [x] Replace _sortedOperators field with _operatorTrie
+        [x] Build trie in constructor
+        [x] Update TryParseOperator to use trie-based matching
+        [x] Use stackalloc for character buffer (zero allocation)
+    [x] Keep TokenizerOptions.Operators as ImmutableHashSet (no breaking change)
+    [x] Verify all tests pass
 
 [ ] 2.5 Phase 2 Release
     [ ] Run full test suite
