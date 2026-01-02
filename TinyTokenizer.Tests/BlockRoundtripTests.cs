@@ -701,4 +701,422 @@ public class BlockRoundtripTests
     }
 
     #endregion
+
+    #region GLSL Real-World Tests
+
+    private static TokenizerOptions GlslOptions => TokenizerOptions.Default
+        .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+        .WithOperators(CommonOperators.CFamily)
+        .WithTagPrefixes('#', '@');
+
+    [Fact]
+    public void Glsl_SimpleForLoop_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    for (int i = 0; i < 10; i++) {
+        color += vec4(1.0);
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_NestedForLoops_RoundtripsCorrectly()
+    {
+        var source = @"void processMatrix() {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            mat[i][j] = i * 4 + j;
+        }
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_TripleNestedLoops_RoundtripsCorrectly()
+    {
+        var source = @"void process3D() {
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
+            for (int z = 0; z < depth; z++) {
+                float value = texture(volumeTex, vec3(x, y, z) / resolution).r;
+                sum += value;
+            }
+        }
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_MultipleVariableDeclarations_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    float x = 1.0;
+    float y = 2.0;
+    float z = 3.0;
+    vec3 position = vec3(x, y, z);
+    vec4 color = vec4(position, 1.0);
+    mat4 transform = mat4(1.0);
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_StructWithFields_RoundtripsCorrectly()
+    {
+        var source = @"struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+struct Light {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_NestedStructs_RoundtripsCorrectly()
+    {
+        var source = @"struct Inner {
+    float value;
+};
+
+struct Outer {
+    Inner data[4];
+    int count;
+};
+
+void main() {
+    Outer obj;
+    for (int i = 0; i < 4; i++) {
+        obj.data[i].value = float(i);
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_FieldAccessChain_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    float val = object.material.properties.ambient.r;
+    object.transform.matrix[0][0] = 1.0;
+    output.color.rgb = input.color.rgb * material.diffuse.rgb;
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_ComplexIndentation_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+
+uniform sampler2D tex;
+in vec2 uv;
+out vec4 fragColor;
+
+void main() {
+    vec4 color = vec4(0.0);
+    
+    // Nested conditionals with loops
+    if (uv.x > 0.5) {
+        for (int i = 0; i < 4; i++) {
+            if (i % 2 == 0) {
+                color += texture(tex, uv + vec2(float(i) * 0.1, 0.0));
+            } else {
+                color -= texture(tex, uv - vec2(float(i) * 0.1, 0.0));
+            }
+        }
+    }
+    
+    fragColor = color;
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_MixedCommentsAndCode_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+
+/* 
+ * Multi-line comment
+ * describing the shader
+ */
+
+// Single line comment
+uniform float time;
+
+void main() {
+    // Loop with inline comment
+    for (int i = 0; i < 10; i++) { // iterate 10 times
+        /* process each iteration */
+        value += float(i);
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_WhileLoopWithBreakContinue_RoundtripsCorrectly()
+    {
+        var source = @"void search() {
+    int i = 0;
+    while (i < 100) {
+        if (data[i] == target) {
+            result = i;
+            break;
+        }
+        if (data[i] < 0) {
+            i++;
+            continue;
+        }
+        process(data[i]);
+        i++;
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_SwitchStatement_RoundtripsCorrectly()
+    {
+        var source = @"void selectColor(int mode) {
+    switch (mode) {
+        case 0:
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+            break;
+        case 1:
+            color = vec4(0.0, 1.0, 0.0, 1.0);
+            break;
+        case 2:
+            color = vec4(0.0, 0.0, 1.0, 1.0);
+            break;
+        default:
+            color = vec4(1.0);
+            break;
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_ArrayInitializersAndAccess_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    vec2 offsets[9] = vec2[](
+        vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0),
+        vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0),
+        vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0)
+    );
+    
+    for (int i = 0; i < 9; i++) {
+        sum += texture(tex, uv + offsets[i] * texelSize) * weights[i % 5];
+    }
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_FunctionCallsWithNestedParens_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    float result = max(min(pow(abs(sin(time * 2.0)), 2.0), 1.0), 0.0);
+    vec3 normal = normalize(cross(dFdx(position), dFdy(position)));
+    float attenuation = 1.0 / (constant + linear * distance + quadratic * (distance * distance));
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_CompleteFragmentShader_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+
+// Input from vertex shader
+in vec3 FragPos;
+in vec3 Normal;
+in vec2 TexCoords;
+
+// Output
+out vec4 FragColor;
+
+// Uniforms
+uniform sampler2D diffuseMap;
+uniform sampler2D specularMap;
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform vec3 lightColor;
+
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+uniform Material material;
+
+void main() {
+    // Ambient
+    vec3 ambient = lightColor * material.ambient * texture(diffuseMap, TexCoords).rgb;
+    
+    // Diffuse
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = lightColor * (diff * material.diffuse) * texture(diffuseMap, TexCoords).rgb;
+    
+    // Specular
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(-lightDir, norm);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    vec3 specular = lightColor * (spec * material.specular) * texture(specularMap, TexCoords).rgb;
+    
+    // Combine
+    vec3 result = ambient + diffuse + specular;
+    FragColor = vec4(result, 1.0);
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_MultipleFunctionsWithSharedState_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+
+// Shared state
+vec3 globalLight = vec3(0.0);
+float totalIntensity = 0.0;
+
+void addPointLight(vec3 pos, vec3 color, float intensity) {
+    for (int i = 0; i < 4; i++) {
+        float falloff = 1.0 / (1.0 + float(i) * 0.1);
+        globalLight += color * intensity * falloff;
+        totalIntensity += intensity * falloff;
+    }
+}
+
+void addDirectionalLight(vec3 dir, vec3 color) {
+    float factor = max(dot(normal, -dir), 0.0);
+    globalLight += color * factor;
+}
+
+void main() {
+    // Reset
+    globalLight = vec3(0.0);
+    totalIntensity = 0.0;
+    
+    // Add lights
+    for (int i = 0; i < numLights; i++) {
+        if (lights[i].type == 0) {
+            addPointLight(lights[i].position, lights[i].color, lights[i].intensity);
+        } else {
+            addDirectionalLight(lights[i].direction, lights[i].color);
+        }
+    }
+    
+    // Output
+    fragColor = vec4(globalLight / max(totalIntensity, 1.0), 1.0);
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_MacroDirectives_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+#define PI 3.14159265359
+#define TWO_PI (PI * 2.0)
+#define SAMPLE_COUNT 16
+
+void main() {
+    float angle = 0.0;
+    vec3 result = vec3(0.0);
+    
+    for (int i = 0; i < SAMPLE_COUNT; i++) {
+        angle = TWO_PI * float(i) / float(SAMPLE_COUNT);
+        vec2 offset = vec2(cos(angle), sin(angle)) * radius;
+        result += texture(tex, uv + offset).rgb;
+    }
+    
+    result /= float(SAMPLE_COUNT);
+    fragColor = vec4(result, 1.0);
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_TernaryOperatorsNested_RoundtripsCorrectly()
+    {
+        var source = @"void main() {
+    float x = condition1 ? value1 : (condition2 ? value2 : value3);
+    vec3 color = isDay 
+        ? (isSunny ? sunColor : cloudColor)
+        : (isMoonVisible ? moonColor : starColor);
+    int index = a > b ? (b > c ? 2 : 1) : (a > c ? 1 : 0);
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_BlankLinesPreserved_RoundtripsCorrectly()
+    {
+        var source = @"#version 330 core
+
+
+uniform float time;
+
+
+void helper() {
+
+    // Some code
+    
+}
+
+
+void main() {
+    
+    vec4 color = vec4(0.0);
+    
+    
+    color.r = sin(time);
+    
+    
+    fragColor = color;
+    
+}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_TabsAndSpacesMixed_RoundtripsCorrectly()
+    {
+        var source = "void main() {\n\tvec4 color = vec4(0.0);\n    for (int i = 0; i < 4; i++) {\n\t    color += texture(tex, uv);\n    \t}\n\tfragColor = color;\n}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_WindowsLineEndings_RoundtripsCorrectly()
+    {
+        var source = "void main() {\r\n    for (int i = 0; i < 4; i++) {\r\n        color += vec4(1.0);\r\n    }\r\n}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    [Fact]
+    public void Glsl_MixedLineEndings_RoundtripsCorrectly()
+    {
+        var source = "void main() {\n    // Unix line\r\n    // Windows line\r    // Old Mac line\n}";
+        AssertRoundtrip(source, GlslOptions);
+    }
+
+    #endregion
 }
