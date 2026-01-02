@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace TinyTokenizer;
 
@@ -9,7 +10,7 @@ namespace TinyTokenizer;
 /// Tokens are immutable and reference content via <see cref="ReadOnlyMemory{T}"/> to avoid copying.
 /// Properties use defaults to support parameterless construction via new().
 /// </summary>
-public abstract record Token
+public abstract record Token : ITextSerializable
 {
     /// <summary>
     /// Gets or sets the token content as memory.
@@ -30,6 +31,18 @@ public abstract record Token
     /// Gets the content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.
     /// </summary>
     public ReadOnlySpan<char> ContentSpan => Content.Span;
+
+    /// <inheritdoc />
+    public virtual void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
+
+    /// <inheritdoc />
+    public virtual string ToText() => new(Content.Span);
+
+    /// <summary>
+    /// Returns a debug representation of this token.
+    /// Use <see cref="ToText"/> to get the serialized text content.
+    /// </summary>
+    public override string ToString() => $"{Type}@{Position}";
 }
 
 #endregion

@@ -10,7 +10,7 @@ namespace TinyTokenizer.Ast;
 /// across different tree versions for structural sharing during mutations.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-internal abstract record GreenNode : IFormattable
+internal abstract record GreenNode : IFormattable, ITextSerializable
 {
     /// <summary>
     /// Gets the debugger display string for this node.
@@ -141,9 +141,10 @@ internal abstract record GreenNode : IFormattable
     }
     
     /// <summary>
-    /// Returns the text content of this node.
+    /// Returns a debug representation of this node.
+    /// Use <see cref="ToText"/> to get the serialized text content.
     /// </summary>
-    public override string ToString() => ToText();
+    public override string ToString() => ToString("D", null);
     
     #endregion
 }

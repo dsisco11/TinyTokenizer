@@ -15,7 +15,8 @@ public readonly record struct SimpleToken(
     SimpleTokenType Type,
     ReadOnlyMemory<char> Content,
     long Position
-) : IParsable<SimpleToken>,
+) : ITextSerializable,
+    IParsable<SimpleToken>,
     ISpanParsable<SimpleToken>,
     IFormattable,
     ISpanFormattable,
@@ -161,7 +162,8 @@ public readonly record struct SimpleToken(
     /// </summary>
     /// <param name="format">
     /// Format string:
-    /// - null or "G": "Type:Content@Position"
+    /// - null or "D": Debug format "Type@Position"
+    /// - "G": General format "Type:Content@Position"
     /// - "S": Short format "Type@Position"
     /// - "C": Content only
     /// - "T": Type only
@@ -171,7 +173,8 @@ public readonly record struct SimpleToken(
     {
         return format?.ToUpperInvariant() switch
         {
-            null or "" or "G" => $"{Type}:{Content}@{Position}",
+            null or "" or "D" => $"{Type}@{Position}",
+            "G" => $"{Type}:{Content}@{Position}",
             "S" => $"{Type}@{Position}",
             "C" => Content.ToString(),
             "T" => Type.ToString(),
@@ -179,8 +182,21 @@ public readonly record struct SimpleToken(
         };
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns a debug representation of this token.
+    /// Use <see cref="ToText"/> to get the serialized text content.
+    /// </summary>
     public override string ToString() => ToString(null, null);
+
+    #endregion
+
+    #region ITextSerializable
+
+    /// <inheritdoc />
+    public void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
+
+    /// <inheritdoc />
+    public string ToText() => new(Content.Span);
 
     #endregion
 

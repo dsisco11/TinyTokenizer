@@ -9,7 +9,7 @@ namespace TinyTokenizer.Ast;
 /// They provide parent links and computed absolute positions.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public abstract class RedNode : IFormattable
+public abstract class RedNode : IFormattable, ITextSerializable
 {
     private readonly GreenNode _green;
     private readonly RedNode? _parent;
@@ -316,9 +316,10 @@ public abstract class RedNode : IFormattable
     public string ToText() => _green.ToText();
     
     /// <summary>
-    /// Returns the text content of this node.
+    /// Returns a debug representation of this node.
+    /// Use <see cref="ToText"/> to get the serialized text content.
     /// </summary>
-    public override string ToString() => ToText();
+    public override string ToString() => ToString("D", null);
     
     #endregion
 }

@@ -526,11 +526,11 @@ public class QueryCombinatorTests
         // Verify content
         var importNode = imports[0] as ImportSyntax;
         Assert.NotNull(importNode);
-        Assert.Contains("@import", importNode!.ToString());
+        Assert.Contains("@import", importNode!.ToText());
         
         var directiveNode = directivesList[0] as DirectiveSyntax;
         Assert.NotNull(directiveNode);
-        Assert.Contains("#version", directiveNode!.ToString());
+        Assert.Contains("#version", directiveNode!.ToText());
     }
     
     private static string DumpGreenTree(GreenNode node, int indent)
@@ -747,7 +747,7 @@ public class QueryCombinatorTests
         foreach (var child in root.Children)
         {
             if (query.TryMatch(child, out _))
-                matches.Add(child.ToString().Trim());
+                matches.Add(child.ToText().Trim());
         }
         
         Assert.Equal(3, matches.Count);
@@ -810,7 +810,7 @@ public class QueryCombinatorTests
         var matches = Query.BOF.Select(tree).ToList();
         
         Assert.Single(matches);
-        Assert.StartsWith("foo", matches[0].ToString());
+        Assert.StartsWith("foo", matches[0].ToText());
     }
     
     [Fact]
@@ -868,7 +868,7 @@ public class QueryCombinatorTests
         var matches = Query.EOF.Select(tree).ToList();
         
         Assert.Single(matches);
-        Assert.Equal("baz", matches[0].ToString());
+        Assert.Equal("baz", matches[0].ToText());
     }
     
     [Fact]
@@ -909,7 +909,7 @@ public class QueryCombinatorTests
         
         // Find the open angle bracket
         var children = root.Children.ToList();
-        var openAngle = children.FirstOrDefault(c => c.ToString().Trim() == "<");
+        var openAngle = children.FirstOrDefault(c => c.ToText().Trim() == "<");
         
         if (openAngle != null)
         {
@@ -1280,7 +1280,7 @@ public class QueryCombinatorTests
         
         var bofMatches = Query.BOF.Select(root).ToList();
         Assert.Single(bofMatches);
-        Assert.StartsWith("first", bofMatches[0].ToString());
+        Assert.StartsWith("first", bofMatches[0].ToText());
     }
     
     #endregion
@@ -1293,7 +1293,7 @@ public class QueryCombinatorTests
         var tree = Parse("< a b c >");
         var root = tree.Root;
         var children = root.Children.ToList();
-        var openAngle = children.First(c => c.ToString().Trim() == "<");
+        var openAngle = children.First(c => c.ToText().Trim() == "<");
         
         var queryInclusive = Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: true);
         var queryExclusive = Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: false);
@@ -1323,7 +1323,7 @@ public class QueryCombinatorTests
         var tree = Parse("| content |");
         var root = tree.Root;
         var children = root.Children.ToList();
-        var firstPipe = children.FirstOrDefault(c => c.ToString().Trim() == "|");
+        var firstPipe = children.FirstOrDefault(c => c.ToText().Trim() == "|");
         
         if (firstPipe != null)
         {

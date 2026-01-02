@@ -99,7 +99,7 @@ public class GlslEditorTests
         /// <summary>
         /// Gets the arguments as a string.
         /// </summary>
-        public string ArgumentsText => string.Concat(Arguments.Select(a => a.ToString()));
+        public string ArgumentsText => string.Concat(Arguments.Select(a => a.ToText()));
     }
     
     /// <summary>
@@ -223,7 +223,7 @@ void main() {
         
         Assert.NotNull(versionDirective);
         // Roslyn-style: ToString() includes trailing trivia (space before next token)
-        Assert.Equal("#version 330 core\n", NormalizeLineEndings(versionDirective!.ToString()));
+        Assert.Equal("#version 330 core\n", NormalizeLineEndings(versionDirective!.ToText()));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ void main() {
         var importDirective = tree.Select(importDirectiveQuery).FirstOrDefault() as GlImportNode;
         Assert.NotNull(importDirective);
         // Roslyn-style: ToString() includes trailing trivia (space before next token)
-        Assert.Equal("\n@import \"my-include.glsl\"\n", NormalizeLineEndings(importDirective!.ToString()));
+        Assert.Equal("\n@import \"my-include.glsl\"\n", NormalizeLineEndings(importDirective!.ToText()));
     }
     
     #endregion
@@ -258,7 +258,7 @@ void main() {
             .Insert(mainFuncQuery.Before(), "// Entry point for the fragment shader\r\n")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Roslyn-style: insertion goes BEFORE target's leading trivia.
         // The blank line (leading trivia of 'void') stays with 'void', so comment appears before the blank line.
@@ -280,7 +280,7 @@ void main() {
             .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify insertion appears at inner start of main's body (after opening brace)
         Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
@@ -301,7 +301,7 @@ void main() {
             .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify insertion appears at inner end of main's body, showing context (last statement + inserted + closing brace)
         // The exact whitespace may vary, so we check the key sequence
@@ -326,7 +326,7 @@ void main() {
             .Insert(mainQuery.After(), "\n// End of main function\n")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify insertion appears after main's closing brace
         // Block trailing trivia (newline after }) comes before the inserted content
@@ -348,7 +348,7 @@ void main() {
             .Insert(Query.Syntax<GlDirectiveNode>().Named("version").After(), "\n@import \"my-include.glsl\"")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify insertion appears after #version directive
         // The sample already contains @import, so we now have TWO imports
@@ -370,7 +370,7 @@ void main() {
             .Insert(Query.Syntax<GlFunctionNode>().Named("foo").Before(), "/* foo comment */\n")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Roslyn-style: insertion goes BEFORE target's leading trivia.
         // The existing comment is leading trivia of 'vec4', so our comment appears before it.
@@ -407,7 +407,7 @@ void main() {
             .Insert(fooQuery.Before(), "/* foo comment */\n")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify all edits with their surrounding context using patterns that match the sequence
         // 1. Import after "core" - sample already has @import so now we have two
@@ -433,7 +433,7 @@ void main() {
     {
         var schema = CreateGlslSchema();
         var tree = SyntaxTree.Parse(SampleShader, schema);
-        var originalText = tree.Root.ToString();
+        var originalText = tree.Root.ToText();
         
         var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         var mainFunc = tree.Select(mainQuery).FirstOrDefault() as GlFunctionNode;
@@ -443,13 +443,13 @@ void main() {
             .Insert(mainQuery.Before(), "// This comment will be undone\n")
             .Commit();
         
-        var modifiedText = tree.Root.ToString();
+        var modifiedText = tree.Root.ToText();
         Assert.Contains("// This comment will be undone", modifiedText);
         
         // Undo
         Assert.True(tree.Undo());
         
-        var undoneText = tree.Root.ToString();
+        var undoneText = tree.Root.ToText();
         Assert.Equal(originalText, undoneText);
         Assert.DoesNotContain("// This comment will be undone", undoneText);
     }
@@ -500,7 +500,7 @@ void main() {
             .Insert(mainQuery.InnerStart("body"), "\n    // Body start")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         Assert.Contains("void main() {\n    // Body start", result);
     }
     
@@ -517,7 +517,7 @@ void main() {
             .Insert(mainQuery.InnerEnd(), "\n    // Body end")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         Assert.Matches(@"// Body end\s*}", result);
     }
     
@@ -556,7 +556,7 @@ void main() {
             .Edit(importQuery, str => $"// {str}")
             .Commit();
         
-        var result = NormalizeLineEndings(tree.Root.ToString());
+        var result = NormalizeLineEndings(tree.Root.ToText());
         
         // Verify that the import directive is now commented out
         // Note: The blank line between #version and @import is preserved (leading trivia)
@@ -590,7 +590,7 @@ void main() {
             .Commit();
         
         // The inserted text is present in serialized content
-        var serialized = NormalizeLineEndings(tree.Root.ToString());
+        var serialized = NormalizeLineEndings(tree.Root.ToText());
         Assert.Contains("@import \"utils.glsl\"", serialized);
         
         // Incremental rebinding happens automatically in Commit(),
