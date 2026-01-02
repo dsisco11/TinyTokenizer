@@ -1773,4 +1773,42 @@ public class SyntaxEditorTests
     }
     
     #endregion
+    
+    #region Trivia Preservation Bug Tests
+    
+    /// <summary>
+    /// Minimal reproduction of trivia loss bug: when using a schema with CommentStyles
+    /// and nested block structures, the indentation before "} else {" is lost.
+    /// 
+    /// Trigger conditions:
+    /// 1. Schema with WithCommentStyles(...)
+    /// 2. Nested blocks (e.g., if inside if)
+    /// 
+    /// Expected: "\n    } else {\n" (4 spaces before })
+    /// Actual:   "\n} else {\n" (no spaces before })
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_NestedBlocksWithSchema_IndentationBeforeElseLost()
+    {
+        const string source = @"void test() {
+    if (a) {
+        if (b) {
+            x = 1;
+        }
+    } else {
+        y = 0;
+    }
+}";
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .Build();
+            
+        var tree = SyntaxTree.Parse(source, schema);
+        var result = tree.ToText().ReplaceLineEndings("\n");
+        
+        // The "    } else {" should preserve its 4-space indentation
+        Assert.Contains("\n    } else {\n", result);
+    }
+    
+    #endregion
 }
