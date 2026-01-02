@@ -102,10 +102,26 @@ internal sealed class GreenLexer
         }
         
         // EOF: any remaining trivia (collected as leadingTrivia) goes to last node as trailing
-        if (!leadingTrivia.IsEmpty && builder.Count > 0)
+        if (!leadingTrivia.IsEmpty)
         {
-            var last = builder[^1];
-            builder[^1] = AttachTrailingTrivia(last, leadingTrivia);
+            if (builder.Count > 0)
+            {
+                var last = builder[^1];
+                builder[^1] = AttachTrailingTrivia(last, leadingTrivia);
+            }
+            else
+            {
+                // Only trivia, no actual nodes - convert trivia to standalone nodes
+                // This handles cases like parsing just "// comment" where the comment
+                // is treated as leading trivia but there's no subsequent token.
+                foreach (var trivia in leadingTrivia)
+                {
+                    // Create a leaf node from the trivia content
+                    var triviaNode = new GreenLeaf(NodeKind.Symbol, trivia.Text, 
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+                    builder.Add(triviaNode);
+                }
+            }
         }
         
         return builder.ToImmutable();

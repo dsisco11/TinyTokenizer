@@ -441,20 +441,26 @@ public class TriviaTests
     }
 
     [Fact]
-    public void OnlyWhitespace_ReturnsNoLeaves()
+    public void OnlyWhitespace_ReturnsNodes()
     {
-        // Whitespace-only source has no tokens to attach trivia to
+        // Whitespace-only source is converted to nodes to preserve content
+        // (important for SyntaxEditor insertions of trivia-only text)
         var leaves = ParseLeaves("   \n\n   ");
-        Assert.Empty(leaves);
+        Assert.NotEmpty(leaves);
+        // The whitespace and newlines are converted to symbol nodes
+        var fullText = string.Concat(leaves.Select(l => l.ToText()));
+        Assert.Equal("   \n\n   ", fullText);
     }
 
     [Fact]
-    public void OnlyComment_ReturnsNoLeaves()
+    public void OnlyComment_ReturnsNodes()
     {
-        // Comment-only source has no tokens to attach trivia to
+        // Comment-only source is converted to nodes to preserve content
+        // (important for SyntaxEditor insertions of trivia-only text)
         var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
         var leaves = ParseLeaves("// just a comment", options);
-        Assert.Empty(leaves);
+        Assert.NotEmpty(leaves);
+        Assert.Equal("// just a comment", leaves[0].ToText());
     }
 
     #endregion

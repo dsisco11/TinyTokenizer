@@ -201,9 +201,11 @@ public sealed class Schema
     #region TokenizerOptions Conversion
     
     /// <summary>
-    /// Converts tokenization settings to TokenizerOptions for internal use.
+    /// Converts tokenization settings to TokenizerOptions.
+    /// Use this when creating a SyntaxEditor to ensure inserted text is
+    /// lexed consistently with how the tree was originally parsed.
     /// </summary>
-    internal TokenizerOptions ToTokenizerOptions() => new TokenizerOptions()
+    public TokenizerOptions ToTokenizerOptions() => new TokenizerOptions()
         .WithSymbols(Symbols.ToArray())
         .WithCommentStyles(CommentStyles.ToArray())
         .WithOperators(Operators)
