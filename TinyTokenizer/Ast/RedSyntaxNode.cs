@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace TinyTokenizer.Ast;
 
@@ -25,8 +26,13 @@ namespace TinyTokenizer.Ast;
 /// }
 /// </code>
 /// </example>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public abstract class SyntaxNode : RedNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Position}..{EndPosition}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     /// <summary>
     /// Opaque context for creating SyntaxNode instances.
     /// Used by the library to construct syntax nodes without exposing green layer details.
@@ -136,8 +142,13 @@ public abstract class SyntaxNode : RedNode
 /// Pattern: Ident + ParenBlock
 /// Example: foo(a, b, c)
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class FunctionCallSyntax : SyntaxNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"FunctionCall[{Position}..{EndPosition}] \"{Truncate(Name, 20)}\" ({Arguments.ChildCount} args)";
+
     /// <summary>
     /// Creates a function call red syntax node.
     /// </summary>
@@ -167,8 +178,13 @@ public sealed class FunctionCallSyntax : SyntaxNode
 /// Pattern: Ident + BracketBlock
 /// Example: arr[0], dict["key"]
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class ArrayAccessSyntax : SyntaxNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"ArrayAccess[{Position}..{EndPosition}] \"{Truncate(Target, 20)}\"";
+
     /// <summary>
     /// Creates an array access red syntax node.
     /// </summary>
@@ -198,8 +214,13 @@ public sealed class ArrayAccessSyntax : SyntaxNode
 /// Pattern: Ident + Symbol(".") + Ident
 /// Example: obj.property, namespace.Class
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class PropertyAccessSyntax : SyntaxNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"PropertyAccess[{Position}..{EndPosition}] \"{Truncate(FullPath, 20)}\"";
+
     /// <summary>
     /// Creates a property access red syntax node.
     /// </summary>

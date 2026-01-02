@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Text;
 
@@ -13,8 +14,13 @@ namespace TinyTokenizer.Ast;
 /// When the red tree is created, it produces typed red nodes (e.g., RedFunctionCall) that provide
 /// domain-specific accessors for the matched syntax pattern.
 /// </remarks>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed record GreenSyntaxNode : GreenContainer
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Width}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     private readonly ImmutableArray<GreenNode> _children;
     private readonly NodeKind _kind;
     private readonly Type _redType;

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace TinyTokenizer.Ast;
 
@@ -6,8 +7,13 @@ namespace TinyTokenizer.Ast;
 /// Red node wrapper for block structures.
 /// Provides position-aware access to children with lazy creation and caching.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class RedBlock : RedNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Position}..{EndPosition}] '{Opener}' ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     // Lazy child cache - initialized on first child access
     private RedNode?[]? _children;
     

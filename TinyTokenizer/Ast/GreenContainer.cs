@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace TinyTokenizer.Ast;
 
@@ -14,8 +15,13 @@ namespace TinyTokenizer.Ast;
 /// 
 /// All support structural sharing through WithSlot/WithChildren/WithInsert/WithReplace.
 /// </remarks>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal abstract record GreenContainer : GreenNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Width}] ({SlotCount} children)";
+
     /// <summary>
     /// Gets the child nodes of this container.
     /// </summary>

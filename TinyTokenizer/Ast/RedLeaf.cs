@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace TinyTokenizer.Ast;
 
@@ -6,8 +7,13 @@ namespace TinyTokenizer.Ast;
 /// Red node wrapper for leaf tokens.
 /// Provides position-aware access to token text and trivia.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class RedLeaf : RedNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Position}..{EndPosition}] \"{Truncate(Text, 20)}\"";
+
     /// <summary>
     /// Creates a new red leaf wrapping a green leaf.
     /// </summary>
