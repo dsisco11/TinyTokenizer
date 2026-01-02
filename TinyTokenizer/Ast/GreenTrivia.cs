@@ -1,9 +1,12 @@
+using System.Diagnostics;
+
 namespace TinyTokenizer.Ast;
 
 /// <summary>
 /// Represents trivia (whitespace, newlines, comments) attached to a token.
 /// Trivia does not affect semantics but preserves formatting information.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal readonly record struct GreenTrivia
 {
     /// <summary>The kind of trivia.</summary>
@@ -14,6 +17,23 @@ internal readonly record struct GreenTrivia
     
     /// <summary>The character width of this trivia.</summary>
     public int Width => Text.Length;
+
+    /// <summary>
+    /// Gets the debugger display string for this trivia.
+    /// </summary>
+    private string DebuggerDisplay => $"{Kind}[{Width}] \"{Truncate(Text, 20)}\"";
+
+    /// <summary>
+    /// Truncates a string to the specified length, replacing quotes with single quotes.
+    /// </summary>
+    private static string Truncate(string text, int maxLength)
+    {
+        var escaped = text.Replace('"', '\'').Replace("\n", "\\n").Replace("\r", "\\r");
+        if (escaped.Length <= maxLength)
+            return escaped;
+        return escaped[..maxLength] + "...";
+    }
+
     
     /// <summary>
     /// Creates a new trivia instance.

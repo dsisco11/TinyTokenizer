@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -7,11 +8,33 @@ namespace TinyTokenizer.Ast;
 /// Red nodes are ephemeral - created on demand and discarded after mutations.
 /// They provide parent links and computed absolute positions.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public abstract class RedNode : IFormattable
 {
     private readonly GreenNode _green;
     private readonly RedNode? _parent;
     private readonly int _position;
+
+    /// <summary>
+    /// Gets the debugger display string for this node.
+    /// Override in derived classes for specialized display.
+    /// </summary>
+    protected virtual string DebuggerDisplay =>
+        SlotCount > 0
+            ? $"{Kind}[{_position}..{EndPosition}] ({SlotCount} children)"
+            : $"{Kind}[{_position}..{EndPosition}]";
+
+    /// <summary>
+    /// Truncates a string to the specified length, replacing quotes with single quotes.
+    /// </summary>
+    protected static string Truncate(string text, int maxLength)
+    {
+        var escaped = text.Replace('"', '\'');
+        if (escaped.Length <= maxLength)
+            return escaped;
+        return escaped[..maxLength] + "...";
+    }
+
     
     /// <summary>
     /// Creates a new red node wrapping a green node.

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -13,8 +14,13 @@ namespace TinyTokenizer.Ast;
 /// - InnerTrivia: trivia after the opener when block is empty (for blocks like "{ }")
 /// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
 /// </remarks>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed record GreenBlock : GreenContainer
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Width}] '{Opener}' ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
     private readonly int[]? _childOffsets; // Pre-computed for ≥10 children (O(1) lookup)

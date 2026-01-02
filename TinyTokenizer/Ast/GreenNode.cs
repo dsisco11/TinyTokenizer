@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -8,8 +9,29 @@ namespace TinyTokenizer.Ast;
 /// Green nodes store width (not absolute position) and can be freely shared
 /// across different tree versions for structural sharing during mutations.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal abstract record GreenNode : IFormattable
 {
+    /// <summary>
+    /// Gets the debugger display string for this node.
+    /// Override in derived classes for specialized display.
+    /// </summary>
+    protected virtual string DebuggerDisplay =>
+        SlotCount > 0
+            ? $"{Kind}[{Width}] ({SlotCount} children)"
+            : $"{Kind}[{Width}]";
+
+    /// <summary>
+    /// Truncates a string to the specified length, replacing quotes with single quotes.
+    /// </summary>
+    protected static string Truncate(string text, int maxLength)
+    {
+        var escaped = text.Replace('"', '\'');
+        if (escaped.Length <= maxLength)
+            return escaped;
+        return escaped[..maxLength] + "...";
+    }
+
     /// <summary>The kind of this node.</summary>
     public abstract NodeKind Kind { get; }
     

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -7,8 +8,13 @@ namespace TinyTokenizer.Ast;
 /// Green node for leaf tokens (identifiers, operators, strings, etc.).
 /// Stores the token text and attached trivia. Has no children.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed record GreenLeaf : GreenNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"{Kind}[{Width}] \"{Truncate(Text, 20)}\"";
+
     private readonly int _width;
     
     /// <inheritdoc/>

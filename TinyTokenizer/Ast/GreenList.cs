@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -7,8 +8,13 @@ namespace TinyTokenizer.Ast;
 /// Green node for the root token list (top-level sequence of nodes).
 /// Similar to GreenBlock but without delimiters.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed record GreenList : GreenContainer
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"List[{Width}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
     private readonly int[]? _childOffsets;
@@ -130,8 +136,13 @@ internal sealed record GreenList : GreenContainer
 /// <summary>
 /// Red node wrapper for the root token list.
 /// </summary>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class RedList : RedNode
 {
+    /// <inheritdoc/>
+    protected override string DebuggerDisplay =>
+        $"List[{Position}..{EndPosition}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
+
     private RedNode?[]? _children;
     
     /// <summary>
