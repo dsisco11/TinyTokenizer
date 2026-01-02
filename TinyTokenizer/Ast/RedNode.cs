@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -314,6 +316,18 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// Returns the text content of this node.
     /// </summary>
     public string ToText() => _green.ToText();
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => _green.WriteTo(writer);
+
+    /// <inheritdoc />
+    public void WriteTo(IBufferWriter<char> writer) => _green.WriteTo(writer);
+
+    /// <inheritdoc />
+    public bool TryFormat(Span<char> destination, out int charsWritten) => _green.TryFormat(destination, out charsWritten);
+
+    /// <inheritdoc />
+    public int TextLength => _green.TextLength;
     
     /// <summary>
     /// Returns a debug representation of this node.

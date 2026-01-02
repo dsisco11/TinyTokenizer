@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -130,6 +132,10 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
         };
     }
     
+    #endregion
+
+    #region ITextSerializable
+    
     /// <summary>
     /// Returns the text content of this node.
     /// </summary>
@@ -139,6 +145,49 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
         WriteTo(sb);
         return sb.ToString();
     }
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer)
+    {
+        var sb = new StringBuilder(Width);
+        WriteTo(sb);
+        foreach (var chunk in sb.GetChunks())
+        {
+            writer.Write(chunk.Span);
+        }
+    }
+
+    /// <inheritdoc />
+    public void WriteTo(IBufferWriter<char> writer)
+    {
+        var sb = new StringBuilder(Width);
+        WriteTo(sb);
+        foreach (var chunk in sb.GetChunks())
+        {
+            var span = writer.GetSpan(chunk.Length);
+            chunk.Span.CopyTo(span);
+            writer.Advance(chunk.Length);
+        }
+    }
+
+    /// <inheritdoc />
+    public bool TryFormat(Span<char> destination, out int charsWritten)
+    {
+        if (Width > destination.Length)
+        {
+            charsWritten = 0;
+            return false;
+        }
+        
+        var sb = new StringBuilder(Width);
+        WriteTo(sb);
+        sb.CopyTo(0, destination, sb.Length);
+        charsWritten = sb.Length;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public int TextLength => Width;
     
     /// <summary>
     /// Returns a debug representation of this node.

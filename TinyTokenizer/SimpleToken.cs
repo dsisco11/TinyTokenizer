@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace TinyTokenizer;
@@ -197,6 +199,33 @@ public readonly record struct SimpleToken(
 
     /// <inheritdoc />
     public string ToText() => new(Content.Span);
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => writer.Write(Content.Span);
+
+    /// <inheritdoc />
+    public void WriteTo(IBufferWriter<char> writer)
+    {
+        var span = writer.GetSpan(Content.Length);
+        Content.Span.CopyTo(span);
+        writer.Advance(Content.Length);
+    }
+
+    /// <inheritdoc />
+    public bool TryFormat(Span<char> destination, out int charsWritten)
+    {
+        if (Content.Length > destination.Length)
+        {
+            charsWritten = 0;
+            return false;
+        }
+        Content.Span.CopyTo(destination);
+        charsWritten = Content.Length;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public int TextLength => Content.Length;
 
     #endregion
 

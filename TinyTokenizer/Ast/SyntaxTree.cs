@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Collections.Immutable;
+using System.IO;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -492,6 +494,18 @@ public class SyntaxTree : IFormattable, ITextSerializable
     
     /// <inheritdoc />
     public string ToText() => Root.ToText();
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => Root.WriteTo(writer);
+
+    /// <inheritdoc />
+    public void WriteTo(IBufferWriter<char> writer) => Root.WriteTo(writer);
+
+    /// <inheritdoc />
+    public bool TryFormat(Span<char> destination, out int charsWritten) => Root.TryFormat(destination, out charsWritten);
+
+    /// <inheritdoc />
+    public int TextLength => Root.TextLength;
     
     #endregion
 }
