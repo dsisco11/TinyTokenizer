@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
@@ -75,10 +76,10 @@ internal sealed record GreenList : GreenContainer
         => new RedList(this, parent, position);
     
     /// <inheritdoc/>
-    public override void WriteTo(StringBuilder builder)
+    public override void WriteTo(IBufferWriter<char> writer)
     {
         foreach (var child in _children)
-            child.WriteTo(builder);
+            child.WriteTo(writer);
     }
     
     #region Structural Sharing Mutations

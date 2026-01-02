@@ -63,11 +63,77 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
     /// <returns>A new red node wrapping this green node.</returns>
     public abstract RedNode CreateRed(RedNode? parent, int position);
     
+    #region ITextSerializable
+    
+    /// <summary>
+    /// Writes the text content of this node to an <see cref="IBufferWriter{T}"/>.
+    /// This is the core serialization method that derived classes must implement.
+    /// </summary>
+    /// <param name="writer">The buffer writer to write to.</param>
+    public abstract void WriteTo(IBufferWriter<char> writer);
+
     /// <summary>
     /// Writes the text content of this node to a StringBuilder.
     /// </summary>
     /// <param name="builder">The StringBuilder to write to.</param>
-    public abstract void WriteTo(StringBuilder builder);
+    public void WriteTo(StringBuilder builder)
+    {
+        if (Width == 0) return;
+        var buffer = new ArrayBufferWriter<char>(Width);
+        WriteTo(buffer);
+        builder.Append(buffer.WrittenSpan);
+    }
+    
+    /// <summary>
+    /// Returns the text content of this node.
+    /// </summary>
+    public string ToText()
+    {
+        if (Width == 0) return string.Empty;
+        var buffer = new ArrayBufferWriter<char>(Width);
+        WriteTo(buffer);
+        return new string(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// Writes the text content to a <see cref="TextWriter"/>.
+    /// </summary>
+    public void WriteTo(TextWriter writer)
+    {
+        if (Width == 0) return;
+        var buffer = new ArrayBufferWriter<char>(Width);
+        WriteTo(buffer);
+        writer.Write(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// Tries to write the text content into the provided span.
+    /// </summary>
+    public bool TryWriteTo(Span<char> destination, out int charsWritten)
+    {
+        if (Width == 0)
+        {
+            charsWritten = 0;
+            return true;
+        }
+        
+        if (Width > destination.Length)
+        {
+            charsWritten = 0;
+            return false;
+        }
+        
+        var buffer = new ArrayBufferWriter<char>(Width);
+        WriteTo(buffer);
+        buffer.WrittenSpan.CopyTo(destination);
+        charsWritten = buffer.WrittenCount;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public int TextLength => Width;
+    
+    #endregion
     
     /// <summary>
     /// Computes the character offset of a child slot from this node's start.
@@ -133,67 +199,10 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
     }
     
     #endregion
-
-    #region ITextSerializable
-    
-    /// <summary>
-    /// Returns the text content of this node.
-    /// </summary>
-    public string ToText()
-    {
-        var sb = new StringBuilder(Width);
-        WriteTo(sb);
-        return sb.ToString();
-    }
-
-    /// <inheritdoc />
-    public void WriteTo(TextWriter writer)
-    {
-        var sb = new StringBuilder(Width);
-        WriteTo(sb);
-        foreach (var chunk in sb.GetChunks())
-        {
-            writer.Write(chunk.Span);
-        }
-    }
-
-    /// <inheritdoc />
-    public void WriteTo(IBufferWriter<char> writer)
-    {
-        var sb = new StringBuilder(Width);
-        WriteTo(sb);
-        foreach (var chunk in sb.GetChunks())
-        {
-            var span = writer.GetSpan(chunk.Length);
-            chunk.Span.CopyTo(span);
-            writer.Advance(chunk.Length);
-        }
-    }
-
-    /// <inheritdoc />
-    public bool TryFormat(Span<char> destination, out int charsWritten)
-    {
-        if (Width > destination.Length)
-        {
-            charsWritten = 0;
-            return false;
-        }
-        
-        var sb = new StringBuilder(Width);
-        WriteTo(sb);
-        sb.CopyTo(0, destination, sb.Length);
-        charsWritten = sb.Length;
-        return true;
-    }
-
-    /// <inheritdoc />
-    public int TextLength => Width;
     
     /// <summary>
     /// Returns a debug representation of this node.
     /// Use <see cref="ToText"/> to get the serialized text content.
     /// </summary>
     public override string ToString() => ToString("D", null);
-    
-    #endregion
 }

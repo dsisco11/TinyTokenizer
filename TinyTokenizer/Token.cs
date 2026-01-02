@@ -37,15 +37,6 @@ public abstract record Token : ITextSerializable
     #region ITextSerializable
 
     /// <inheritdoc />
-    public virtual void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
-
-    /// <inheritdoc />
-    public virtual string ToText() => new(Content.Span);
-
-    /// <inheritdoc />
-    public virtual void WriteTo(TextWriter writer) => writer.Write(Content.Span);
-
-    /// <inheritdoc />
     public virtual void WriteTo(IBufferWriter<char> writer)
     {
         var span = writer.GetSpan(Content.Length);
@@ -54,7 +45,16 @@ public abstract record Token : ITextSerializable
     }
 
     /// <inheritdoc />
-    public virtual bool TryFormat(Span<char> destination, out int charsWritten)
+    public virtual string ToText() => new(Content.Span);
+
+    /// <inheritdoc />
+    public virtual void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
+
+    /// <inheritdoc />
+    public virtual void WriteTo(TextWriter writer) => writer.Write(Content.Span);
+
+    /// <inheritdoc />
+    public virtual bool TryWriteTo(Span<char> destination, out int charsWritten)
     {
         if (Content.Length > destination.Length)
         {

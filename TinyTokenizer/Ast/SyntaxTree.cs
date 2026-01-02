@@ -490,19 +490,19 @@ public class SyntaxTree : IFormattable, ITextSerializable
     public string Serialize() => ToText();
     
     /// <inheritdoc />
-    public void WriteTo(StringBuilder builder) => Root.WriteTo(builder);
+    public void WriteTo(IBufferWriter<char> writer) => Root.WriteTo(writer);
     
     /// <inheritdoc />
     public string ToText() => Root.ToText();
 
     /// <inheritdoc />
+    public void WriteTo(StringBuilder builder) => Root.WriteTo(builder);
+
+    /// <inheritdoc />
     public void WriteTo(TextWriter writer) => Root.WriteTo(writer);
 
     /// <inheritdoc />
-    public void WriteTo(IBufferWriter<char> writer) => Root.WriteTo(writer);
-
-    /// <inheritdoc />
-    public bool TryFormat(Span<char> destination, out int charsWritten) => Root.TryFormat(destination, out charsWritten);
+    public bool TryWriteTo(Span<char> destination, out int charsWritten) => Root.TryWriteTo(destination, out charsWritten);
 
     /// <inheritdoc />
     public int TextLength => Root.TextLength;

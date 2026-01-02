@@ -195,15 +195,6 @@ public readonly record struct SimpleToken(
     #region ITextSerializable
 
     /// <inheritdoc />
-    public void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
-
-    /// <inheritdoc />
-    public string ToText() => new(Content.Span);
-
-    /// <inheritdoc />
-    public void WriteTo(TextWriter writer) => writer.Write(Content.Span);
-
-    /// <inheritdoc />
     public void WriteTo(IBufferWriter<char> writer)
     {
         var span = writer.GetSpan(Content.Length);
@@ -212,7 +203,16 @@ public readonly record struct SimpleToken(
     }
 
     /// <inheritdoc />
-    public bool TryFormat(Span<char> destination, out int charsWritten)
+    public string ToText() => new(Content.Span);
+
+    /// <inheritdoc />
+    public void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => writer.Write(Content.Span);
+
+    /// <inheritdoc />
+    public bool TryWriteTo(Span<char> destination, out int charsWritten)
     {
         if (Content.Length > destination.Length)
         {

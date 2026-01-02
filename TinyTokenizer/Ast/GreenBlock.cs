@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
@@ -125,18 +126,39 @@ internal sealed record GreenBlock : GreenContainer
         => new RedBlock(this, parent, position);
     
     /// <inheritdoc/>
-    public override void WriteTo(StringBuilder builder)
+    public override void WriteTo(IBufferWriter<char> writer)
     {
         foreach (var trivia in LeadingTrivia)
-            builder.Append(trivia.Text);
-        builder.Append(Opener);
+        {
+            var span = writer.GetSpan(trivia.Width);
+            trivia.Text.AsSpan().CopyTo(span);
+            writer.Advance(trivia.Width);
+        }
+        
+        var openerSpan = writer.GetSpan(1);
+        openerSpan[0] = Opener;
+        writer.Advance(1);
+        
         foreach (var trivia in InnerTrivia)
-            builder.Append(trivia.Text);
+        {
+            var span = writer.GetSpan(trivia.Width);
+            trivia.Text.AsSpan().CopyTo(span);
+            writer.Advance(trivia.Width);
+        }
+        
         foreach (var child in _children)
-            child.WriteTo(builder);
-        builder.Append(Closer);
+            child.WriteTo(writer);
+        
+        var closerSpan = writer.GetSpan(1);
+        closerSpan[0] = Closer;
+        writer.Advance(1);
+        
         foreach (var trivia in TrailingTrivia)
-            builder.Append(trivia.Text);
+        {
+            var span = writer.GetSpan(trivia.Width);
+            trivia.Text.AsSpan().CopyTo(span);
+            writer.Advance(trivia.Width);
+        }
     }
     
     #region Structural Sharing Mutations

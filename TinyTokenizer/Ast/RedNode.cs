@@ -307,24 +307,27 @@ public abstract class RedNode : IFormattable, ITextSerializable
     }
     
     /// <summary>
-    /// Writes the text content of this node to a StringBuilder.
+    /// Writes the text content to an <see cref="IBufferWriter{T}"/>.
     /// Delegates to the underlying green node.
     /// </summary>
-    public void WriteTo(StringBuilder builder) => _green.WriteTo(builder);
-    
+    public void WriteTo(IBufferWriter<char> writer) => _green.WriteTo(writer);
+
     /// <summary>
     /// Returns the text content of this node.
     /// </summary>
     public string ToText() => _green.ToText();
 
+    /// <summary>
+    /// Writes the text content of this node to a StringBuilder.
+    /// Delegates to the underlying green node.
+    /// </summary>
+    public void WriteTo(StringBuilder builder) => _green.WriteTo(builder);
+
     /// <inheritdoc />
     public void WriteTo(TextWriter writer) => _green.WriteTo(writer);
 
     /// <inheritdoc />
-    public void WriteTo(IBufferWriter<char> writer) => _green.WriteTo(writer);
-
-    /// <inheritdoc />
-    public bool TryFormat(Span<char> destination, out int charsWritten) => _green.TryFormat(destination, out charsWritten);
+    public bool TryWriteTo(Span<char> destination, out int charsWritten) => _green.TryWriteTo(destination, out charsWritten);
 
     /// <inheritdoc />
     public int TextLength => _green.TextLength;
