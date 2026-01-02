@@ -68,9 +68,9 @@ public class RedLeafTests
         // Check any leaf has trivia accessible
         foreach (var child in children.OfType<RedLeaf>())
         {
-            // LeadingTrivia should be accessible (may be empty)
-            var trivia = child.LeadingTrivia;
-            Assert.True(trivia.IsDefault == false || trivia.IsEmpty);
+            // GetLeadingTrivia should be accessible (may be empty)
+            var trivia = child.GetLeadingTrivia().ToList();
+            Assert.NotNull(trivia);
         }
     }
 
@@ -82,8 +82,8 @@ public class RedLeafTests
         
         foreach (var child in children.OfType<RedLeaf>())
         {
-            var trivia = child.TrailingTrivia;
-            Assert.True(trivia.IsDefault == false || trivia.IsEmpty);
+            var trivia = child.GetTrailingTrivia().ToList();
+            Assert.NotNull(trivia);
         }
     }
 

@@ -1448,7 +1448,8 @@ public class SyntaxTreeTests
         var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
         
         Assert.NotNull(block);
-        Assert.True(block.LeadingTrivia.IsEmpty);
+        Assert.False(block.HasLeadingTrivia);
+        Assert.Empty(block.GetLeadingTrivia());
     }
     
     [Fact]
@@ -1458,7 +1459,8 @@ public class SyntaxTreeTests
         var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
         
         Assert.NotNull(block);
-        Assert.True(block.TrailingTrivia.IsEmpty);
+        Assert.False(block.HasTrailingTrivia);
+        Assert.Empty(block.GetTrailingTrivia());
     }
     
     #endregion

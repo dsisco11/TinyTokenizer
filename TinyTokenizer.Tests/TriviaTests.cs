@@ -464,4 +464,267 @@ public class TriviaTests
     }
 
     #endregion
+    
+    #region Public Trivia API Tests
+    
+    [Fact]
+    public void Trivia_Kind_ReturnsCorrectKind()
+    {
+        var tree = SyntaxTree.Parse("  x"); // Leading whitespace
+        var leaf = tree.Leaves.First();
+        
+        var trivia = leaf.GetLeadingTrivia().First();
+        
+        Assert.Equal(TriviaKind.Whitespace, trivia.Kind);
+    }
+    
+    [Fact]
+    public void Trivia_Text_ReturnsCorrectText()
+    {
+        var tree = SyntaxTree.Parse("  x");
+        var leaf = tree.Leaves.First();
+        
+        var trivia = leaf.GetLeadingTrivia().First();
+        
+        Assert.Equal("  ", trivia.Text);
+    }
+    
+    [Fact]
+    public void Trivia_Width_ReturnsCorrectLength()
+    {
+        var tree = SyntaxTree.Parse("    x"); // 4 spaces
+        var leaf = tree.Leaves.First();
+        
+        var trivia = leaf.GetLeadingTrivia().First();
+        
+        Assert.Equal(4, trivia.Width);
+    }
+    
+    [Fact]
+    public void Trivia_IsWhitespace_ReturnsTrueForWhitespace()
+    {
+        var tree = SyntaxTree.Parse("  x");
+        var leaf = tree.Leaves.First();
+        
+        var trivia = leaf.GetLeadingTrivia().First();
+        
+        Assert.True(trivia.IsWhitespace);
+        Assert.False(trivia.IsNewline);
+        Assert.False(trivia.IsComment);
+    }
+    
+    [Fact]
+    public void Trivia_IsNewline_ReturnsTrueForNewline()
+    {
+        var tree = SyntaxTree.Parse("x\ny");
+        var xLeaf = tree.Leaves.First();
+        
+        var trivia = xLeaf.GetTrailingTrivia().First();
+        
+        Assert.True(trivia.IsNewline);
+        Assert.False(trivia.IsWhitespace);
+        Assert.False(trivia.IsComment);
+    }
+    
+    [Fact]
+    public void Trivia_IsComment_ReturnsTrueForComments()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("x // comment\ny", options);
+        var xLeaf = tree.Leaves.First();
+        
+        var trivia = xLeaf.GetTrailingTrivia().First(t => t.IsComment);
+        
+        Assert.True(trivia.IsComment);
+        Assert.False(trivia.IsWhitespace);
+        Assert.False(trivia.IsNewline);
+        Assert.Equal(TriviaKind.SingleLineComment, trivia.Kind);
+    }
+    
+    [Fact]
+    public void Trivia_ToString_ReturnsText()
+    {
+        var tree = SyntaxTree.Parse("  x");
+        var leaf = tree.Leaves.First();
+        
+        var trivia = leaf.GetLeadingTrivia().First();
+        
+        Assert.Equal("  ", trivia.ToString());
+    }
+    
+    [Fact]
+    public void Trivia_Equality_WorksCorrectly()
+    {
+        // Two leaves with identical leading whitespace
+        var tree = SyntaxTree.Parse("  x\n  y");
+        var leaves = tree.Leaves.ToList();
+        
+        // Both x and y start with 2 spaces of leading trivia
+        var trivia1 = leaves[0].GetLeadingTrivia().First();
+        var trivia2 = leaves[1].GetLeadingTrivia().First();
+        
+        // Same content ("  "), same kind (Whitespace)
+        Assert.Equal(TriviaKind.Whitespace, trivia1.Kind);
+        Assert.Equal(TriviaKind.Whitespace, trivia2.Kind);
+        Assert.Equal(trivia1.Text, trivia2.Text);
+        Assert.Equal(trivia1, trivia2);
+        Assert.True(trivia1 == trivia2);
+        Assert.False(trivia1 != trivia2);
+    }
+    
+    [Fact]
+    public void Trivia_Inequality_WorksCorrectly()
+    {
+        var tree = SyntaxTree.Parse("  x\ny");
+        var leaves = tree.Leaves.ToList();
+        
+        var whitespaceTrivia = leaves[0].GetLeadingTrivia().First();
+        var newlineTrivia = leaves[0].GetTrailingTrivia().First();
+        
+        Assert.NotEqual(whitespaceTrivia, newlineTrivia);
+        Assert.False(whitespaceTrivia == newlineTrivia);
+        Assert.True(whitespaceTrivia != newlineTrivia);
+    }
+    
+    [Fact]
+    public void RedLeaf_GetLeadingTrivia_ReturnsAllLeadingTrivia()
+    {
+        var tree = SyntaxTree.Parse("  \t x");
+        var leaf = tree.Leaves.First();
+        
+        var leadingTrivia = leaf.GetLeadingTrivia().ToList();
+        
+        Assert.Single(leadingTrivia); // Consecutive whitespace is combined
+        Assert.True(leadingTrivia[0].IsWhitespace);
+    }
+    
+    [Fact]
+    public void RedLeaf_GetTrailingTrivia_ReturnsAllTrailingTrivia()
+    {
+        var tree = SyntaxTree.Parse("x  \t\n");
+        var leaf = tree.Leaves.First();
+        
+        var trailingTrivia = leaf.GetTrailingTrivia().ToList();
+        
+        // Whitespace + newline
+        Assert.Equal(2, trailingTrivia.Count);
+        Assert.True(trailingTrivia[0].IsWhitespace);
+        Assert.True(trailingTrivia[1].IsNewline);
+    }
+    
+    [Fact]
+    public void RedLeaf_HasLeadingTrivia_ReturnsTrueWhenPresent()
+    {
+        var tree = SyntaxTree.Parse("  x");
+        var leaf = tree.Leaves.First();
+        
+        Assert.True(leaf.HasLeadingTrivia);
+    }
+    
+    [Fact]
+    public void RedLeaf_HasLeadingTrivia_ReturnsFalseWhenEmpty()
+    {
+        var tree = SyntaxTree.Parse("x");
+        var leaf = tree.Leaves.First();
+        
+        Assert.False(leaf.HasLeadingTrivia);
+    }
+    
+    [Fact]
+    public void RedLeaf_HasTrailingTrivia_ReturnsTrueWhenPresent()
+    {
+        var tree = SyntaxTree.Parse("x ");
+        var leaf = tree.Leaves.First();
+        
+        Assert.True(leaf.HasTrailingTrivia);
+    }
+    
+    [Fact]
+    public void RedLeaf_HasTrailingTrivia_ReturnsFalseWhenEmpty()
+    {
+        var tree = SyntaxTree.Parse("x");
+        var leaf = tree.Leaves.First();
+        
+        Assert.False(leaf.HasTrailingTrivia);
+    }
+    
+    [Fact]
+    public void RedBlock_GetLeadingTrivia_ReturnsBlockLeadingTrivia()
+    {
+        var tree = SyntaxTree.Parse("  {x}");
+        var block = tree.Root.Children.OfType<RedBlock>().First();
+        
+        var leadingTrivia = block.GetLeadingTrivia().ToList();
+        
+        Assert.Single(leadingTrivia);
+        Assert.True(leadingTrivia[0].IsWhitespace);
+        Assert.Equal("  ", leadingTrivia[0].Text);
+    }
+    
+    [Fact]
+    public void RedBlock_GetTrailingTrivia_ReturnsBlockTrailingTrivia()
+    {
+        var tree = SyntaxTree.Parse("{x}  ");
+        var block = tree.Root.Children.OfType<RedBlock>().First();
+        
+        var trailingTrivia = block.GetTrailingTrivia().ToList();
+        
+        Assert.Single(trailingTrivia);
+        Assert.True(trailingTrivia[0].IsWhitespace);
+        Assert.Equal("  ", trailingTrivia[0].Text);
+    }
+    
+    [Fact]
+    public void RedBlock_GetInnerTrivia_ReturnsInnerTrivia()
+    {
+        var tree = SyntaxTree.Parse("{  }"); // Empty block with spaces
+        var block = tree.Root.Children.OfType<RedBlock>().First();
+        
+        var innerTrivia = block.GetInnerTrivia().ToList();
+        
+        Assert.Single(innerTrivia);
+        Assert.True(innerTrivia[0].IsWhitespace);
+        Assert.Equal("  ", innerTrivia[0].Text);
+    }
+    
+    [Fact]
+    public void RedBlock_HasLeadingTrivia_ReturnsCorrectValue()
+    {
+        var treeWith = SyntaxTree.Parse("  {x}");
+        var treeWithout = SyntaxTree.Parse("{x}");
+        
+        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        
+        Assert.True(blockWith.HasLeadingTrivia);
+        Assert.False(blockWithout.HasLeadingTrivia);
+    }
+    
+    [Fact]
+    public void RedBlock_HasTrailingTrivia_ReturnsCorrectValue()
+    {
+        var treeWith = SyntaxTree.Parse("{x}  ");
+        var treeWithout = SyntaxTree.Parse("{x}");
+        
+        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        
+        Assert.True(blockWith.HasTrailingTrivia);
+        Assert.False(blockWithout.HasTrailingTrivia);
+    }
+    
+    [Fact]
+    public void RedBlock_HasInnerTrivia_ReturnsCorrectValue()
+    {
+        var treeWith = SyntaxTree.Parse("{  }");
+        var treeWithout = SyntaxTree.Parse("{}");
+        
+        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        
+        Assert.True(blockWith.HasInnerTrivia);
+        Assert.False(blockWithout.HasInnerTrivia);
+    }
+    
+    #endregion
 }

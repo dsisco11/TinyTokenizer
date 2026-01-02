@@ -31,11 +31,71 @@ public sealed class RedLeaf : RedNode
     /// <summary>The token text as a span.</summary>
     public ReadOnlySpan<char> TextSpan => Green.Text.AsSpan();
     
-    /// <summary>Leading trivia attached to this token.</summary>
-    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
+    /// <summary>Leading trivia attached to this token (internal access).</summary>
+    internal ImmutableArray<GreenTrivia> GreenLeadingTrivia => Green.LeadingTrivia;
     
-    /// <summary>Trailing trivia attached to this token.</summary>
-    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
+    /// <summary>Trailing trivia attached to this token (internal access).</summary>
+    internal ImmutableArray<GreenTrivia> GreenTrailingTrivia => Green.TrailingTrivia;
+    
+    /// <summary>
+    /// Gets the leading trivia attached to this token.
+    /// Leading trivia appears before the token text (e.g., indentation, comments on previous line).
+    /// </summary>
+    /// <returns>An enumerable of trivia items before this token.</returns>
+    /// <example>
+    /// <code>
+    /// var tree = SyntaxTree.Parse("  x + y");
+    /// var xToken = tree.Leaves.First();
+    /// foreach (var trivia in xToken.GetLeadingTrivia())
+    /// {
+    ///     Console.WriteLine($"{trivia.Kind}: '{trivia.Text}'"); // Whitespace: '  '
+    /// }
+    /// </code>
+    /// </example>
+    /// <seealso cref="GetTrailingTrivia"/>
+    /// <seealso cref="HasLeadingTrivia"/>
+    public IEnumerable<Trivia> GetLeadingTrivia()
+    {
+        foreach (var green in Green.LeadingTrivia)
+        {
+            yield return new Trivia(green);
+        }
+    }
+    
+    /// <summary>
+    /// Gets the trailing trivia attached to this token.
+    /// Trailing trivia appears after the token text (e.g., end-of-line comments).
+    /// </summary>
+    /// <returns>An enumerable of trivia items after this token.</returns>
+    /// <example>
+    /// <code>
+    /// var tree = SyntaxTree.Parse("x // comment\n");
+    /// var xToken = tree.Leaves.First();
+    /// foreach (var trivia in xToken.GetTrailingTrivia())
+    /// {
+    ///     Console.WriteLine($"{trivia.Kind}: '{trivia.Text}'");
+    /// }
+    /// </code>
+    /// </example>
+    /// <seealso cref="GetLeadingTrivia"/>
+    /// <seealso cref="HasTrailingTrivia"/>
+    public IEnumerable<Trivia> GetTrailingTrivia()
+    {
+        foreach (var green in Green.TrailingTrivia)
+        {
+            yield return new Trivia(green);
+        }
+    }
+    
+    /// <summary>
+    /// Gets whether this token has any leading trivia.
+    /// </summary>
+    public bool HasLeadingTrivia => !Green.LeadingTrivia.IsEmpty;
+    
+    /// <summary>
+    /// Gets whether this token has any trailing trivia.
+    /// </summary>
+    public bool HasTrailingTrivia => !Green.TrailingTrivia.IsEmpty;
     
     /// <summary>Width of the token text only.</summary>
     public int TextWidth => Green.TextWidth;

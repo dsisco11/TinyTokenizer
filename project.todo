@@ -197,25 +197,31 @@ Timeline: 2-3 weeks | Breaking Changes: Yes (major cleanup)
         [x] MatchAll_WithExplicitSchema_DoesNotRequireAttachedSchema
     [x] All 1,174 tests pass
 
-[ ] 3.3 Make Trivia Types Public (3 hrs)
-    Files: Ast/GreenTrivia.cs, new Trivia.cs, Ast/RedLeaf.cs
-    [ ] Create Trivia.cs file
-        [ ] Create public readonly struct Trivia
-            [ ] internal Trivia(GreenTrivia green) constructor
-            [ ] TriviaKind Kind property
-            [ ] string Text property
-            [ ] int Width property
-            [ ] override ToString()
-        [ ] Create public enum TriviaKind
-            [ ] Whitespace
-            [ ] Newline
-            [ ] SingleLineComment
-            [ ] MultiLineComment
-    [ ] Update RedLeaf.cs
-        [ ] Add IEnumerable<Trivia> LeadingTrivia property
-        [ ] Add IEnumerable<Trivia> TrailingTrivia property
-    [ ] Add XML documentation to all new types
-    [ ] Add usage examples in README or docs
+[x] 3.3 Make Trivia Types Public (3 hrs) ✓ DONE
+    Files: Ast/GreenTrivia.cs, new Trivia.cs, Ast/RedLeaf.cs, Ast/RedBlock.cs
+    [x] Create Trivia.cs file
+        [x] Create public readonly struct Trivia
+            [x] internal Trivia(GreenTrivia green) constructor
+            [x] TriviaKind Kind property
+            [x] string Text property
+            [x] int Width property
+            [x] bool IsWhitespace, IsNewline, IsComment helper properties
+            [x] IEquatable<Trivia> implementation
+            [x] override ToString()
+        [x] TriviaKind enum already public (in GreenTrivia.cs)
+    [x] Update RedLeaf.cs
+        [x] Add IEnumerable<Trivia> GetLeadingTrivia() method
+        [x] Add IEnumerable<Trivia> GetTrailingTrivia() method
+        [x] Add bool HasLeadingTrivia property
+        [x] Add bool HasTrailingTrivia property
+    [x] Update RedBlock.cs
+        [x] Add IEnumerable<Trivia> GetLeadingTrivia() method
+        [x] Add IEnumerable<Trivia> GetInnerTrivia() method
+        [x] Add IEnumerable<Trivia> GetTrailingTrivia() method
+        [x] Add bool HasLeadingTrivia, HasInnerTrivia, HasTrailingTrivia properties
+    [x] Add XML documentation to all new types
+    [x] Add unit tests (21 new tests in TriviaTests.cs)
+    [x] All 1,195 tests pass
 
 [ ] 3.4 Comprehensive Documentation Pass (4 hrs)
     Files: All public API files
