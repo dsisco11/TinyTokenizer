@@ -530,13 +530,7 @@ public class SyntaxTree : IFormattable, ITextSerializable
     #endregion
     
     #region Output
-    
-    /// <summary>
-    /// Reconstructs the source text from the tree.
-    /// </summary>
-    [Obsolete("Use ToText() instead.")]
-    public string ToFullString() => ToText();
-    
+
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
     
