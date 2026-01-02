@@ -80,23 +80,23 @@ Timeline: 1-2 weeks | Breaking Changes: Minor (internal APIs only)
     [x] Remove AppendToBuffer helper method (replaced with WriteToBuffer)
     [x] Run all parsing tests to confirm no regressions
 
-[ ] 2.2 Build Operator Trie (6 hrs)
+[x] 2.2 Build Operator Trie (6 hrs) ✓ DONE
     Files: TokenParser.cs, new OperatorTrie.cs
-    [ ] Create OperatorTrie.cs file
-        [ ] Create internal sealed class OperatorTrie
-        [ ] Create private sealed class TrieNode
-            [ ] Dictionary<char, TrieNode>? Children
-            [ ] string? Operator (non-null if end of operator)
-        [ ] Implement Add(string op) method
-        [ ] Implement TryMatch(ReadOnlySpan<char>) method
-    [ ] Update TokenParser constructor
-        [ ] Add private readonly OperatorTrie _operatorTrie field
-        [ ] Build trie from options.Operators
-    [ ] Update TryParseOperator to use trie lookup
-    [ ] Verify O(k) matching where k = operator length
-    [ ] Verify greedy matching still works (longest match first)
-    [ ] Add unit tests for OperatorTrie
-    [ ] Benchmark with 50+ operators to confirm improvement
+    [x] Create OperatorTrie.cs file
+        [x] Create internal sealed class OperatorTrie
+        [x] Create private sealed class TrieNode
+            [x] Dictionary<char, TrieNode>? Children
+            [x] string? Operator (non-null if end of operator)
+        [x] Implement Add(string op) method
+        [x] Implement TryMatch(ReadOnlySpan<char>) method
+    [x] Update TokenParser constructor
+        [x] Add private readonly OperatorTrie _operatorTrie field
+        [x] Build trie from options.Operators
+    [x] Update TryParseOperator to use trie lookup
+    [x] Verify O(k) matching where k = operator length
+    [x] Verify greedy matching still works (longest match first)
+    [x] Add unit tests for OperatorTrie
+    [x] Benchmark with 50+ operators to confirm improvement
 
 [ ] 2.3 Standardize Position Types (2 hrs) ⚠️ BREAKING
     Files: SimpleToken.cs, Token.cs, all derived types

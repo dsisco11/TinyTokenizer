@@ -12,7 +12,7 @@ namespace TinyTokenizer;
 public sealed partial class TokenParser
 {
     private readonly TokenizerOptions _options;
-    private readonly ImmutableArray<string> _sortedOperators;
+    private readonly OperatorTrie _operatorTrie;
     private readonly bool _hasCSingleLineComment;
     private readonly bool _hasCMultiLineComment;
 
@@ -29,10 +29,13 @@ public sealed partial class TokenParser
     public TokenParser(TokenizerOptions options)
     {
         _options = options;
-        // Sort operators by length descending for greedy matching (longest first)
-        _sortedOperators = options.Operators
-            .OrderByDescending(op => op.Length)
-            .ToImmutableArray();
+        
+        // Build operator trie for O(k) greedy matching
+        _operatorTrie = new OperatorTrie();
+        foreach (var op in options.Operators)
+        {
+            _operatorTrie.Add(op);
+        }
         
         // Pre-compute comment style flags to avoid LINQ allocation on each TryParseComment call
         _hasCSingleLineComment = options.CommentStyles.Any(s => s.Start == "//");
@@ -336,19 +339,19 @@ public sealed partial class TokenParser
 
     /// <summary>
     /// Tries to parse an operator starting from the current position.
-    /// Uses greedy matching (longest operator first).
+    /// Uses trie-based greedy matching for O(k) lookup where k is operator length.
     /// </summary>
     private OperatorToken? TryParseOperator(SimpleTokenReader reader)
     {
-        if (_sortedOperators.IsEmpty)
+        if (_operatorTrie.IsEmpty)
             return null;
 
-        // Build a string of consecutive operator-capable characters
-        var chars = new List<char>();
-        var tokens = new List<SimpleToken>();
-        int offset = 0;
+        // Build a span of consecutive operator-capable characters for trie matching
+        Span<char> chars = stackalloc char[16]; // Most operators are short
+        var tokens = new List<SimpleToken>(8);
+        int charCount = 0;
 
-        while (reader.TryPeek(offset, out var peekToken))
+        while (reader.TryPeek(charCount, out var peekToken))
         {
             var tokenChar = GetTokenChar(peekToken.Type);
             if (tokenChar == null)
@@ -363,38 +366,38 @@ public sealed partial class TokenParser
                     break;
                 }
             }
-            chars.Add(tokenChar.Value);
+            
+            // Grow buffer if needed (rare case for very long operators)
+            if (charCount >= chars.Length)
+            {
+                var newChars = new char[chars.Length * 2];
+                chars.CopyTo(newChars);
+                chars = newChars;
+            }
+            
+            chars[charCount] = tokenChar.Value;
             tokens.Add(peekToken);
-            offset++;
-
-            // Optimization: stop if we've collected more chars than the longest operator
-            if (_sortedOperators.Length > 0 && chars.Count > _sortedOperators[0].Length)
-                break;
+            charCount++;
         }
 
-        if (chars.Count == 0)
+        if (charCount == 0)
             return null;
 
-        var sequence = new string(chars.ToArray());
-
-        // Try to match operators, longest first (greedy)
-        foreach (var op in _sortedOperators)
+        // Use trie for O(k) greedy matching
+        if (_operatorTrie.TryMatch(chars[..charCount], out var matchedOp) && matchedOp is not null)
         {
-            if (sequence.StartsWith(op, StringComparison.Ordinal))
+            // Found a match! Consume the tokens and build the operator
+            var startPosition = tokens[0].Position;
+            using var contentBuilder = new ArrayPoolBufferWriter<char>();
+
+            for (int i = 0; i < matchedOp.Length; i++)
             {
-                // Found a match! Consume the tokens and build the operator
-                var startPosition = tokens[0].Position;
-                using var contentBuilder = new ArrayPoolBufferWriter<char>();
-
-                for (int i = 0; i < op.Length; i++)
-                {
-                    WriteToBuffer(contentBuilder, tokens[i].Content.Span);
-                    reader.Advance();
-                }
-
-                var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
-                return new OperatorToken { Content = content, Position = startPosition };
+                WriteToBuffer(contentBuilder, tokens[i].Content.Span);
+                reader.Advance();
             }
+
+            var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
+            return new OperatorToken { Content = content, Position = startPosition };
         }
 
         return null;
