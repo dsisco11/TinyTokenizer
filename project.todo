@@ -165,20 +165,37 @@ Timeline: 2-3 weeks | Breaking Changes: Yes (major cleanup)
           data flow (char vs SimpleToken streams, different output types).
           Focused on sharing classification/mapping helpers instead.
 
-[ ] 3.2 Address Schema Nullability (4 hrs)
+[x] 3.2 Address Schema Nullability (4 hrs) ✓ DONE
     File: Ast/SyntaxTree.cs
-    [ ] Add HasSchema property
-        [ ] public bool HasSchema => Schema != null;
-    [ ] Add private RequireSchema() helper method
-        [ ] Throw InvalidOperationException with clear message if null
-    [ ] Add WithSchema method
-        [ ] public SyntaxTree WithSchema(Schema schema)
-    [ ] Update all schema-dependent methods to use RequireSchema()
-    [ ] Add comprehensive XML documentation
-        [ ] Document when schema is required
-        [ ] Document how to attach schema
-        [ ] Document error behavior
-    [ ] Add unit tests for schema-related functionality
+    [x] Add HasSchema property
+        [x] public bool HasSchema => Schema != null;
+    [x] Add private RequireSchema() helper method
+        [x] Throws InvalidOperationException with clear message if null
+        [x] Returns Schema if non-null (for use in expressions)
+    [x] Add WithSchema method
+        [x] public SyntaxTree WithSchema(Schema schema)
+        [x] Creates new tree with schema attached
+        [x] Auto-applies syntax binding if schema has definitions
+        [x] Throws ArgumentNullException if schema is null
+    [x] Update all schema-dependent methods to use RequireSchema()
+        [x] Match<T>(SemanticContext?) - uses RequireSchema()
+        [x] MatchAll(SemanticContext?) - uses RequireSchema()
+    [x] Add comprehensive XML documentation
+        [x] Document when schema is required
+        [x] Document how to attach schema (WithSchema)
+        [x] Document error behavior
+        [x] Add <seealso> cross-references
+    [x] Add unit tests (9 new tests)
+        [x] HasSchema_WithoutSchema_ReturnsFalse
+        [x] HasSchema_WithSchema_ReturnsTrue
+        [x] WithSchema_AttachesSchemaToExistingTree
+        [x] WithSchema_DoesNotModifyOriginalTree
+        [x] WithSchema_ThrowsOnNull
+        [x] Match_WithoutSchema_ThrowsInvalidOperationException
+        [x] MatchAll_WithoutSchema_ThrowsInvalidOperationException
+        [x] Match_WithExplicitSchema_DoesNotRequireAttachedSchema
+        [x] MatchAll_WithExplicitSchema_DoesNotRequireAttachedSchema
+    [x] All 1,174 tests pass
 
 [ ] 3.3 Make Trivia Types Public (3 hrs)
     Files: Ast/GreenTrivia.cs, new Trivia.cs, Ast/RedLeaf.cs
