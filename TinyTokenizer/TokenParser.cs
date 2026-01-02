@@ -745,9 +745,16 @@ public sealed partial class TokenParser
 
     private static void AppendToBuffer(List<char> buffer, ReadOnlyMemory<char> content)
     {
-        for (int i = 0; i < content.Length; i++)
+        if (content.Length == 0)
+            return;
+
+        // Pre-allocate capacity to avoid multiple resizes
+        buffer.EnsureCapacity(buffer.Count + content.Length);
+
+        // Use foreach over span to avoid repeated Span property access
+        foreach (var c in content.Span)
         {
-            buffer.Add(content.Span[i]);
+            buffer.Add(c);
         }
     }
 

@@ -29,12 +29,12 @@ Timeline: 1-2 days | Breaking Changes: None
     [x] Add XML documentation for format specifiers
     [x] Add unit tests for each format specifier
 
-[ ] 1.3 Fix AppendToBuffer Inefficiency (15 min)
+[x] 1.3 Fix AppendToBuffer Inefficiency (15 min) ✓ DONE
     File: TokenParser.cs
-    [ ] Add EnsureCapacity call before loop
-    [ ] Replace indexed access with foreach over span
-    [ ] Verify single capacity allocation instead of multiple resizes
-    [ ] Run all parsing tests to confirm no regressions
+    [x] Add EnsureCapacity call before loop
+    [x] Replace indexed access with foreach over span
+    [x] Verify single capacity allocation instead of multiple resizes
+    [x] Run all parsing tests to confirm no regressions
 
 [ ] 1.4 Cache SiblingIndex in RedNode (1 hr)
     File: Ast/RedNode.cs
