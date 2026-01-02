@@ -606,4 +606,287 @@ void main() {
     }
     
     #endregion
+    
+    #region Trivia Preservation Tests - Complex Nested Structures
+    
+    /// <summary>
+    /// Complex shader with triple-nested for loops for testing trivia preservation.
+    /// Uses 4-space indentation consistently.
+    /// </summary>
+    private const string ComplexNestedShader = @"#version 330 core
+
+// Uniforms
+uniform sampler2D tex;
+uniform float time;
+uniform vec3 lightDir;
+
+// Input/output
+in vec2 uv;
+out vec4 fragColor;
+
+// Process a single sample with nested loops
+vec4 processPixel(vec2 coord) {
+    vec4 result = vec4(0.0);
+    
+    // Triple nested loop for blur kernel
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) {
+            for (int c = 0; c < 4; c++) {
+                vec2 offset = vec2(float(x), float(y)) * 0.01;
+                vec4 sample = texture(tex, coord + offset);
+                result[c] += sample[c] * 0.04;
+            }
+        }
+    }
+    
+    return result;
+}
+
+// Calculate lighting with conditionals
+float calculateLight(vec3 normal) {
+    float intensity = 0.0;
+    
+    if (dot(normal, lightDir) > 0.0) {
+        intensity = dot(normal, lightDir);
+        
+        // Specular highlight
+        if (intensity > 0.8) {
+            intensity += pow(intensity, 32.0);
+        }
+    } else {
+        intensity = 0.1; // Ambient
+    }
+    
+    return intensity;
+}
+
+void main() {
+    vec4 color = processPixel(uv);
+    float light = calculateLight(vec3(0.0, 0.0, 1.0));
+    fragColor = color * light;
+}
+";
+
+    /// <summary>
+    /// Test that parsing and serializing a shader preserves exact 4-space indentation
+    /// in triple-nested for loops. This test will FAIL if the tokenizer corrupts whitespace.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_TripleNestedLoop_FourSpaceIndentationPreserved()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // These are the EXPECTED patterns with exact 4-space-per-level indentation.
+        // If ANY of these fail, there's a bug in trivia handling.
+        
+        // Level 0 (inside function): exactly 4 spaces
+        Assert.Contains("\n    // Triple nested loop for blur kernel\n", result);
+        Assert.Contains("\n    for (int x = -2; x <= 2; x++) {\n", result);
+        
+        // Level 1: exactly 8 spaces (4+4)
+        Assert.Contains("\n        for (int y = -2; y <= 2; y++) {\n", result);
+        
+        // Level 2: exactly 12 spaces (4+4+4)
+        Assert.Contains("\n            for (int c = 0; c < 4; c++) {\n", result);
+        
+        // Level 3: exactly 16 spaces (4+4+4+4)
+        Assert.Contains("\n                vec2 offset = vec2(float(x), float(y)) * 0.01;\n", result);
+        Assert.Contains("\n                vec4 sample = texture(tex, coord + offset);\n", result);
+        Assert.Contains("\n                result[c] += sample[c] * 0.04;\n", result);
+    }
+    
+    /// <summary>
+    /// Test that nested if/else conditionals preserve exact indentation.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_NestedConditionals_FourSpaceIndentationPreserved()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // Level 0 (function body): 4 spaces
+        Assert.Contains("\n    if (dot(normal, lightDir) > 0.0) {\n", result);
+        
+        // Level 1 (inside if): 8 spaces
+        Assert.Contains("\n        intensity = dot(normal, lightDir);\n", result);
+        Assert.Contains("\n        // Specular highlight\n", result);
+        Assert.Contains("\n        if (intensity > 0.8) {\n", result);
+        
+        // Level 2 (nested if): 12 spaces
+        Assert.Contains("\n            intensity += pow(intensity, 32.0);\n", result);
+        
+        // The else block: "    } else {" with 4 spaces before the closing brace
+        Assert.Contains("\n    } else {\n", result);
+        
+        // Inside else: 8 spaces, with inline comment preserved
+        Assert.Contains("\n        intensity = 0.1; // Ambient\n", result);
+    }
+    
+    /// <summary>
+    /// Test that blank lines between functions are preserved exactly (one blank line = two newlines).
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_BlankLinesBetweenFunctions_ExactlyOneBlankLine()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // Between processPixel and calculateLight: exactly one blank line
+        Assert.Contains("}\n\n// Calculate lighting with conditionals\n", result);
+        
+        // Between calculateLight and main: exactly one blank line
+        Assert.Contains("}\n\nvoid main() {\n", result);
+    }
+    
+    /// <summary>
+    /// Test that inline comments (statement followed by // comment) are preserved.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_InlineComment_SpacingPreserved()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // The inline comment must have: 8 spaces indent, statement, semicolon, space, //, space, comment
+        Assert.Contains("\n        intensity = 0.1; // Ambient\n", result);
+    }
+    
+    /// <summary>
+    /// Test that global declarations (uniforms, in/out) have no indentation.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_GlobalDeclarations_NoIndentation()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // Uniforms should have no leading spaces (start at column 0)
+        Assert.Contains("\nuniform sampler2D tex;\n", result);
+        Assert.Contains("\nuniform float time;\n", result);
+        Assert.Contains("\nuniform vec3 lightDir;\n", result);
+        
+        // In/out should have no leading spaces
+        Assert.Contains("\nin vec2 uv;\n", result);
+        Assert.Contains("\nout vec4 fragColor;\n", result);
+    }
+    
+    /// <summary>
+    /// Test that 4-level deep nesting (20 spaces for innermost) is preserved.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_FourLevelNesting_TwentySpacesInnermost()
+    {
+        const string deeplyNestedShader = @"void deepNest() {
+    // Level 1
+    for (int a = 0; a < 2; a++) {
+        // Level 2
+        for (int b = 0; b < 2; b++) {
+            // Level 3
+            for (int c = 0; c < 2; c++) {
+                // Level 4
+                for (int d = 0; d < 2; d++) {
+                    // Innermost
+                    result += a * b * c * d;
+                }
+            }
+        }
+    }
+}
+";
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(deeplyNestedShader, schema);
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // Level 1: 4 spaces
+        Assert.Contains("\n    // Level 1\n", result);
+        Assert.Contains("\n    for (int a = 0; a < 2; a++) {\n", result);
+        
+        // Level 2: 8 spaces
+        Assert.Contains("\n        // Level 2\n", result);
+        Assert.Contains("\n        for (int b = 0; b < 2; b++) {\n", result);
+        
+        // Level 3: 12 spaces
+        Assert.Contains("\n            // Level 3\n", result);
+        Assert.Contains("\n            for (int c = 0; c < 2; c++) {\n", result);
+        
+        // Level 4: 16 spaces
+        Assert.Contains("\n                // Level 4\n", result);
+        Assert.Contains("\n                for (int d = 0; d < 2; d++) {\n", result);
+        
+        // Innermost: 20 spaces (5 levels deep)
+        Assert.Contains("\n                    // Innermost\n", result);
+        Assert.Contains("\n                    result += a * b * c * d;\n", result);
+    }
+    
+    /// <summary>
+    /// Test that after making edits, unmodified sections still have exact indentation.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_AfterEdits_UnmodifiedSectionsKeepExactIndentation()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        
+        // Make edits to calculateLight
+        var calcLightQuery = Query.Syntax<GlFunctionNode>().Named("calculateLight");
+        tree.CreateEditor()
+            .Insert(calcLightQuery.InnerStart("body"), "\n    // INJECTED")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.ToText());
+        
+        // The edit should be there
+        Assert.Contains("// INJECTED", result);
+        
+        // processPixel's nested loops should still have EXACT indentation
+        Assert.Contains("\n    for (int x = -2; x <= 2; x++) {\n", result);
+        Assert.Contains("\n        for (int y = -2; y <= 2; y++) {\n", result);
+        Assert.Contains("\n            for (int c = 0; c < 4; c++) {\n", result);
+        Assert.Contains("\n                vec2 offset = vec2(float(x), float(y)) * 0.01;\n", result);
+        
+        // main function should still have exact 4-space indentation
+        Assert.Contains("\n    vec4 color = processPixel(uv);\n", result);
+        Assert.Contains("\n    float light = calculateLight(vec3(0.0, 0.0, 1.0));\n", result);
+        Assert.Contains("\n    fragColor = color * light;\n", result);
+    }
+    
+    /// <summary>
+    /// Test that undo restores the EXACT original text including all whitespace.
+    /// </summary>
+    [Fact]
+    public void TriviaPreservation_UndoRestoresExactOriginal()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(ComplexNestedShader, schema);
+        var original = tree.ToText();
+        
+        // Make edits
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        tree.CreateEditor()
+            .Insert(mainQuery.Before(), "// Comment\n")
+            .Insert(mainQuery.InnerStart("body"), "\n    // Start")
+            .Insert(mainQuery.InnerEnd("body"), "\n    // End")
+            .Commit();
+        
+        // Verify edits were applied
+        var edited = tree.ToText();
+        Assert.Contains("// Comment", edited);
+        Assert.Contains("// Start", edited);
+        Assert.Contains("// End", edited);
+        
+        // Undo
+        Assert.True(tree.Undo());
+        
+        // Should be byte-for-byte identical to original
+        var afterUndo = tree.ToText();
+        Assert.Equal(original, afterUndo);
+    }
+    
+    #endregion
 }
