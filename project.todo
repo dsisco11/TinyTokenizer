@@ -17,17 +17,17 @@ Timeline: 1-2 days | Breaking Changes: None
     [x] Verify no LINQ allocation in TryParseComment
     [x] Benchmark comment-heavy input to confirm improvement
 
-[ ] 1.2 Add IFormattable to Token (1 hr)
+[x] 1.2 Add IFormattable to Token (1 hr) ✓ DONE
     File: Token.cs
-    [ ] Add IFormattable interface to base Token record
-    [ ] Implement ToString(string?, IFormatProvider?) method
-        [ ] "G" or null → ContentSpan.ToString()
-        [ ] "T" → Type.ToString()
-        [ ] "P" → Position.ToString()
-        [ ] "R" → Range format "{Position}..{Position + Content.Length}"
-        [ ] "D" → Debug format "{Type}[{Range}]"
-    [ ] Add XML documentation for format specifiers
-    [ ] Add unit tests for each format specifier
+    [x] Add IFormattable interface to base Token record
+    [x] Implement ToString(string?, IFormatProvider?) method
+        [x] "G" or null → ContentSpan.ToString()
+        [x] "T" → Type.ToString()
+        [x] "P" → Position.ToString()
+        [x] "R" → Range format "{Position}..{Position + Content.Length}"
+        [x] "D" → Debug format "{Type}[{Range}]"
+    [x] Add XML documentation for format specifiers
+    [x] Add unit tests for each format specifier
 
 [ ] 1.3 Fix AppendToBuffer Inefficiency (15 min)
     File: TokenParser.cs
