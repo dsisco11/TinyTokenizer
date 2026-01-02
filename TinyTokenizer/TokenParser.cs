@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Buffers;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace TinyTokenizer;
 
@@ -382,15 +384,15 @@ public sealed partial class TokenParser
             {
                 // Found a match! Consume the tokens and build the operator
                 var startPosition = tokens[0].Position;
-                var contentBuilder = new List<char>();
+                using var contentBuilder = new ArrayPoolBufferWriter<char>();
 
                 for (int i = 0; i < op.Length; i++)
                 {
-                    AppendToBuffer(contentBuilder, tokens[i].Content);
+                    WriteToBuffer(contentBuilder, tokens[i].Content.Span);
                     reader.Advance();
                 }
 
-                var content = contentBuilder.ToArray().AsMemory();
+                var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
                 return new OperatorToken { Content = content, Position = startPosition };
             }
         }
@@ -412,18 +414,18 @@ public sealed partial class TokenParser
 
         // This is a tagged identifier!
         var startPosition = tagToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
 
         // Consume tag character
-        AppendToBuffer(contentBuilder, tagToken.Content);
+        WriteToBuffer(contentBuilder, tagToken.Content.Span);
         reader.Advance();
 
         // Consume identifier
         var identName = identToken.Content;
-        AppendToBuffer(contentBuilder, identToken.Content);
+        WriteToBuffer(contentBuilder, identToken.Content.Span);
         reader.Advance();
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new TaggedIdentToken { Content = content, Tag = tagChar, Name = identName, Position = startPosition };
     }
 
@@ -437,27 +439,27 @@ public sealed partial class TokenParser
         var startPosition = openToken.Position;
 
         var children = ImmutableArray.CreateBuilder<Token>();
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add opener to full content
-        AppendToBuffer(contentBuilder, openToken.Content);
+        WriteToBuffer(contentBuilder, openToken.Content.Span);
 
-        var innerStart = contentBuilder.Count;
+        var innerStart = contentBuilder.WrittenCount;
 
         // Parse children until closing delimiter or end
         while (reader.TryPeek(out var token))
         {
             if (token.Type == closerType)
             {
-                // Found closer
-                var innerContent = contentBuilder.Skip(innerStart).ToArray();
+                // Found closer - extract inner content before adding closer
+                var innerContent = contentBuilder.WrittenSpan[innerStart..].ToArray();
                 
                 // Add closer
-                AppendToBuffer(contentBuilder, token.Content);
+                WriteToBuffer(contentBuilder, token.Content.Span);
                 
                 reader.Advance();
 
-                var fullContent = contentBuilder.ToArray().AsMemory();
+                var fullContent = contentBuilder.WrittenSpan.ToArray().AsMemory();
                 var innerMemory = innerContent.AsMemory();
 
                 return new SimpleBlock
@@ -476,7 +478,7 @@ public sealed partial class TokenParser
             foreach (var child in ParseToken(reader, closerType))
             {
                 children.Add(child);
-                AppendToBuffer(contentBuilder, child.Content);
+                WriteToBuffer(contentBuilder, child.Content.Span);
             }
         }
 
@@ -496,10 +498,10 @@ public sealed partial class TokenParser
 
         var quote = quoteToken.FirstChar;
         var startPosition = quoteToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add opening quote
-        contentBuilder.Add(quote);
+        WriteToBuffer(contentBuilder, quote);
 
         var quoteType = quoteToken.Type;
         bool escaped = false;
@@ -509,7 +511,7 @@ public sealed partial class TokenParser
             if (escaped)
             {
                 // Consume escaped character
-                AppendToBuffer(contentBuilder, token.Content);
+                WriteToBuffer(contentBuilder, token.Content.Span);
                 reader.Advance();
                 escaped = false;
                 continue;
@@ -517,7 +519,7 @@ public sealed partial class TokenParser
 
             if (token.Type == SimpleTokenType.Backslash)
             {
-                contentBuilder.Add('\\');
+                WriteToBuffer(contentBuilder, '\\');
                 reader.Advance();
                 escaped = true;
                 continue;
@@ -526,15 +528,15 @@ public sealed partial class TokenParser
             if (token.Type == quoteType)
             {
                 // Closing quote
-                contentBuilder.Add(quote);
+                WriteToBuffer(contentBuilder, quote);
                 reader.Advance();
 
-                var content = contentBuilder.ToArray().AsMemory();
+                var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
                 return new StringToken { Content = content, Quote = quote, Position = startPosition };
             }
 
             // Regular content
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
@@ -561,21 +563,21 @@ public sealed partial class TokenParser
 
     private CommentToken ParseSingleLineComment(SimpleTokenReader reader)
     {
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         long startPosition = 0;
 
         // Consume first slash
         if (reader.TryPeek(out var slash1))
         {
             startPosition = slash1.Position;
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
         // Consume second slash
         if (reader.TryPeek(out _))
         {
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
@@ -585,31 +587,31 @@ public sealed partial class TokenParser
             if (token.Type == SimpleTokenType.Newline)
                 break;
 
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new CommentToken { Content = content, IsMultiLine = false, Position = startPosition };
     }
 
     private Token ParseMultiLineComment(SimpleTokenReader reader)
     {
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         long startPosition = 0;
 
         // Consume /
         if (reader.TryPeek(out var slash))
         {
             startPosition = slash.Position;
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
         // Consume *
         if (reader.TryPeek(out _))
         {
-            contentBuilder.Add('*');
+            WriteToBuffer(contentBuilder, '*');
             reader.Advance();
         }
 
@@ -621,22 +623,22 @@ public sealed partial class TokenParser
                 if (reader.TryPeek(1, out var next) && next.Type == SimpleTokenType.Slash)
                 {
                     // Found */
-                    contentBuilder.Add('*');
-                    contentBuilder.Add('/');
+                    WriteToBuffer(contentBuilder, '*');
+                    WriteToBuffer(contentBuilder, '/');
                     reader.Advance(); // *
                     reader.Advance(); // /
 
-                    var content = contentBuilder.ToArray().AsMemory();
+                    var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
                     return new CommentToken { Content = content, IsMultiLine = true, Position = startPosition };
                 }
             }
 
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
         // Unterminated comment
-        var errorContent = contentBuilder.ToArray().AsMemory();
+        var errorContent = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new ErrorToken
         {
             Content = errorContent,
@@ -653,10 +655,10 @@ public sealed partial class TokenParser
     {
         reader.TryPeek(out var digitsToken);
         var startPosition = digitsToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add the initial digits
-        AppendToBuffer(contentBuilder, digitsToken.Content);
+        WriteToBuffer(contentBuilder, digitsToken.Content.Span);
         reader.Advance();
 
         bool hasDecimal = false;
@@ -667,17 +669,17 @@ public sealed partial class TokenParser
             if (reader.TryPeek(1, out var afterDot) && afterDot.Type == SimpleTokenType.Digits)
             {
                 // It's a decimal number: add dot and digits
-                contentBuilder.Add('.');
+                WriteToBuffer(contentBuilder, '.');
                 reader.Advance(); // consume dot
 
-                AppendToBuffer(contentBuilder, afterDot.Content);
+                WriteToBuffer(contentBuilder, afterDot.Content.Span);
                 reader.Advance(); // consume digits after dot
 
                 hasDecimal = true;
             }
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
         return new NumericToken { Content = content, NumericType = numericType, Position = startPosition };
     }
@@ -690,26 +692,47 @@ public sealed partial class TokenParser
     {
         reader.TryPeek(out var dotToken);
         var startPosition = dotToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
 
         // Add the leading dot
-        contentBuilder.Add('.');
+        WriteToBuffer(contentBuilder, '.');
         reader.Advance();
 
         // Add the digits after the dot
         if (reader.TryPeek(out var digitsToken) && digitsToken.Type == SimpleTokenType.Digits)
         {
-            AppendToBuffer(contentBuilder, digitsToken.Content);
+            WriteToBuffer(contentBuilder, digitsToken.Content.Span);
             reader.Advance();
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new NumericToken { Content = content, NumericType = NumericType.FloatingPoint, Position = startPosition };
     }
 
     #endregion
 
     #region Helper Methods
+
+    /// <summary>
+    /// Writes a span to the buffer writer.
+    /// </summary>
+    private static void WriteToBuffer(ArrayPoolBufferWriter<char> buffer, ReadOnlySpan<char> span)
+    {
+        if (span.IsEmpty) return;
+        var destination = buffer.GetSpan(span.Length);
+        span.CopyTo(destination);
+        buffer.Advance(span.Length);
+    }
+
+    /// <summary>
+    /// Writes a single character to the buffer writer.
+    /// </summary>
+    private static void WriteToBuffer(ArrayPoolBufferWriter<char> buffer, char c)
+    {
+        var destination = buffer.GetSpan(1);
+        destination[0] = c;
+        buffer.Advance(1);
+    }
 
     private static bool IsOpeningDelimiter(SimpleTokenType type)
     {
@@ -741,21 +764,6 @@ public sealed partial class TokenParser
             SimpleTokenType.OpenParen => TokenType.ParenthesisBlock,
             _ => throw new ArgumentException($"Not an opening delimiter: {opener}")
         };
-    }
-
-    private static void AppendToBuffer(List<char> buffer, ReadOnlyMemory<char> content)
-    {
-        if (content.Length == 0)
-            return;
-
-        // Pre-allocate capacity to avoid multiple resizes
-        buffer.EnsureCapacity(buffer.Count + content.Length);
-
-        // Use foreach over span to avoid repeated Span property access
-        foreach (var c in content.Span)
-        {
-            buffer.Add(c);
-        }
     }
 
     #endregion

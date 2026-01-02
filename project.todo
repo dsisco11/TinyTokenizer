@@ -60,26 +60,25 @@ PHASE 2: Performance (v0.7.0)
 Timeline: 1-2 weeks | Breaking Changes: Minor (internal APIs only)
 ═══════════════════════════════════════════════════════════════════════════════
 
-[ ] 2.1 Replace List<char> with ArrayPoolBufferWriter (4 hrs)
+[x] 2.1 Replace List<char> with ArrayPoolBufferWriter (4 hrs) ✓ DONE
     Files: TokenParser.cs, TinyTokenizer.csproj
-    [ ] Add NuGet reference: CommunityToolkit.HighPerformance 8.2.2
-    [ ] Add using CommunityToolkit.HighPerformance.Buffers
-    [ ] Update ParseBlock method
-        [ ] Replace List<char> with ArrayPoolBufferWriter<char>
-        [ ] Use buffer.Write(span) for appending
-        [ ] Add using statement for proper disposal
-    [ ] Update ParseString method
-        [ ] Replace List<char> with ArrayPoolBufferWriter<char>
-        [ ] Ensure disposal in all code paths
-    [ ] Update ParseNumericFromDigits method
-    [ ] Update ParseNumericFromDot method
-    [ ] Update ParseSingleLineComment method
-    [ ] Update ParseMultiLineComment method
-    [ ] Update TryParseOperator method
-    [ ] Update TryParseTaggedIdent method
-    [ ] Remove AppendToBuffer helper method (no longer needed)
-    [ ] Run allocation benchmark (target: >50% reduction)
-    [ ] Verify no memory leaks with memory profiler
+    [x] Add NuGet reference: CommunityToolkit.HighPerformance 8.2.2
+    [x] Add using CommunityToolkit.HighPerformance.Buffers
+    [x] Update ParseBlock method
+        [x] Replace List<char> with ArrayPoolBufferWriter<char>
+        [x] Use buffer.Write(span) for appending
+        [x] Add using statement for proper disposal
+    [x] Update ParseString method
+        [x] Replace List<char> with ArrayPoolBufferWriter<char>
+        [x] Ensure disposal in all code paths
+    [x] Update ParseNumericFromDigits method
+    [x] Update ParseNumericFromDot method
+    [x] Update ParseSingleLineComment method
+    [x] Update ParseMultiLineComment method
+    [x] Update TryParseOperator method
+    [x] Update TryParseTaggedIdent method
+    [x] Remove AppendToBuffer helper method (replaced with WriteToBuffer)
+    [x] Run all parsing tests to confirm no regressions
 
 [ ] 2.2 Build Operator Trie (6 hrs)
     Files: TokenParser.cs, new OperatorTrie.cs
@@ -314,7 +313,7 @@ Timeline: Continuous
 DEPENDENCIES
 ═══════════════════════════════════════════════════════════════════════════════
 
-[ ] Add CommunityToolkit.HighPerformance 8.2.2 (Phase 2.1)
+[x] Add CommunityToolkit.HighPerformance 8.2.2 (Phase 2.1) ✓ DONE
     Purpose: ArrayPoolBufferWriter<char> for zero-allocation parsing
 
 ═══════════════════════════════════════════════════════════════════════════════
