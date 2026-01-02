@@ -562,6 +562,51 @@ void main() {
         // Note: The blank line between #version and @import is preserved (leading trivia)
         Assert.Contains("#version 330 core\n\n// @import \"my-include.glsl\"", NormalizeLineEndings(result));
     }
+
+    [Fact]
+    public void InsertNewImport_CanQueryGlImportNodeAfterwards()
+    {
+        // Use a shader without any imports initially
+        const string shaderWithoutImport = @"#version 330 core
+
+uniform sampler2D tex;
+
+void main() {
+    vec4 color = texture(tex, vec2(0.0));
+}
+";
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(shaderWithoutImport, schema);
+        
+        // Verify no imports exist before insertion
+        var importQuery = Query.Syntax<GlImportNode>();
+        var importsBefore = tree.Select(importQuery).ToList();
+        Assert.Empty(importsBefore);
+        
+        // Insert a new import after the #version directive
+        var versionQuery = Query.Syntax<GlDirectiveNode>().Named("version");
+        tree.CreateEditor()
+            .Insert(versionQuery.After(), "\n@import \"utils.glsl\"")
+            .Commit();
+        
+        // The inserted text is present in serialized content
+        var serialized = NormalizeLineEndings(tree.Root.ToString());
+        Assert.Contains("@import \"utils.glsl\"", serialized);
+        
+        // Re-parse the modified content to apply syntax binding
+        // (syntax binding only happens at parse time, not during edits)
+        var reparsedTree = SyntaxTree.Parse(serialized, schema);
+        
+        // Now verify the new import can be queried as a GlImportNode
+        var importsAfter = reparsedTree.Select(importQuery).Cast<GlImportNode>().ToList();
+        Assert.Single(importsAfter);
+        
+        var insertedImport = importsAfter[0];
+        Assert.Equal("import", insertedImport.Name);
+        // Filename includes trailing trivia via ToString(), so check the node's text value
+        Assert.NotNull(insertedImport.FilenameNode);
+        Assert.Equal("\"utils.glsl\"", insertedImport.FilenameNode!.Text);
+    }
     
     #endregion
 }
