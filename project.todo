@@ -306,18 +306,18 @@ Timeline: Continuous
         [x] Test "00123" → Integer (leading zeros)
         [x] Test "1.2.3" → 1.2 FloatingPoint + .3 FloatingPoint (greedy parsing)
 
-[ ] 4.4 Thread Safety Tests (3 hrs)
+[x] 4.4 Thread Safety Tests (3 hrs) ✓ DONE
     File: new TinyTokenizer.Tests/ConcurrencyTests.cs
-    [ ] Create ConcurrencyTests.cs file
-    [ ] Concurrent RedNode access test
-        [ ] Parse a tree once
-        [ ] Spawn 100 tasks accessing Root.Children
-        [ ] Each task accesses SiblingIndex, NextSibling()
-        [ ] Verify no exceptions thrown
-    [ ] Concurrent tree parsing test
-        [ ] Spawn 100 tasks each parsing different input
-        [ ] Await all tasks
-        [ ] Verify all trees have valid Root
+    [x] Create ConcurrencyTests.cs file
+    [x] Concurrent RedNode access test
+        [x] Parse a tree once
+        [x] Spawn 100 tasks accessing Root.Children
+        [x] Each task accesses SiblingIndex, NextSibling()
+        [x] Verify no exceptions thrown
+    [x] Concurrent tree parsing test
+        [x] Spawn 100 tasks each parsing different input
+        [x] Await all tasks
+        [x] Verify all trees have valid Root
 
 [ ] 4.5 Performance Benchmarks (4 hrs)
     File: TinyTokenizer.Benchmarks/
