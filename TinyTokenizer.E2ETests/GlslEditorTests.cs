@@ -282,8 +282,9 @@ void main() {
         
         var result = NormalizeLineEndings(tree.Root.ToText());
         
-        // Verify insertion appears at inner start of main's body (after opening brace)
-        Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
+        // Verify insertion appears at inner start of main's body (after opener's trailing trivia)
+        // Original: {\n    vec4 color... -> After insert: {\n    \n    vec4 sample...vec4 color
+        Assert.Contains("void main() {\n    \n    vec4 sample = texture(tex, uv);", result);
     }
     
     #endregion
@@ -416,8 +417,8 @@ void main() {
         Assert.Contains("/* foo comment */\n\n// A helper function to sample a texture\nvec4 foo", result);
         // 3. Comment above main (before leading trivia)
         Assert.Contains("// Entry point for the fragment shader\n\nvoid main()", result);
-        // 4. Sample at inner start of main body  
-        Assert.Contains("void main() {\n    vec4 sample = texture(tex, uv);", result);
+        // 4. Sample at inner start of main body (opener's trailing trivia preserved: newline + indent)
+        Assert.Contains("void main() {\n    \n    vec4 sample = texture(tex, uv);", result);
         // 5. fragColor at inner end of main body (shows context: last stmt + inserted + close brace)
         Assert.Matches(@"foo\(uv\);\s*fragColor = sample;\s*}", result);
         // 6. Comment after main (shows closing brace + trailing trivia + inserted content)
@@ -501,7 +502,8 @@ void main() {
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
-        Assert.Contains("void main() {\n    // Body start", result);
+        // With new GreenBlock design, opener's trailing trivia (newline + indent) is preserved
+        Assert.Contains("void main() {\n    \n    // Body start", result);
     }
     
     [Fact]
