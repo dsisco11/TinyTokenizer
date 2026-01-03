@@ -12,11 +12,15 @@ namespace TinyTokenizer;
 /// </summary>
 /// <param name="Type">The type of this token.</param>
 /// <param name="Content">The character content of this token.</param>
-/// <param name="Position">The absolute position in the source where this token starts.</param>
+/// <param name="Position">The absolute position in the source where this token starts. Limited to ~2GB file size.</param>
+/// <remarks>
+/// Position uses <c>int</c> rather than <c>long</c> for memory efficiency and alignment with
+/// .NET's string and array length limits. This supports files up to ~2GB in size.
+/// </remarks>
 public readonly record struct SimpleToken(
     SimpleTokenType Type,
     ReadOnlyMemory<char> Content,
-    long Position
+    int Position
 ) : ITextSerializable,
     IParsable<SimpleToken>,
     ISpanParsable<SimpleToken>,
@@ -53,7 +57,7 @@ public readonly record struct SimpleToken(
     /// <summary>
     /// Creates a simple token from a single character.
     /// </summary>
-    public static SimpleToken FromChar(SimpleTokenType type, char c, long position)
+    public static SimpleToken FromChar(SimpleTokenType type, char c, int position)
     {
         return new SimpleToken(type, new[] { c }.AsMemory(), position);
     }
@@ -61,7 +65,7 @@ public readonly record struct SimpleToken(
     /// <summary>
     /// Creates a simple token from a string.
     /// </summary>
-    public static SimpleToken FromString(SimpleTokenType type, string content, long position)
+    public static SimpleToken FromString(SimpleTokenType type, string content, int position)
     {
         return new SimpleToken(type, content.AsMemory(), position);
     }
@@ -144,7 +148,7 @@ public readonly record struct SimpleToken(
 
         // Parse position
         var positionSpan = s[(atIndex + 1)..];
-        if (!long.TryParse(positionSpan, NumberStyles.Integer, provider, out var position))
+        if (!int.TryParse(positionSpan, NumberStyles.Integer, provider, out var position))
             return false;
 
         // Extract content (between colon and @)

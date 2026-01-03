@@ -4,6 +4,7 @@ using Xunit;
 
 namespace TinyTokenizer.Tests;
 
+[Trait("Category", "Semantic")]
 public class SemanticNodeTests
 {
     #region NodeKind Extensions

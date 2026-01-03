@@ -1,0 +1,371 @@
+# TinyTokenizer Improvement Plan - Project Tasks
+# Based on: docs/improvement-plan-2026.md
+# Created: January 2, 2026
+# Target Completion: Q2 2026
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: Quick Wins (v0.6.6)
+Timeline: 1-2 days | Breaking Changes: None
+═══════════════════════════════════════════════════════════════════════════════
+
+[x] 1.1 Pre-compute Comment Style Flags (30 min) ✓ DONE
+    File: TokenParser.cs
+    [x] Add _hasCSingleLineComment private readonly field
+    [x] Add _hasCMultiLineComment private readonly field
+    [x] Initialize fields in constructor from options.CommentStyles
+    [x] Update TryParseComment to use cached fields instead of LINQ
+    [x] Verify no LINQ allocation in TryParseComment
+    [x] Benchmark comment-heavy input to confirm improvement
+
+[x] 1.2 Add IFormattable to Token (1 hr) ✓ DONE
+    File: Token.cs
+    [x] Add IFormattable interface to base Token record
+    [x] Implement ToString(string?, IFormatProvider?) method
+        [x] "G" or null → ContentSpan.ToString()
+        [x] "T" → Type.ToString()
+        [x] "P" → Position.ToString()
+        [x] "R" → Range format "{Position}..{Position + Content.Length}"
+        [x] "D" → Debug format "{Type}[{Range}]"
+    [x] Add XML documentation for format specifiers
+    [x] Add unit tests for each format specifier
+
+[x] 1.3 Fix AppendToBuffer Inefficiency (15 min) ✓ DONE
+    File: TokenParser.cs
+    [x] Add EnsureCapacity call before loop
+    [x] Replace indexed access with foreach over span
+    [x] Verify single capacity allocation instead of multiple resizes
+    [x] Run all parsing tests to confirm no regressions
+
+[x] 1.4 Cache SiblingIndex in RedNode (1 hr) ✓ DONE
+    File: Ast/RedNode.cs
+    [x] Add private readonly int _siblingIndex field
+    [x] Update internal constructor to accept siblingIndex parameter (default -1)
+    [x] Update GetRedChild<T> to pass slot index when creating red child
+    [x] Update CreateRed method signature to accept siblingIndex
+    [x] Change SiblingIndex property to return _siblingIndex directly
+    [x] Verify O(1) access time
+    [x] Test NextSibling() and PreviousSibling() still work correctly
+
+[ ] 1.5 Phase 1 Release
+    [ ] Run full test suite (dotnet test)
+    [ ] Run benchmarks and document results
+    [ ] Update CHANGELOG.md with changes
+    [ ] Bump version to 0.6.6 in TinyTokenizer.csproj
+    [ ] Commit and tag as v0.6.6
+    [ ] Create GitHub release
+    [ ] Verify NuGet package published via CI
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: Performance (v0.7.0)
+Timeline: 1-2 weeks | Breaking Changes: Minor (internal APIs only)
+═══════════════════════════════════════════════════════════════════════════════
+
+[x] 2.1 Replace List<char> with ArrayPoolBufferWriter (4 hrs) ✓ DONE
+    Files: TokenParser.cs, TinyTokenizer.csproj
+    [x] Add NuGet reference: CommunityToolkit.HighPerformance 8.2.2
+    [x] Add using CommunityToolkit.HighPerformance.Buffers
+    [x] Update ParseBlock method
+        [x] Replace List<char> with ArrayPoolBufferWriter<char>
+        [x] Use buffer.Write(span) for appending
+        [x] Add using statement for proper disposal
+    [x] Update ParseString method
+        [x] Replace List<char> with ArrayPoolBufferWriter<char>
+        [x] Ensure disposal in all code paths
+    [x] Update ParseNumericFromDigits method
+    [x] Update ParseNumericFromDot method
+    [x] Update ParseSingleLineComment method
+    [x] Update ParseMultiLineComment method
+    [x] Update TryParseOperator method
+    [x] Update TryParseTaggedIdent method
+    [x] Remove AppendToBuffer helper method (replaced with WriteToBuffer)
+    [x] Run all parsing tests to confirm no regressions
+
+[x] 2.2 Build Operator Trie (6 hrs) ✓ DONE
+    Files: TokenParser.cs, new OperatorTrie.cs
+    [x] Create OperatorTrie.cs file
+        [x] Create internal sealed class OperatorTrie
+        [x] Create private sealed class TrieNode
+            [x] Dictionary<char, TrieNode>? Children
+            [x] string? Operator (non-null if end of operator)
+        [x] Implement Add(string op) method
+        [x] Implement TryMatch(ReadOnlySpan<char>) method
+    [x] Update TokenParser constructor
+        [x] Add private readonly OperatorTrie _operatorTrie field
+        [x] Build trie from options.Operators
+    [x] Update TryParseOperator to use trie lookup
+    [x] Verify O(k) matching where k = operator length
+    [x] Verify greedy matching still works (longest match first)
+    [x] Add unit tests for OperatorTrie
+    [x] Benchmark with 50+ operators to confirm improvement
+
+[x] 2.3 Standardize Position Types (2 hrs) ⚠️ BREAKING ✓ DONE
+    Files: SimpleToken.cs, Token.cs, all derived types
+    [x] Update SimpleToken.cs
+        [x] Change Position parameter: long → int
+    [x] Update Token.cs
+        [x] Change Position parameter: long → int
+    [x] Update all derived token types (if any explicit Position usage)
+    [x] Update Lexer.cs position tracking
+    [x] Update TokenParser.cs position handling
+    [x] Search codebase for all long position usages and update
+    [x] Add XML doc noting 2GB file size practical limit
+    [x] Update all tests with position assertions
+    [ ] Document breaking change in CHANGELOG
+
+[x] 2.4 Unify Operator Matching with OperatorTrie (1 hr) ✓ DONE
+    Files: Tokenizer.cs, Ast/GreenLexer.cs
+    [x] Update Tokenizer.cs to use OperatorTrie instead of sorted array
+        [x] Replace _sortedOperators field with _operatorTrie
+        [x] Build trie in constructor from options.Operators
+        [x] Update TryParseOperator to use trie-based O(k) matching
+    [x] Update GreenLexer.cs to use OperatorTrie
+        [x] Replace _sortedOperators field with _operatorTrie
+        [x] Build trie in constructor
+        [x] Update TryParseOperator to use trie-based matching
+        [x] Use stackalloc for character buffer (zero allocation)
+    [x] Keep TokenizerOptions.Operators as ImmutableHashSet (no breaking change)
+    [x] Verify all tests pass
+
+[ ] 2.5 Phase 2 Release
+    [ ] Run full test suite
+    [ ] Run before/after allocation benchmarks
+    [ ] Document benchmark results
+    [ ] Write migration guide for position type change (long → int)
+    [ ] Update CHANGELOG.md with all changes and breaking changes
+    [ ] Bump version to 0.7.0 in TinyTokenizer.csproj
+    [ ] Commit and tag as v0.7.0
+    [ ] Create GitHub release with migration notes
+    [ ] Verify NuGet package published via CI
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3: API Cleanup (v0.8.0)
+Timeline: 2-3 weeks | Breaking Changes: Yes (major cleanup)
+═══════════════════════════════════════════════════════════════════════════════
+
+[x] 3.1 Consolidate Duplicate Parsing Logic (4 hrs) ✓ DONE
+    Files: TokenizerCore.cs, TokenParser.cs, Ast/GreenLexer.cs
+    [x] Extend TokenizerCore.cs with shared helper methods
+        [x] Add IsOperatorCapableToken(SimpleTokenType) method
+        [x] Add GetOperatorChar(SimpleTokenType) method
+        [x] Add GetMatchingCloser(SimpleTokenType) method
+        [x] Add GetBlockTokenType(SimpleTokenType) method
+        [x] Add IsOpeningDelimiter(SimpleTokenType) overload
+        [x] Add IsClosingDelimiter(SimpleTokenType) overload
+    [x] Refactor TokenParser.cs to use TokenizerCore
+        [x] Remove duplicate IsOperatorCapableToken
+        [x] Remove duplicate GetTokenChar (use GetOperatorChar)
+        [x] Remove duplicate IsOpeningDelimiter/IsClosingDelimiter
+        [x] Remove duplicate GetMatchingCloser/GetBlockTokenType
+    [x] Refactor GreenLexer.cs to use TokenizerCore
+        [x] Remove duplicate GetOperatorChar
+        [x] Remove duplicate IsOpeningDelimiter/IsClosingDelimiter
+        [x] Remove duplicate GetMatchingCloser
+    [x] Verify all 1,165 tests pass
+    Note: Full parsing logic unification not practical due to different 
+          data flow (char vs SimpleToken streams, different output types).
+          Focused on sharing classification/mapping helpers instead.
+
+[x] 3.2 Address Schema Nullability (4 hrs) ✓ DONE
+    File: Ast/SyntaxTree.cs
+    [x] Add HasSchema property
+        [x] public bool HasSchema => Schema != null;
+    [x] Add private RequireSchema() helper method
+        [x] Throws InvalidOperationException with clear message if null
+        [x] Returns Schema if non-null (for use in expressions)
+    [x] Add WithSchema method
+        [x] public SyntaxTree WithSchema(Schema schema)
+        [x] Creates new tree with schema attached
+        [x] Auto-applies syntax binding if schema has definitions
+        [x] Throws ArgumentNullException if schema is null
+    [x] Update all schema-dependent methods to use RequireSchema()
+        [x] Match<T>(SemanticContext?) - uses RequireSchema()
+        [x] MatchAll(SemanticContext?) - uses RequireSchema()
+    [x] Add comprehensive XML documentation
+        [x] Document when schema is required
+        [x] Document how to attach schema (WithSchema)
+        [x] Document error behavior
+        [x] Add <seealso> cross-references
+    [x] Add unit tests (9 new tests)
+        [x] HasSchema_WithoutSchema_ReturnsFalse
+        [x] HasSchema_WithSchema_ReturnsTrue
+        [x] WithSchema_AttachesSchemaToExistingTree
+        [x] WithSchema_DoesNotModifyOriginalTree
+        [x] WithSchema_ThrowsOnNull
+        [x] Match_WithoutSchema_ThrowsInvalidOperationException
+        [x] MatchAll_WithoutSchema_ThrowsInvalidOperationException
+        [x] Match_WithExplicitSchema_DoesNotRequireAttachedSchema
+        [x] MatchAll_WithExplicitSchema_DoesNotRequireAttachedSchema
+    [x] All 1,174 tests pass
+
+[x] 3.3 Make Trivia Types Public (3 hrs) ✓ DONE
+    Files: Ast/GreenTrivia.cs, new Trivia.cs, Ast/RedLeaf.cs, Ast/RedBlock.cs
+    [x] Create Trivia.cs file
+        [x] Create public readonly struct Trivia
+            [x] internal Trivia(GreenTrivia green) constructor
+            [x] TriviaKind Kind property
+            [x] string Text property
+            [x] int Width property
+            [x] bool IsWhitespace, IsNewline, IsComment helper properties
+            [x] IEquatable<Trivia> implementation
+            [x] override ToString()
+        [x] TriviaKind enum already public (in GreenTrivia.cs)
+    [x] Update RedLeaf.cs
+        [x] Add IEnumerable<Trivia> GetLeadingTrivia() method
+        [x] Add IEnumerable<Trivia> GetTrailingTrivia() method
+        [x] Add bool HasLeadingTrivia property
+        [x] Add bool HasTrailingTrivia property
+    [x] Update RedBlock.cs
+        [x] Add IEnumerable<Trivia> GetLeadingTrivia() method
+        [x] Add IEnumerable<Trivia> GetInnerTrivia() method
+        [x] Add IEnumerable<Trivia> GetTrailingTrivia() method
+        [x] Add bool HasLeadingTrivia, HasInnerTrivia, HasTrailingTrivia properties
+    [x] Add XML documentation to all new types
+    [x] Add unit tests (21 new tests in TriviaTests.cs)
+    [x] All 1,195 tests pass
+
+[x] 3.4 Comprehensive Documentation Pass (4 hrs) ✓ VERIFIED COMPLETE
+    Files: All public API files
+    Note: Documentation review shows codebase already has comprehensive XML docs:
+    [x] Query.cs - Has <summary>, <example>, <param> tags on all methods
+    [x] TreeWalker.cs - Has <summary> for NodeFilter, FilterResult, all methods
+    [x] NodePattern.cs - Has <summary> and <remarks> (marked obsolete with guidance)
+    [x] SyntaxBinder.cs - Has <summary> and <remarks> on class and methods
+    [x] Schema.cs - Has <summary> for all properties, SchemaBuilder documented
+    [x] SemanticNode.cs - Has <summary> for base class and all built-in nodes
+    [x] NodeQuery.cs/NodeQueryTypes.cs - Has full documentation
+    [x] QueryCombinators.cs/QueryExtensions.cs - Has <summary> and <remarks>
+    [x] SemanticContext.cs - Has <summary> for all members
+    [x] SemanticNodeDefinition.cs - Has full interface/class documentation
+    [x] RedSyntaxNode.cs - Has <example> code and <remarks>
+    [x] Trivia.cs - Has comprehensive <summary>, <remarks>, <example>
+    Template used consistently: <summary>, <remarks>, <example>, <seealso>
+
+[x] 3.5 Remove Obsolete APIs (30 min) ⚠️ BREAKING ✓ DONE
+    File: Ast/SyntaxTree.cs
+    [x] Remove [Obsolete] attribute from ToFullString()
+    [x] Remove ToFullString() method entirely
+    [x] Search for and update any internal usages (none found)
+    [x] All 1,195 tests pass
+    [ ] Document removal in CHANGELOG (at release time)
+
+[ ] 3.6 Phase 3 Release
+    [ ] Run full test suite
+    [ ] Verify API documentation is complete
+    [ ] Write migration guide for removed/changed APIs
+    [ ] Update CHANGELOG.md with all changes and breaking changes
+    [ ] Bump version to 0.8.0 in TinyTokenizer.csproj
+    [ ] Commit and tag as v0.8.0
+    [ ] Create GitHub release with migration notes
+    [ ] Verify NuGet package published via CI
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 4: Testing (Ongoing)
+Timeline: Continuous
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] 4.1 Error Recovery Test Suite (4 hrs)
+    File: new TinyTokenizer.Tests/ErrorRecoveryTests.cs
+    [x] Create ErrorRecoveryTests.cs file
+    [x] Unclosed block tests
+        [x] Test "{" produces ErrorToken
+        [x] Test "[" produces ErrorToken
+        [x] Test "(" produces ErrorToken
+        [x] Test "{ { }" (nested unclosed) produces ErrorToken
+    [x] Mismatched delimiter tests
+        [x] Test "{]" produces ErrorToken
+        [x] Test "[)" produces ErrorToken
+        [x] Test "(}" produces ErrorToken
+    [x] Unclosed string tests
+        [x] Test "\"hello" produces ErrorToken or Symbol
+        [x] Test "'world" produces ErrorToken or Symbol
+        [x] Test "\"test\nmore\"" handles newline in string
+    [x] Recovery tests
+        [x] Test tokenizer continues after error token
+
+[ ] 4.2 Unicode Test Suite (3 hrs)
+    File: new TinyTokenizer.Tests/UnicodeTests.cs
+    [x] Create UnicodeTests.cs file
+    [x] Unicode identifier tests
+        [x] Test "変数" (Japanese) recognized as identifier
+        [x] Test "переменная" (Cyrillic) recognized as identifier
+        [x] Test "משתנה" (Hebrew RTL) recognized as identifier
+    [x] Emoji tests
+        [x] Test "🚀rocket" (emoji prefix) handled correctly
+        [x] Test "var_🎉" (emoji suffix) handled correctly
+    [x] Invisible character tests
+        [x] Test "\u200B" (zero-width space) handled
+        [x] Test "\uFEFF" (BOM) handled
+
+[x] 4.3 Numeric Edge Cases Tests (2 hrs) ✓ DONE
+    File: TinyTokenizer.Tests/LexerParserTests.cs (extend existing)
+    [x] Add numeric edge case theory tests
+        [x] Test "0" → Integer
+        [x] Test "0.0" → FloatingPoint
+        [x] Test ".0" → FloatingPoint
+        [x] Test "0." → Integer + Dot (trailing dot separate)
+        [x] Test "00123" → Integer (leading zeros)
+        [x] Test "1.2.3" → 1.2 FloatingPoint + .3 FloatingPoint (greedy parsing)
+
+[x] 4.4 Thread Safety Tests (3 hrs) ✓ DONE
+    File: new TinyTokenizer.Tests/ConcurrencyTests.cs
+    [x] Create ConcurrencyTests.cs file
+    [x] Concurrent RedNode access test
+        [x] Parse a tree once
+        [x] Spawn 100 tasks accessing Root.Children
+        [x] Each task accesses SiblingIndex, NextSibling()
+        [x] Verify no exceptions thrown
+    [x] Concurrent tree parsing test
+        [x] Spawn 100 tasks each parsing different input
+        [x] Await all tasks
+        [x] Verify all trees have valid Root
+
+[x] 4.5 Performance Benchmarks (4 hrs) ✓ DONE
+    File: TinyTokenizer.Benchmarks/
+    [x] Create AllocationBenchmarks.cs
+        [x] Add [MemoryDiagnoser] attribute
+        [x] Setup small input (~1 KB)
+        [x] Setup medium input (~100 KB)
+        [x] Setup large input (~1 MB)
+        [x] Add ParseSmall benchmark
+        [x] Add ParseMedium benchmark
+        [x] Add ParseLarge benchmark
+    [x] Create OperatorMatchingBenchmarks.cs
+        [x] Add [MemoryDiagnoser] attribute
+        [x] Add [Params(10, 50, 100)] OperatorCount
+        [x] Add MatchOperators benchmark
+    [x] Create SyntaxTreeBenchmarks.cs
+        [x] Tree parsing benchmarks (small/medium/large/nested)
+        [x] Schema integration benchmarks
+        [x] Red node creation and traversal benchmarks
+        [x] TreeWalker benchmarks
+        [x] Query/filter benchmarks
+        [x] Sibling navigation benchmarks
+        [x] Edit/mutation benchmarks
+
+═══════════════════════════════════════════════════════════════════════════════
+DEPENDENCIES
+═══════════════════════════════════════════════════════════════════════════════
+
+[x] Add CommunityToolkit.HighPerformance 8.2.2 (Phase 2.1) ✓ DONE
+    Purpose: ArrayPoolBufferWriter<char> for zero-allocation parsing
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS METRICS
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Allocation reduction: >50% fewer allocations in parsing benchmarks
+[ ] API consistency: All public types implement IFormattable where applicable
+[ ] Test coverage: >85% line coverage on core parsing logic
+[ ] Documentation: 100% XML doc coverage on public APIs
+[ ] Performance: No regression in existing benchmarks
+
+═══════════════════════════════════════════════════════════════════════════════
+RISK ASSESSMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Risk                          | Likelihood | Impact | Mitigation
+------------------------------|------------|--------|--------------------------------
+Breaking change regression    | Medium     | High   | Comprehensive test suite
+Performance regression        | Low        | Medium | Benchmark before/after each phase
+Memory leak from pooling      | Low        | High   | Memory profiler, dispose patterns
+Thread safety issues          | Medium     | High   | Dedicated concurrency tests

@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Buffers;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace TinyTokenizer;
 
@@ -10,7 +12,9 @@ namespace TinyTokenizer;
 public sealed partial class TokenParser
 {
     private readonly TokenizerOptions _options;
-    private readonly ImmutableArray<string> _sortedOperators;
+    private readonly OperatorTrie _operatorTrie;
+    private readonly bool _hasCSingleLineComment;
+    private readonly bool _hasCMultiLineComment;
 
     /// <summary>
     /// Initializes a new instance of <see cref="TokenParser"/> with default options.
@@ -25,10 +29,17 @@ public sealed partial class TokenParser
     public TokenParser(TokenizerOptions options)
     {
         _options = options;
-        // Sort operators by length descending for greedy matching (longest first)
-        _sortedOperators = options.Operators
-            .OrderByDescending(op => op.Length)
-            .ToImmutableArray();
+        
+        // Build operator trie for O(k) greedy matching
+        _operatorTrie = new OperatorTrie();
+        foreach (var op in options.Operators)
+        {
+            _operatorTrie.Add(op);
+        }
+        
+        // Pre-compute comment style flags to avoid LINQ allocation on each TryParseComment call
+        _hasCSingleLineComment = options.CommentStyles.Any(s => s.Start == "//");
+        _hasCMultiLineComment = options.CommentStyles.Any(s => s.Start == "/*");
     }
 
     #region Public API
@@ -72,7 +83,7 @@ public sealed partial class TokenParser
             yield break;
 
         // Check for unexpected closing delimiter
-        if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
+        if (TokenizerCore.IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
             yield return new ErrorToken
@@ -85,7 +96,7 @@ public sealed partial class TokenParser
         }
 
         // Opening delimiter - parse block
-        if (IsOpeningDelimiter(token.Type))
+        if (TokenizerCore.IsOpeningDelimiter(token.Type))
         {
             var block = ParseBlock(reader);
             yield return block;
@@ -231,13 +242,13 @@ public sealed partial class TokenParser
         }
 
         // Check if this is an operator-capable token type (includes Symbol)
-        if (IsOperatorCapableToken(token.Type))
+        if (TokenizerCore.IsOperatorCapableToken(token.Type))
         {
             // First check if it could be a tagged identifier
             // Get the character for this token type
             char? tokenChar = token.Type == SimpleTokenType.Symbol && token.Content.Length == 1
                 ? token.Content.Span[0]
-                : GetTokenChar(token.Type);
+                : TokenizerCore.GetOperatorChar(token.Type);
             
             if (tokenChar.HasValue && _options.TagPrefixes.Contains(tokenChar.Value))
             {
@@ -274,75 +285,22 @@ public sealed partial class TokenParser
     }
 
     /// <summary>
-    /// Checks if a SimpleTokenType represents a character that could be part of an operator.
-    /// </summary>
-    private static bool IsOperatorCapableToken(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.Symbol
-            or SimpleTokenType.Equals
-            or SimpleTokenType.Plus
-            or SimpleTokenType.Minus
-            or SimpleTokenType.LessThan
-            or SimpleTokenType.GreaterThan
-            or SimpleTokenType.Pipe
-            or SimpleTokenType.Ampersand
-            or SimpleTokenType.Percent
-            or SimpleTokenType.Caret
-            or SimpleTokenType.Tilde
-            or SimpleTokenType.Question
-            or SimpleTokenType.Exclamation
-            or SimpleTokenType.Colon
-            or SimpleTokenType.At;
-    }
-
-    /// <summary>
-    /// Gets the character representation of a SimpleTokenType for operator matching.
-    /// </summary>
-    private static char? GetTokenChar(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.Equals => '=',
-            SimpleTokenType.Plus => '+',
-            SimpleTokenType.Minus => '-',
-            SimpleTokenType.LessThan => '<',
-            SimpleTokenType.GreaterThan => '>',
-            SimpleTokenType.Pipe => '|',
-            SimpleTokenType.Ampersand => '&',
-            SimpleTokenType.Percent => '%',
-            SimpleTokenType.Caret => '^',
-            SimpleTokenType.Tilde => '~',
-            SimpleTokenType.Question => '?',
-            SimpleTokenType.Exclamation => '!',
-            SimpleTokenType.Colon => ':',
-            SimpleTokenType.Hash => '#',
-            SimpleTokenType.At => '@',
-            SimpleTokenType.Slash => '/',
-            SimpleTokenType.Asterisk => '*',
-            SimpleTokenType.Dot => '.',
-            SimpleTokenType.Comma => ',',
-            SimpleTokenType.Semicolon => ';',
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// Tries to parse an operator starting from the current position.
-    /// Uses greedy matching (longest operator first).
+    /// Uses trie-based greedy matching for O(k) lookup where k is operator length.
     /// </summary>
     private OperatorToken? TryParseOperator(SimpleTokenReader reader)
     {
-        if (_sortedOperators.IsEmpty)
+        if (_operatorTrie.IsEmpty)
             return null;
 
-        // Build a string of consecutive operator-capable characters
-        var chars = new List<char>();
-        var tokens = new List<SimpleToken>();
-        int offset = 0;
+        // Build a span of consecutive operator-capable characters for trie matching
+        Span<char> chars = stackalloc char[16]; // Most operators are short
+        var tokens = new List<SimpleToken>(8);
+        int charCount = 0;
 
-        while (reader.TryPeek(offset, out var peekToken))
+        while (reader.TryPeek(charCount, out var peekToken))
         {
-            var tokenChar = GetTokenChar(peekToken.Type);
+            var tokenChar = TokenizerCore.GetOperatorChar(peekToken.Type);
             if (tokenChar == null)
             {
                 // For Symbol type, get the actual character
@@ -355,38 +313,38 @@ public sealed partial class TokenParser
                     break;
                 }
             }
-            chars.Add(tokenChar.Value);
+            
+            // Grow buffer if needed (rare case for very long operators)
+            if (charCount >= chars.Length)
+            {
+                var newChars = new char[chars.Length * 2];
+                chars.CopyTo(newChars);
+                chars = newChars;
+            }
+            
+            chars[charCount] = tokenChar.Value;
             tokens.Add(peekToken);
-            offset++;
-
-            // Optimization: stop if we've collected more chars than the longest operator
-            if (_sortedOperators.Length > 0 && chars.Count > _sortedOperators[0].Length)
-                break;
+            charCount++;
         }
 
-        if (chars.Count == 0)
+        if (charCount == 0)
             return null;
 
-        var sequence = new string(chars.ToArray());
-
-        // Try to match operators, longest first (greedy)
-        foreach (var op in _sortedOperators)
+        // Use trie for O(k) greedy matching
+        if (_operatorTrie.TryMatch(chars[..charCount], out var matchedOp) && matchedOp is not null)
         {
-            if (sequence.StartsWith(op, StringComparison.Ordinal))
+            // Found a match! Consume the tokens and build the operator
+            var startPosition = tokens[0].Position;
+            using var contentBuilder = new ArrayPoolBufferWriter<char>();
+
+            for (int i = 0; i < matchedOp.Length; i++)
             {
-                // Found a match! Consume the tokens and build the operator
-                var startPosition = tokens[0].Position;
-                var contentBuilder = new List<char>();
-
-                for (int i = 0; i < op.Length; i++)
-                {
-                    AppendToBuffer(contentBuilder, tokens[i].Content);
-                    reader.Advance();
-                }
-
-                var content = contentBuilder.ToArray().AsMemory();
-                return new OperatorToken { Content = content, Position = startPosition };
+                WriteToBuffer(contentBuilder, tokens[i].Content.Span);
+                reader.Advance();
             }
+
+            var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
+            return new OperatorToken { Content = content, Position = startPosition };
         }
 
         return null;
@@ -406,18 +364,18 @@ public sealed partial class TokenParser
 
         // This is a tagged identifier!
         var startPosition = tagToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
 
         // Consume tag character
-        AppendToBuffer(contentBuilder, tagToken.Content);
+        WriteToBuffer(contentBuilder, tagToken.Content.Span);
         reader.Advance();
 
         // Consume identifier
         var identName = identToken.Content;
-        AppendToBuffer(contentBuilder, identToken.Content);
+        WriteToBuffer(contentBuilder, identToken.Content.Span);
         reader.Advance();
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new TaggedIdentToken { Content = content, Tag = tagChar, Name = identName, Position = startPosition };
     }
 
@@ -426,32 +384,32 @@ public sealed partial class TokenParser
         reader.TryPeek(out var openToken);
         reader.Advance();
 
-        var closerType = GetMatchingCloser(openToken.Type);
-        var blockType = GetBlockTokenType(openToken.Type);
+        var closerType = TokenizerCore.GetMatchingCloser(openToken.Type);
+        var blockType = TokenizerCore.GetBlockTokenType(openToken.Type);
         var startPosition = openToken.Position;
 
         var children = ImmutableArray.CreateBuilder<Token>();
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add opener to full content
-        AppendToBuffer(contentBuilder, openToken.Content);
+        WriteToBuffer(contentBuilder, openToken.Content.Span);
 
-        var innerStart = contentBuilder.Count;
+        var innerStart = contentBuilder.WrittenCount;
 
         // Parse children until closing delimiter or end
         while (reader.TryPeek(out var token))
         {
             if (token.Type == closerType)
             {
-                // Found closer
-                var innerContent = contentBuilder.Skip(innerStart).ToArray();
+                // Found closer - extract inner content before adding closer
+                var innerContent = contentBuilder.WrittenSpan[innerStart..].ToArray();
                 
                 // Add closer
-                AppendToBuffer(contentBuilder, token.Content);
+                WriteToBuffer(contentBuilder, token.Content.Span);
                 
                 reader.Advance();
 
-                var fullContent = contentBuilder.ToArray().AsMemory();
+                var fullContent = contentBuilder.WrittenSpan.ToArray().AsMemory();
                 var innerMemory = innerContent.AsMemory();
 
                 return new SimpleBlock
@@ -470,7 +428,7 @@ public sealed partial class TokenParser
             foreach (var child in ParseToken(reader, closerType))
             {
                 children.Add(child);
-                AppendToBuffer(contentBuilder, child.Content);
+                WriteToBuffer(contentBuilder, child.Content.Span);
             }
         }
 
@@ -490,10 +448,10 @@ public sealed partial class TokenParser
 
         var quote = quoteToken.FirstChar;
         var startPosition = quoteToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add opening quote
-        contentBuilder.Add(quote);
+        WriteToBuffer(contentBuilder, quote);
 
         var quoteType = quoteToken.Type;
         bool escaped = false;
@@ -503,7 +461,7 @@ public sealed partial class TokenParser
             if (escaped)
             {
                 // Consume escaped character
-                AppendToBuffer(contentBuilder, token.Content);
+                WriteToBuffer(contentBuilder, token.Content.Span);
                 reader.Advance();
                 escaped = false;
                 continue;
@@ -511,7 +469,7 @@ public sealed partial class TokenParser
 
             if (token.Type == SimpleTokenType.Backslash)
             {
-                contentBuilder.Add('\\');
+                WriteToBuffer(contentBuilder, '\\');
                 reader.Advance();
                 escaped = true;
                 continue;
@@ -520,15 +478,15 @@ public sealed partial class TokenParser
             if (token.Type == quoteType)
             {
                 // Closing quote
-                contentBuilder.Add(quote);
+                WriteToBuffer(contentBuilder, quote);
                 reader.Advance();
 
-                var content = contentBuilder.ToArray().AsMemory();
+                var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
                 return new StringToken { Content = content, Quote = quote, Position = startPosition };
             }
 
             // Regular content
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
@@ -538,18 +496,14 @@ public sealed partial class TokenParser
 
     private Token? TryParseComment(SimpleTokenReader reader, SimpleToken slashToken, SimpleToken nextToken)
     {
-        // Check for C-style comments
-        var hasCSingleLine = _options.CommentStyles.Any(s => s.Start == "//");
-        var hasCMultiLine = _options.CommentStyles.Any(s => s.Start == "/*");
-
         // Single-line comment: //
-        if (hasCSingleLine && nextToken.Type == SimpleTokenType.Slash)
+        if (_hasCSingleLineComment && nextToken.Type == SimpleTokenType.Slash)
         {
             return ParseSingleLineComment(reader);
         }
 
         // Multi-line comment: /*
-        if (hasCMultiLine && nextToken.Type == SimpleTokenType.Asterisk)
+        if (_hasCMultiLineComment && nextToken.Type == SimpleTokenType.Asterisk)
         {
             return ParseMultiLineComment(reader);
         }
@@ -559,21 +513,21 @@ public sealed partial class TokenParser
 
     private CommentToken ParseSingleLineComment(SimpleTokenReader reader)
     {
-        var contentBuilder = new List<char>();
-        long startPosition = 0;
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
+        int startPosition = 0;
 
         // Consume first slash
         if (reader.TryPeek(out var slash1))
         {
             startPosition = slash1.Position;
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
         // Consume second slash
         if (reader.TryPeek(out _))
         {
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
@@ -583,31 +537,31 @@ public sealed partial class TokenParser
             if (token.Type == SimpleTokenType.Newline)
                 break;
 
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new CommentToken { Content = content, IsMultiLine = false, Position = startPosition };
     }
 
     private Token ParseMultiLineComment(SimpleTokenReader reader)
     {
-        var contentBuilder = new List<char>();
-        long startPosition = 0;
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
+        int startPosition = 0;
 
         // Consume /
         if (reader.TryPeek(out var slash))
         {
             startPosition = slash.Position;
-            contentBuilder.Add('/');
+            WriteToBuffer(contentBuilder, '/');
             reader.Advance();
         }
 
         // Consume *
         if (reader.TryPeek(out _))
         {
-            contentBuilder.Add('*');
+            WriteToBuffer(contentBuilder, '*');
             reader.Advance();
         }
 
@@ -619,22 +573,22 @@ public sealed partial class TokenParser
                 if (reader.TryPeek(1, out var next) && next.Type == SimpleTokenType.Slash)
                 {
                     // Found */
-                    contentBuilder.Add('*');
-                    contentBuilder.Add('/');
+                    WriteToBuffer(contentBuilder, '*');
+                    WriteToBuffer(contentBuilder, '/');
                     reader.Advance(); // *
                     reader.Advance(); // /
 
-                    var content = contentBuilder.ToArray().AsMemory();
+                    var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
                     return new CommentToken { Content = content, IsMultiLine = true, Position = startPosition };
                 }
             }
 
-            AppendToBuffer(contentBuilder, token.Content);
+            WriteToBuffer(contentBuilder, token.Content.Span);
             reader.Advance();
         }
 
         // Unterminated comment
-        var errorContent = contentBuilder.ToArray().AsMemory();
+        var errorContent = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new ErrorToken
         {
             Content = errorContent,
@@ -651,10 +605,10 @@ public sealed partial class TokenParser
     {
         reader.TryPeek(out var digitsToken);
         var startPosition = digitsToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
         
         // Add the initial digits
-        AppendToBuffer(contentBuilder, digitsToken.Content);
+        WriteToBuffer(contentBuilder, digitsToken.Content.Span);
         reader.Advance();
 
         bool hasDecimal = false;
@@ -665,17 +619,17 @@ public sealed partial class TokenParser
             if (reader.TryPeek(1, out var afterDot) && afterDot.Type == SimpleTokenType.Digits)
             {
                 // It's a decimal number: add dot and digits
-                contentBuilder.Add('.');
+                WriteToBuffer(contentBuilder, '.');
                 reader.Advance(); // consume dot
 
-                AppendToBuffer(contentBuilder, afterDot.Content);
+                WriteToBuffer(contentBuilder, afterDot.Content.Span);
                 reader.Advance(); // consume digits after dot
 
                 hasDecimal = true;
             }
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         var numericType = hasDecimal ? NumericType.FloatingPoint : NumericType.Integer;
         return new NumericToken { Content = content, NumericType = numericType, Position = startPosition };
     }
@@ -688,20 +642,20 @@ public sealed partial class TokenParser
     {
         reader.TryPeek(out var dotToken);
         var startPosition = dotToken.Position;
-        var contentBuilder = new List<char>();
+        using var contentBuilder = new ArrayPoolBufferWriter<char>();
 
         // Add the leading dot
-        contentBuilder.Add('.');
+        WriteToBuffer(contentBuilder, '.');
         reader.Advance();
 
         // Add the digits after the dot
         if (reader.TryPeek(out var digitsToken) && digitsToken.Type == SimpleTokenType.Digits)
         {
-            AppendToBuffer(contentBuilder, digitsToken.Content);
+            WriteToBuffer(contentBuilder, digitsToken.Content.Span);
             reader.Advance();
         }
 
-        var content = contentBuilder.ToArray().AsMemory();
+        var content = contentBuilder.WrittenSpan.ToArray().AsMemory();
         return new NumericToken { Content = content, NumericType = NumericType.FloatingPoint, Position = startPosition };
     }
 
@@ -709,44 +663,25 @@ public sealed partial class TokenParser
 
     #region Helper Methods
 
-    private static bool IsOpeningDelimiter(SimpleTokenType type)
+    /// <summary>
+    /// Writes a span to the buffer writer.
+    /// </summary>
+    private static void WriteToBuffer(ArrayPoolBufferWriter<char> buffer, ReadOnlySpan<char> span)
     {
-        return type is SimpleTokenType.OpenBrace or SimpleTokenType.OpenBracket or SimpleTokenType.OpenParen;
+        if (span.IsEmpty) return;
+        var destination = buffer.GetSpan(span.Length);
+        span.CopyTo(destination);
+        buffer.Advance(span.Length);
     }
 
-    private static bool IsClosingDelimiter(SimpleTokenType type)
+    /// <summary>
+    /// Writes a single character to the buffer writer.
+    /// </summary>
+    private static void WriteToBuffer(ArrayPoolBufferWriter<char> buffer, char c)
     {
-        return type is SimpleTokenType.CloseBrace or SimpleTokenType.CloseBracket or SimpleTokenType.CloseParen;
-    }
-
-    private static SimpleTokenType GetMatchingCloser(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => SimpleTokenType.CloseBrace,
-            SimpleTokenType.OpenBracket => SimpleTokenType.CloseBracket,
-            SimpleTokenType.OpenParen => SimpleTokenType.CloseParen,
-            _ => throw new ArgumentException($"Not an opening delimiter: {opener}")
-        };
-    }
-
-    private static TokenType GetBlockTokenType(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => TokenType.BraceBlock,
-            SimpleTokenType.OpenBracket => TokenType.BracketBlock,
-            SimpleTokenType.OpenParen => TokenType.ParenthesisBlock,
-            _ => throw new ArgumentException($"Not an opening delimiter: {opener}")
-        };
-    }
-
-    private static void AppendToBuffer(List<char> buffer, ReadOnlyMemory<char> content)
-    {
-        for (int i = 0; i < content.Length; i++)
-        {
-            buffer.Add(content.Span[i]);
-        }
+        var destination = buffer.GetSpan(1);
+        destination[0] = c;
+        buffer.Advance(1);
     }
 
     #endregion

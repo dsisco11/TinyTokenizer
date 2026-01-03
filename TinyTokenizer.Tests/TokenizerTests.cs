@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 
 namespace TinyTokenizer.Tests;
 
+[Trait("Category", "Tokenizer")]
 public class TokenizerTests
 {
     #region Helper Methods

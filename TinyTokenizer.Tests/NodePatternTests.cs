@@ -2,11 +2,14 @@ using System.Collections.Immutable;
 using TinyTokenizer.Ast;
 using Q = TinyTokenizer.Ast.Query;
 
+#pragma warning disable CS0618 // Tests intentionally exercise deprecated NodePattern/NodeMatch APIs
+
 namespace TinyTokenizer.Tests;
 
 /// <summary>
 /// Comprehensive tests for NodePattern and all pattern types.
 /// </summary>
+[Trait("Category", "Pattern")]
 public class NodePatternTests
 {
     #region NodeMatch

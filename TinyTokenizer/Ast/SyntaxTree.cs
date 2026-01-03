@@ -30,7 +30,72 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// The schema used for tokenization and semantic analysis.
     /// May be null if tree was created without a schema.
     /// </summary>
+    /// <remarks>
+    /// A schema is required for semantic matching operations like <see cref="Match{T}(SemanticContext?)"/> and <see cref="MatchAll(SemanticContext?)"/>.
+    /// Use <see cref="HasSchema"/> to check if a schema is attached, or <see cref="WithSchema"/> to attach one.
+    /// Trees created via <see cref="Parse(string, Schema)"/> automatically have a schema attached.
+    /// </remarks>
+    /// <seealso cref="HasSchema"/>
+    /// <seealso cref="WithSchema"/>
     public Schema? Schema { get; }
+    
+    /// <summary>
+    /// Gets whether this tree has an attached schema.
+    /// </summary>
+    /// <remarks>
+    /// A schema is required for operations like <see cref="Match{T}(SemanticContext?)"/> and <see cref="MatchAll(SemanticContext?)"/>.
+    /// Use <see cref="WithSchema"/> to attach a schema to an existing tree.
+    /// </remarks>
+    public bool HasSchema => Schema != null;
+    
+    /// <summary>
+    /// Creates a new syntax tree with the specified schema attached.
+    /// </summary>
+    /// <param name="schema">The schema to attach.</param>
+    /// <returns>A new <see cref="SyntaxTree"/> with the same content but with the schema attached.</returns>
+    /// <remarks>
+    /// This creates a new tree instance; the original tree is not modified.
+    /// Note: Undo/redo history is not preserved in the new tree.
+    /// If the schema has syntax definitions, they are automatically applied (binding).
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var tree = SyntaxTree.Parse(source);
+    /// var treeWithSchema = tree.WithSchema(mySchema);
+    /// var matches = treeWithSchema.Match&lt;FunctionCall&gt;();
+    /// </code>
+    /// </example>
+    public SyntaxTree WithSchema(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        
+        var root = _greenRoot;
+        
+        // Apply syntax binding if schema has definitions
+        if (!schema.SyntaxDefinitions.IsEmpty)
+        {
+            var binder = new SyntaxBinder(schema);
+            root = binder.Bind(root);
+        }
+        
+        return new SyntaxTree(root, schema);
+    }
+    
+    /// <summary>
+    /// Ensures a schema is attached, throwing if not.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if no schema is attached.</exception>
+    private Schema RequireSchema()
+    {
+        if (Schema == null)
+        {
+            throw new InvalidOperationException(
+                "This operation requires a schema. " +
+                "Use SyntaxTree.Parse(source, schema) to create a tree with a schema, " +
+                "or use tree.WithSchema(schema) to attach a schema to an existing tree.");
+        }
+        return Schema;
+    }
     
     /// <summary>
     /// The green root node (internal implementation detail).
@@ -332,19 +397,18 @@ public class SyntaxTree : IFormattable, ITextSerializable
     
     /// <summary>
     /// Finds all semantic nodes of the specified type in the tree.
-    /// Requires a schema to be attached (via Parse with schema).
+    /// Requires a schema to be attached (via Parse with schema or WithSchema).
     /// </summary>
     /// <typeparam name="T">The semantic node type to match.</typeparam>
     /// <param name="context">Optional semantic context for factory.</param>
     /// <returns>All matching semantic nodes.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no schema is attached.</exception>
+    /// <seealso cref="HasSchema"/>
+    /// <seealso cref="WithSchema"/>
     public IEnumerable<T> Match<T>(SemanticContext? context = null) where T : SemanticNode
     {
-        if (Schema == null)
-            throw new InvalidOperationException(
-                "No schema attached. Use SyntaxTree.Parse(source, schema) or provide schema parameter.");
-        
-        return Match<T>(Schema, context);
+        var schema = RequireSchema();
+        return Match<T>(schema, context);
     }
     
     /// <summary>
@@ -376,15 +440,15 @@ public class SyntaxTree : IFormattable, ITextSerializable
     
     /// <summary>
     /// Finds all semantic nodes of any registered type in the tree.
-    /// Requires a schema to be attached.
+    /// Requires a schema to be attached (via Parse with schema or WithSchema).
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if no schema is attached.</exception>
+    /// <seealso cref="HasSchema"/>
+    /// <seealso cref="WithSchema"/>
     public IEnumerable<SemanticNode> MatchAll(SemanticContext? context = null)
     {
-        if (Schema == null)
-            throw new InvalidOperationException(
-                "No schema attached. Use SyntaxTree.Parse(source, schema) or provide schema parameter.");
-        
-        return MatchAll(Schema, context);
+        var schema = RequireSchema();
+        return MatchAll(schema, context);
     }
     
     /// <summary>
@@ -466,13 +530,7 @@ public class SyntaxTree : IFormattable, ITextSerializable
     #endregion
     
     #region Output
-    
-    /// <summary>
-    /// Reconstructs the source text from the tree.
-    /// </summary>
-    [Obsolete("Use ToText() instead.")]
-    public string ToFullString() => ToText();
-    
+
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
     

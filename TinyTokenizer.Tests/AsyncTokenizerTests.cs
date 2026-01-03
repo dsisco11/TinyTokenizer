@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// Tests for the async tokenization functionality including AsyncPipeTokenizer,
 /// DecodingPipeReader, and async extension methods.
 /// </summary>
+[Trait("Category", "Async")]
 public class AsyncTokenizerTests
 {
     #region Helper Methods
@@ -759,7 +760,7 @@ public class AsyncTokenizerTests
         var report = await GetTokens().ApplyPatternsWithDiagnosticsAsync(new ITokenDefinition[] { definition });
         
         Assert.NotNull(report);
-        Assert.NotNull(report.OutputTokens);
+        Assert.False(report.OutputTokens.IsDefault);
     }
     
     [Fact]

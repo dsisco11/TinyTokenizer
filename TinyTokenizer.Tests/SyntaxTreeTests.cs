@@ -8,6 +8,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the Red-Green tree AST implementation.
 /// </summary>
+[Trait("Category", "SyntaxTree")]
 public class SyntaxTreeTests
 {
     #region Basic Parsing
@@ -1448,7 +1449,8 @@ public class SyntaxTreeTests
         var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
         
         Assert.NotNull(block);
-        Assert.True(block.LeadingTrivia.IsEmpty);
+        Assert.False(block.HasLeadingTrivia);
+        Assert.Empty(block.GetLeadingTrivia());
     }
     
     [Fact]
@@ -1458,7 +1460,8 @@ public class SyntaxTreeTests
         var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
         
         Assert.NotNull(block);
-        Assert.True(block.TrailingTrivia.IsEmpty);
+        Assert.False(block.HasTrailingTrivia);
+        Assert.Empty(block.GetTrailingTrivia());
     }
     
     #endregion
@@ -1758,6 +1761,108 @@ public class SyntaxTreeTests
         
         var positions = insertQuery.ResolvePositions(tree).ToList();
         Assert.Single(positions);
+    }
+    
+    #endregion
+    
+    #region Schema Handling
+    
+    [Fact]
+    public void HasSchema_WithoutSchema_ReturnsFalse()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        
+        Assert.False(tree.HasSchema);
+        Assert.Null(tree.Schema);
+    }
+    
+    [Fact]
+    public void HasSchema_WithSchema_ReturnsTrue()
+    {
+        var schema = Schema.Default;
+        var tree = SyntaxTree.Parse("x + y", schema);
+        
+        Assert.True(tree.HasSchema);
+        Assert.NotNull(tree.Schema);
+        Assert.Same(schema, tree.Schema);
+    }
+    
+    [Fact]
+    public void WithSchema_AttachesSchemaToExistingTree()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        Assert.False(tree.HasSchema);
+        
+        var schema = Schema.Default;
+        var treeWithSchema = tree.WithSchema(schema);
+        
+        Assert.True(treeWithSchema.HasSchema);
+        Assert.Same(schema, treeWithSchema.Schema);
+        Assert.Equal("x + y", treeWithSchema.Serialize());
+    }
+    
+    [Fact]
+    public void WithSchema_DoesNotModifyOriginalTree()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        var schema = Schema.Default;
+        
+        _ = tree.WithSchema(schema);
+        
+        Assert.False(tree.HasSchema);
+        Assert.Null(tree.Schema);
+    }
+    
+    [Fact]
+    public void WithSchema_ThrowsOnNull()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        
+        Assert.Throws<ArgumentNullException>(() => tree.WithSchema(null!));
+    }
+    
+    [Fact]
+    public void Match_WithoutSchema_ThrowsInvalidOperationException()
+    {
+        var tree = SyntaxTree.Parse("func(a, b)");
+        
+        var ex = Assert.Throws<InvalidOperationException>(() => tree.Match<SemanticNode>().ToList());
+        Assert.Contains("schema", ex.Message.ToLowerInvariant());
+        Assert.Contains("WithSchema", ex.Message);
+    }
+    
+    [Fact]
+    public void MatchAll_WithoutSchema_ThrowsInvalidOperationException()
+    {
+        var tree = SyntaxTree.Parse("func(a, b)");
+        
+        var ex = Assert.Throws<InvalidOperationException>(() => tree.MatchAll().ToList());
+        Assert.Contains("schema", ex.Message.ToLowerInvariant());
+        Assert.Contains("WithSchema", ex.Message);
+    }
+    
+    [Fact]
+    public void Match_WithExplicitSchema_DoesNotRequireAttachedSchema()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        var schema = Schema.Create().Build(); // Empty schema, no definitions
+        
+        // Should not throw - explicit schema is provided
+        var matches = tree.Match<SemanticNode>(schema).ToList();
+        
+        Assert.Empty(matches); // No definitions in schema
+    }
+    
+    [Fact]
+    public void MatchAll_WithExplicitSchema_DoesNotRequireAttachedSchema()
+    {
+        var tree = SyntaxTree.Parse("x + y");
+        var schema = Schema.Create().Build(); // Empty schema, no definitions
+        
+        // Should not throw - explicit schema is provided
+        var matches = tree.MatchAll(schema).ToList();
+        
+        Assert.Empty(matches); // No definitions in schema
     }
     
     #endregion

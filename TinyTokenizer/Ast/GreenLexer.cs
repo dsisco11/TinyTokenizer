@@ -11,7 +11,7 @@ internal sealed class GreenLexer
 {
     private readonly TokenizerOptions _options;
     private readonly Lexer _charLexer;
-    private readonly ImmutableArray<string> _sortedOperators;
+    private readonly OperatorTrie _operatorTrie;
     
     /// <summary>
     /// Creates a new GreenLexer with default options.
@@ -27,9 +27,12 @@ internal sealed class GreenLexer
     {
         _options = options;
         _charLexer = new Lexer(options);
-        _sortedOperators = options.Operators
-            .OrderByDescending(op => op.Length)
-            .ToImmutableArray();
+        // Build operator trie for O(k) greedy matching
+        _operatorTrie = new OperatorTrie();
+        foreach (var op in options.Operators)
+        {
+            _operatorTrie.Add(op);
+        }
     }
     
     #region Public API
@@ -140,7 +143,7 @@ internal sealed class GreenLexer
             return null;
         
         // Check for unexpected closing delimiter
-        if (IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
+        if (TokenizerCore.IsClosingDelimiter(token.Type) && token.Type != expectedCloser)
         {
             reader.Advance();
             // Leading-only trivia model: no trailing trivia
@@ -148,7 +151,7 @@ internal sealed class GreenLexer
         }
         
         // Opening delimiter - parse block
-        if (IsOpeningDelimiter(token.Type))
+        if (TokenizerCore.IsOpeningDelimiter(token.Type))
         {
             return ParseBlock(ref reader, leadingTrivia);
         }
@@ -227,8 +230,8 @@ internal sealed class GreenLexer
         reader.Advance();
         
         var opener = openToken.FirstChar;
-        var closerType = GetMatchingCloser(openToken.Type);
-        var closerChar = GetMatchingCloserChar(opener);
+        var closerType = TokenizerCore.GetMatchingCloser(openToken.Type);
+        var closerChar = TokenizerCore.GetClosingDelimiter(opener);
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         
@@ -278,14 +281,6 @@ internal sealed class GreenLexer
         var closerNodeUnclosed = GreenNodeCache.CreateDelimiter(closerChar, childLeading);
         return new GreenBlock(openerNodeUnclosed, closerNodeUnclosed, children.ToImmutable());
     }
-    
-    private static char GetMatchingCloserChar(char opener) => opener switch
-    {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        _ => throw new ArgumentException($"Unknown opener: {opener}")
-    };
     
     private GreenLeaf ParseString(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
     {
@@ -444,16 +439,17 @@ internal sealed class GreenLexer
     
     private GreenLeaf? TryParseOperator(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
     {
-        if (_sortedOperators.IsEmpty)
+        if (_operatorTrie.IsEmpty)
             return null;
         
-        // Build sequence of operator-capable characters
-        var chars = new List<char>();
+        // Build sequence of operator-capable characters for trie matching
+        Span<char> chars = stackalloc char[16]; // Most operators are short
+        int charCount = 0;
         int offset = 0;
         
         while (reader.TryPeek(offset, out var token))
         {
-            var c = GetOperatorChar(token.Type);
+            var c = TokenizerCore.GetOperatorChar(token.Type);
             if (c == null)
             {
                 if (token.Type == SimpleTokenType.Symbol && token.Content.Length == 1)
@@ -461,30 +457,26 @@ internal sealed class GreenLexer
                 else
                     break;
             }
-            chars.Add(c.Value);
-            offset++;
             
-            if (_sortedOperators.Length > 0 && chars.Count > _sortedOperators[0].Length)
-                break;
+            if (charCount >= chars.Length)
+                break; // Safety limit
+            
+            chars[charCount++] = c.Value;
+            offset++;
         }
         
-        if (chars.Count == 0)
+        if (charCount == 0)
             return null;
         
-        var sequence = new string(chars.ToArray());
-        
-        // Match longest operator
-        foreach (var op in _sortedOperators)
+        // Use trie for O(k) greedy matching
+        if (_operatorTrie.TryMatch(chars[..charCount], out var matchedOp) && matchedOp is not null)
         {
-            if (sequence.StartsWith(op, StringComparison.Ordinal))
-            {
-                // Consume tokens for this operator
-                for (int i = 0; i < op.Length; i++)
-                    reader.Advance();
-                
-                // Leading-only trivia model: no trailing trivia
-                return GreenNodeCache.Create(NodeKind.Operator, op, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
-            }
+            // Consume tokens for this operator
+            for (int i = 0; i < matchedOp.Length; i++)
+                reader.Advance();
+            
+            // Leading-only trivia model: no trailing trivia
+            return GreenNodeCache.Create(NodeKind.Operator, matchedOp, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
         }
         
         return null;
@@ -733,27 +725,6 @@ internal sealed class GreenLexer
         return _options.TagPrefixes.Contains(token.FirstChar);
     }
     
-    private static bool IsOpeningDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.OpenBrace or SimpleTokenType.OpenBracket or SimpleTokenType.OpenParen;
-    }
-    
-    private static bool IsClosingDelimiter(SimpleTokenType type)
-    {
-        return type is SimpleTokenType.CloseBrace or SimpleTokenType.CloseBracket or SimpleTokenType.CloseParen;
-    }
-    
-    private static SimpleTokenType GetMatchingCloser(SimpleTokenType opener)
-    {
-        return opener switch
-        {
-            SimpleTokenType.OpenBrace => SimpleTokenType.CloseBrace,
-            SimpleTokenType.OpenBracket => SimpleTokenType.CloseBracket,
-            SimpleTokenType.OpenParen => SimpleTokenType.CloseParen,
-            _ => throw new ArgumentException($"Not an opener: {opener}")
-        };
-    }
-    
     private static NodeKind GetLeafKind(SimpleTokenType type)
     {
         return type switch
@@ -762,30 +733,6 @@ internal sealed class GreenLexer
             SimpleTokenType.Digits => NodeKind.Numeric,
             SimpleTokenType.Symbol => NodeKind.Symbol,
             _ => NodeKind.Symbol
-        };
-    }
-    
-    private static char? GetOperatorChar(SimpleTokenType type)
-    {
-        return type switch
-        {
-            SimpleTokenType.Equals => '=',
-            SimpleTokenType.Plus => '+',
-            SimpleTokenType.Minus => '-',
-            SimpleTokenType.LessThan => '<',
-            SimpleTokenType.GreaterThan => '>',
-            SimpleTokenType.Pipe => '|',
-            SimpleTokenType.Ampersand => '&',
-            SimpleTokenType.Percent => '%',
-            SimpleTokenType.Caret => '^',
-            SimpleTokenType.Tilde => '~',
-            SimpleTokenType.Question => '?',
-            SimpleTokenType.Exclamation => '!',
-            SimpleTokenType.Colon => ':',
-            SimpleTokenType.Slash => '/',
-            SimpleTokenType.Asterisk => '*',
-            SimpleTokenType.Dot => '.',
-            _ => null
         };
     }
     

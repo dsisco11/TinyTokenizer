@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the TokenReader ref struct.
 /// </summary>
+[Trait("Category", "Token")]
 public class TokenReaderTests
 {
     #region Helper Methods

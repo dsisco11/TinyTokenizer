@@ -13,7 +13,7 @@ public ref struct Tokenizer
     private readonly ReadOnlyMemory<char> _source;
     private readonly ReadOnlySpan<char> _span;
     private readonly TokenizerOptions _options;
-    private readonly ImmutableArray<string> _sortedOperators;
+    private readonly OperatorTrie _operatorTrie;
     private int _position;
 
     #endregion
@@ -31,10 +31,12 @@ public ref struct Tokenizer
         _span = source.Span;
         _options = options ?? TokenizerOptions.Default;
         _position = 0;
-        // Sort operators by length descending for greedy matching (longest first)
-        _sortedOperators = _options.Operators
-            .OrderByDescending(op => op.Length)
-            .ToImmutableArray();
+        // Build operator trie for O(k) greedy matching
+        _operatorTrie = new OperatorTrie();
+        foreach (var op in _options.Operators)
+        {
+            _operatorTrie.Add(op);
+        }
     }
 
     #endregion
@@ -446,25 +448,22 @@ public ref struct Tokenizer
 
     /// <summary>
     /// Tries to parse an operator at the current position.
-    /// Uses greedy matching (longest operator first).
+    /// Uses trie-based greedy matching for O(k) lookup where k = operator length.
     /// </summary>
     /// <returns>An <see cref="OperatorToken"/> if an operator is matched, null otherwise.</returns>
     private OperatorToken? TryParseOperator()
     {
-        if (_sortedOperators.IsEmpty)
+        if (_operatorTrie.IsEmpty)
             return null;
 
         var remaining = _span[_position..];
 
-        // Try to match operators, longest first (greedy)
-        foreach (var op in _sortedOperators)
+        // Use trie for O(k) greedy matching
+        if (_operatorTrie.TryMatch(remaining, out var matchedOp) && matchedOp is not null)
         {
-            if (remaining.Length >= op.Length && remaining[..op.Length].SequenceEqual(op.AsSpan()))
-            {
-                var start = _position;
-                _position += op.Length;
-                return new OperatorToken { Content = _source.Slice(start, op.Length), Position = start };
-            }
+            var start = _position;
+            _position += matchedOp.Length;
+            return new OperatorToken { Content = _source.Slice(start, matchedOp.Length), Position = start };
         }
 
         return null;

@@ -670,7 +670,7 @@ public sealed class SyntaxEditor
         
         if (node is RedBlock block)
         {
-            return (block.LeadingTrivia, block.TrailingTrivia);
+            return (block.GreenLeadingTrivia, block.GreenTrailingTrivia);
         }
         
         // For syntax nodes and other containers, get trivia from first/last children

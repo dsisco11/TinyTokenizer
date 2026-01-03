@@ -24,8 +24,8 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, RedNode? parent, int position)
-        : base(green, parent, position)
+    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1)
+        : base(green, parent, position, siblingIndex)
     {
     }
     
@@ -71,10 +71,70 @@ public sealed class RedBlock : RedNode
     public int ChildCount => Green.SlotCount;
     
     /// <summary>Leading trivia before the opening delimiter (from opener node).</summary>
-    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.OpenerNode.LeadingTrivia;
+    internal ImmutableArray<GreenTrivia> GreenLeadingTrivia => Green.OpenerNode.LeadingTrivia;
+    
+    /// <summary>Inner trivia after opener (from opener node's trailing trivia, for blocks like "{ }").</summary>
+    internal ImmutableArray<GreenTrivia> GreenInnerTrivia => Green.OpenerNode.TrailingTrivia;
     
     /// <summary>Trailing trivia after the closing delimiter (from closer node).</summary>
-    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.CloserNode.TrailingTrivia;
+    internal ImmutableArray<GreenTrivia> GreenTrailingTrivia => Green.CloserNode.TrailingTrivia;
+    
+    /// <summary>
+    /// Gets the leading trivia before the opening delimiter.
+    /// </summary>
+    /// <returns>An enumerable of trivia items before the opening delimiter.</returns>
+    /// <seealso cref="GetTrailingTrivia"/>
+    /// <seealso cref="GetInnerTrivia"/>
+    public IEnumerable<Trivia> GetLeadingTrivia()
+    {
+        foreach (var green in Green.OpenerNode.LeadingTrivia)
+        {
+            yield return new Trivia(green);
+        }
+    }
+    
+    /// <summary>
+    /// Gets the inner trivia (trivia after opener when block is empty, for blocks like "{ }").
+    /// </summary>
+    /// <returns>An enumerable of trivia items after the opening delimiter.</returns>
+    /// <seealso cref="GetLeadingTrivia"/>
+    /// <seealso cref="GetTrailingTrivia"/>
+    public IEnumerable<Trivia> GetInnerTrivia()
+    {
+        foreach (var green in Green.OpenerNode.TrailingTrivia)
+        {
+            yield return new Trivia(green);
+        }
+    }
+    
+    /// <summary>
+    /// Gets the trailing trivia after the closing delimiter.
+    /// </summary>
+    /// <returns>An enumerable of trivia items after the closing delimiter.</returns>
+    /// <seealso cref="GetLeadingTrivia"/>
+    /// <seealso cref="GetInnerTrivia"/>
+    public IEnumerable<Trivia> GetTrailingTrivia()
+    {
+        foreach (var green in Green.CloserNode.TrailingTrivia)
+        {
+            yield return new Trivia(green);
+        }
+    }
+    
+    /// <summary>
+    /// Gets whether this block has any leading trivia.
+    /// </summary>
+    public bool HasLeadingTrivia => !Green.OpenerNode.LeadingTrivia.IsEmpty;
+    
+    /// <summary>
+    /// Gets whether this block has any inner trivia.
+    /// </summary>
+    public bool HasInnerTrivia => !Green.OpenerNode.TrailingTrivia.IsEmpty;
+    
+    /// <summary>
+    /// Gets whether this block has any trailing trivia.
+    /// </summary>
+    public bool HasTrailingTrivia => !Green.CloserNode.TrailingTrivia.IsEmpty;
     
     /// <summary>Width of leading trivia.</summary>
     public int LeadingTriviaWidth => Green.LeadingTriviaWidth;
@@ -122,7 +182,7 @@ public sealed class RedBlock : RedNode
         
         // Compute position and create red child
         var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition);
+        var redChild = greenChild.CreateRed(this, childPosition, index);
         
         // Cache with thread-safe exchange
         Interlocked.CompareExchange(ref _children[index], redChild, null);

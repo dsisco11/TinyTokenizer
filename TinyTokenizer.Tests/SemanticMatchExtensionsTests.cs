@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Comprehensive tests for SemanticMatchExtensions covering all methods.
 /// </summary>
+[Trait("Category", "Semantic")]
 public class SemanticMatchExtensionsTests
 {
     #region RedNode.Match<T> Extension

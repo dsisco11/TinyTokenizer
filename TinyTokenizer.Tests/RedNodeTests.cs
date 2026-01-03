@@ -5,6 +5,8 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Comprehensive tests for RedNode covering all properties, methods, and edge cases.
 /// </summary>
+[Trait("Category", "AST")]
+[Trait("Category", "RedNode")]
 public class RedNodeTests
 {
     #region Basic Properties

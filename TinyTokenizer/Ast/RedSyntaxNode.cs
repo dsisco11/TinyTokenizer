@@ -52,11 +52,15 @@ public abstract class SyntaxNode : RedNode
         /// <summary>The absolute position in the source text.</summary>
         public int Position { get; init; }
         
-        internal CreationContext(GreenSyntaxNode green, RedNode? parent, int position)
+        /// <summary>The index of this node within its parent's children, or -1 if root.</summary>
+        public int SiblingIndex { get; init; }
+        
+        internal CreationContext(GreenSyntaxNode green, RedNode? parent, int position, int siblingIndex = -1)
         {
             Green = green;
             Parent = parent;
             Position = position;
+            SiblingIndex = siblingIndex;
         }
     }
     
@@ -67,7 +71,7 @@ public abstract class SyntaxNode : RedNode
     /// </summary>
     /// <param name="context">The creation context containing green node and position info.</param>
     protected SyntaxNode(CreationContext context)
-        : base(context.Green, context.Parent, context.Position)
+        : base(context.Green, context.Parent, context.Position, context.SiblingIndex)
     {
         _children = new RedNode?[context.Green.SlotCount];
     }
