@@ -16,7 +16,7 @@ public class SyntaxNodeTests
     {
         // Arrange: "foo" (width 3) + "()" (width 2) = 5
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "foo");
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         // Act
         var syntaxNode = new GreenSyntaxNode(
@@ -33,7 +33,7 @@ public class SyntaxNodeTests
     public void GreenSyntaxNode_GetSlot_ReturnsChildren()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "test");
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         var syntaxNode = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -59,7 +59,7 @@ public class SyntaxNodeTests
     public void GreenSyntaxNode_CreatesCorrectRedNode()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "myFunc");
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -81,7 +81,7 @@ public class SyntaxNodeTests
     public void FunctionCallSyntax_ProvidesTypedAccessToChildren()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "doSomething");
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -102,7 +102,7 @@ public class SyntaxNodeTests
     {
         var targetLeaf = new GreenLeaf(NodeKind.Ident, "arr");
         var indexContent = new GreenLeaf(NodeKind.Numeric, "0");
-        var indexBlock = new GreenBlock('[', ImmutableArray.Create<GreenNode>(indexContent));
+        var indexBlock = GreenBlock.Create('[', ImmutableArray.Create<GreenNode>(indexContent));
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -161,7 +161,7 @@ public class SyntaxNodeTests
     public void RedSyntaxNode_Position_IsCorrect()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "func");
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -179,7 +179,7 @@ public class SyntaxNodeTests
     public void RedSyntaxNode_ChildPositions_AreCalculatedCorrectly()
     {
         var nameLeaf = new GreenLeaf(NodeKind.Ident, "test"); // width 4
-        var argsBlock = new GreenBlock('(', ImmutableArray<GreenNode>.Empty); // width 2
+        var argsBlock = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty); // width 2
         
         var greenSyntax = new GreenSyntaxNode(
             NodeKind.Semantic,
@@ -231,7 +231,7 @@ public class SyntaxNodeTests
     {
         // Build a tree with a GreenSyntaxNode
         var funcName = new GreenLeaf(NodeKind.Ident, "foo");
-        var args = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var args = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         var funcCallGreen = new GreenSyntaxNode(NodeKind.Semantic, typeof(FunctionCallSyntax), funcName, args);
         
         var root = new GreenList(ImmutableArray.Create<GreenNode>(funcCallGreen));
@@ -250,7 +250,7 @@ public class SyntaxNodeTests
     {
         // Build a tree with a syntax node
         var funcName = new GreenLeaf(NodeKind.Ident, "bar");
-        var args = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var args = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         var syntaxKind = NodeKindExtensions.SemanticKind(0);
         var funcCallGreen = new GreenSyntaxNode(syntaxKind, typeof(FunctionCallSyntax), funcName, args);
         

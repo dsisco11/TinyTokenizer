@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -9,7 +11,7 @@ namespace TinyTokenizer.Ast;
 /// They provide parent links and computed absolute positions.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public abstract class RedNode : IFormattable
+public abstract class RedNode : IFormattable, ITextSerializable
 {
     private readonly GreenNode _green;
     private readonly RedNode? _parent;
@@ -305,20 +307,36 @@ public abstract class RedNode : IFormattable
     }
     
     /// <summary>
-    /// Writes the text content of this node to a StringBuilder.
+    /// Writes the text content to an <see cref="IBufferWriter{T}"/>.
     /// Delegates to the underlying green node.
     /// </summary>
-    public void WriteTo(StringBuilder builder) => _green.WriteTo(builder);
-    
+    public void WriteTo(IBufferWriter<char> writer) => _green.WriteTo(writer);
+
     /// <summary>
     /// Returns the text content of this node.
     /// </summary>
     public string ToText() => _green.ToText();
+
+    /// <summary>
+    /// Writes the text content of this node to a StringBuilder.
+    /// Delegates to the underlying green node.
+    /// </summary>
+    public void WriteTo(StringBuilder builder) => _green.WriteTo(builder);
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => _green.WriteTo(writer);
+
+    /// <inheritdoc />
+    public bool TryWriteTo(Span<char> destination, out int charsWritten) => _green.TryWriteTo(destination, out charsWritten);
+
+    /// <inheritdoc />
+    public int TextLength => _green.TextLength;
     
     /// <summary>
-    /// Returns the text content of this node.
+    /// Returns a debug representation of this node.
+    /// Use <see cref="ToText"/> to get the serialized text content.
     /// </summary>
-    public override string ToString() => ToText();
+    public override string ToString() => ToString("D", null);
     
     #endregion
 }

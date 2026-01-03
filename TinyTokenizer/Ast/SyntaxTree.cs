@@ -1,4 +1,7 @@
+using System.Buffers;
 using System.Collections.Immutable;
+using System.IO;
+using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -7,7 +10,7 @@ namespace TinyTokenizer.Ast;
 /// Wraps a green tree and provides lazy red node creation.
 /// Supports undo via green root history.
 /// </summary>
-public class SyntaxTree : IFormattable
+public class SyntaxTree : IFormattable, ITextSerializable
 {
     private GreenNode _greenRoot;
     private RedNode? _redRoot;
@@ -467,16 +470,42 @@ public class SyntaxTree : IFormattable
     /// <summary>
     /// Reconstructs the source text from the tree.
     /// </summary>
-    [Obsolete("Use Serialize() instead.")]
-    public string ToFullString() => Root.ToString();
+    [Obsolete("Use ToText() instead.")]
+    public string ToFullString() => ToText();
     
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) => Root.ToString(format, formatProvider);
-    public override string ToString() => Root.ToString("D", null);
+    
+    /// <summary>
+    /// Returns a debug representation of this tree.
+    /// Use <see cref="ToText"/> to get the serialized text content.
+    /// </summary>
+    public override string ToString() => $"SyntaxTree[{Root.Kind}]";
+    
     /// <summary>
     /// Serializes the tree to a string representation.
     /// </summary>
-    /// <returns></returns>
-    public string Serialize() => Root.ToString(null, null);
+    /// <returns>The serialized text content of the tree.</returns>
+    [Obsolete("Use ToText() instead.")]
+    public string Serialize() => ToText();
+    
+    /// <inheritdoc />
+    public void WriteTo(IBufferWriter<char> writer) => Root.WriteTo(writer);
+    
+    /// <inheritdoc />
+    public string ToText() => Root.ToText();
+
+    /// <inheritdoc />
+    public void WriteTo(StringBuilder builder) => Root.WriteTo(builder);
+
+    /// <inheritdoc />
+    public void WriteTo(TextWriter writer) => Root.WriteTo(writer);
+
+    /// <inheritdoc />
+    public bool TryWriteTo(Span<char> destination, out int charsWritten) => Root.TryWriteTo(destination, out charsWritten);
+
+    /// <inheritdoc />
+    public int TextLength => Root.TextLength;
+    
     #endregion
 }

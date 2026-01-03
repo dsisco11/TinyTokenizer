@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq.Expressions;
@@ -74,10 +75,10 @@ internal sealed record GreenSyntaxNode : GreenContainer
         index >= 0 && index < _children.Length ? _children[index] : null;
     
     /// <inheritdoc/>
-    public override void WriteTo(StringBuilder builder)
+    public override void WriteTo(IBufferWriter<char> writer)
     {
         foreach (var child in _children)
-            child.WriteTo(builder);
+            child.WriteTo(writer);
     }
     
     /// <inheritdoc/>

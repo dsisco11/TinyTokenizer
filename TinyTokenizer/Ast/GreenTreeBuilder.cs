@@ -224,7 +224,7 @@ internal class GreenTreeBuilder
             var modifiedChild = child switch
             {
                 GreenLeaf leaf => leaf.WithLeadingTrivia(newLeadingTrivia),
-                GreenBlock block => new GreenBlock(block.Opener, block.Children, newLeadingTrivia, block.TrailingTrivia),
+                GreenBlock block => block.WithLeadingTrivia(newLeadingTrivia),
                 _ => child // Can't update trivia on other node types
             };
             

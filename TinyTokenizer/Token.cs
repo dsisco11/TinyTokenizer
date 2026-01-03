@@ -1,4 +1,7 @@
+using System.Buffers;
 using System.Collections.Immutable;
+using System.IO;
+using System.Text;
 
 namespace TinyTokenizer;
 
@@ -9,7 +12,7 @@ namespace TinyTokenizer;
 /// Tokens are immutable and reference content via <see cref="ReadOnlyMemory{T}"/> to avoid copying.
 /// Properties use defaults to support parameterless construction via new().
 /// </summary>
-public abstract record Token
+public abstract record Token : ITextSerializable
 {
     /// <summary>
     /// Gets or sets the token content as memory.
@@ -30,6 +33,49 @@ public abstract record Token
     /// Gets the content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.
     /// </summary>
     public ReadOnlySpan<char> ContentSpan => Content.Span;
+
+    #region ITextSerializable
+
+    /// <inheritdoc />
+    public virtual void WriteTo(IBufferWriter<char> writer)
+    {
+        var span = writer.GetSpan(Content.Length);
+        Content.Span.CopyTo(span);
+        writer.Advance(Content.Length);
+    }
+
+    /// <inheritdoc />
+    public virtual string ToText() => new(Content.Span);
+
+    /// <inheritdoc />
+    public virtual void WriteTo(StringBuilder builder) => builder.Append(Content.Span);
+
+    /// <inheritdoc />
+    public virtual void WriteTo(TextWriter writer) => writer.Write(Content.Span);
+
+    /// <inheritdoc />
+    public virtual bool TryWriteTo(Span<char> destination, out int charsWritten)
+    {
+        if (Content.Length > destination.Length)
+        {
+            charsWritten = 0;
+            return false;
+        }
+        Content.Span.CopyTo(destination);
+        charsWritten = Content.Length;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public virtual int TextLength => Content.Length;
+
+    #endregion
+
+    /// <summary>
+    /// Returns a debug representation of this token.
+    /// Use <see cref="ToText"/> to get the serialized text content.
+    /// </summary>
+    public override string ToString() => $"{Type}@{Position}";
 }
 
 #endregion

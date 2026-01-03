@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
@@ -74,13 +75,25 @@ internal sealed record GreenLeaf : GreenNode
         => new RedLeaf(this, parent, position);
     
     /// <inheritdoc/>
-    public override void WriteTo(StringBuilder builder)
+    public override void WriteTo(IBufferWriter<char> writer)
     {
         foreach (var trivia in LeadingTrivia)
-            builder.Append(trivia.Text);
-        builder.Append(Text);
+        {
+            var span = writer.GetSpan(trivia.Width);
+            trivia.Text.AsSpan().CopyTo(span);
+            writer.Advance(trivia.Width);
+        }
+        
+        var textSpan = writer.GetSpan(Text.Length);
+        Text.AsSpan().CopyTo(textSpan);
+        writer.Advance(Text.Length);
+        
         foreach (var trivia in TrailingTrivia)
-            builder.Append(trivia.Text);
+        {
+            var span = writer.GetSpan(trivia.Width);
+            trivia.Text.AsSpan().CopyTo(span);
+            writer.Advance(trivia.Width);
+        }
     }
     
     /// <summary>
