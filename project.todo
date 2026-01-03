@@ -319,20 +319,28 @@ Timeline: Continuous
         [x] Await all tasks
         [x] Verify all trees have valid Root
 
-[ ] 4.5 Performance Benchmarks (4 hrs)
+[x] 4.5 Performance Benchmarks (4 hrs) ✓ DONE
     File: TinyTokenizer.Benchmarks/
-    [ ] Create AllocationBenchmarks.cs
-        [ ] Add [MemoryDiagnoser] attribute
-        [ ] Setup small input (~1 KB)
-        [ ] Setup medium input (~100 KB)
-        [ ] Setup large input (~1 MB)
-        [ ] Add ParseSmall benchmark
-        [ ] Add ParseMedium benchmark
-        [ ] Add ParseLarge benchmark
-    [ ] Create OperatorMatchingBenchmarks.cs
-        [ ] Add [MemoryDiagnoser] attribute
-        [ ] Add [Params(10, 50, 100)] OperatorCount
-        [ ] Add MatchOperators benchmark
+    [x] Create AllocationBenchmarks.cs
+        [x] Add [MemoryDiagnoser] attribute
+        [x] Setup small input (~1 KB)
+        [x] Setup medium input (~100 KB)
+        [x] Setup large input (~1 MB)
+        [x] Add ParseSmall benchmark
+        [x] Add ParseMedium benchmark
+        [x] Add ParseLarge benchmark
+    [x] Create OperatorMatchingBenchmarks.cs
+        [x] Add [MemoryDiagnoser] attribute
+        [x] Add [Params(10, 50, 100)] OperatorCount
+        [x] Add MatchOperators benchmark
+    [x] Create SyntaxTreeBenchmarks.cs
+        [x] Tree parsing benchmarks (small/medium/large/nested)
+        [x] Schema integration benchmarks
+        [x] Red node creation and traversal benchmarks
+        [x] TreeWalker benchmarks
+        [x] Query/filter benchmarks
+        [x] Sibling navigation benchmarks
+        [x] Edit/mutation benchmarks
 
 ═══════════════════════════════════════════════════════════════════════════════
 DEPENDENCIES
