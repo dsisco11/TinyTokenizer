@@ -231,7 +231,7 @@ internal sealed class GreenLexer
         
         var opener = openToken.FirstChar;
         var closerType = TokenizerCore.GetMatchingCloser(openToken.Type);
-        var closerChar = GetMatchingCloserChar(opener);
+        var closerChar = TokenizerCore.GetClosingDelimiter(opener);
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         
@@ -281,14 +281,6 @@ internal sealed class GreenLexer
         var closerNodeUnclosed = GreenNodeCache.CreateDelimiter(closerChar, childLeading);
         return new GreenBlock(openerNodeUnclosed, closerNodeUnclosed, children.ToImmutable());
     }
-    
-    private static char GetMatchingCloserChar(char opener) => opener switch
-    {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        _ => throw new ArgumentException($"Unknown opener: {opener}")
-    };
     
     private GreenLeaf ParseString(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
     {

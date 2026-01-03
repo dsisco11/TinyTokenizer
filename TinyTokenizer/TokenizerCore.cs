@@ -87,6 +87,20 @@ public static class TokenizerCore
     }
 
     /// <summary>
+    /// Gets the closing delimiter character for an opening delimiter.
+    /// </summary>
+    /// <param name="opener">The opening delimiter character.</param>
+    /// <returns>The corresponding closing delimiter character.</returns>
+    /// <exception cref="ArgumentException">Thrown when the opener is not a valid opening delimiter.</exception>
+    public static char GetClosingDelimiter(char opener) => opener switch
+    {
+        '{' => '}',
+        '[' => ']',
+        '(' => ')',
+        _ => throw new ArgumentException($"Invalid opening delimiter: '{opener}'", nameof(opener))
+    };
+
+    /// <summary>
     /// Gets the token type for an opening delimiter.
     /// </summary>
     /// <param name="opener">The opening delimiter character.</param>

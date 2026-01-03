@@ -102,7 +102,7 @@ internal sealed record GreenBlock : GreenContainer
         ImmutableArray<GreenTrivia> closerTrailingTrivia = default)
     {
         var openerNode = GreenNodeCache.CreateDelimiter(opener, openerLeadingTrivia, openerTrailingTrivia);
-        var closerNode = GreenNodeCache.CreateDelimiter(GetMatchingCloser(opener), closerLeadingTrivia, closerTrailingTrivia);
+        var closerNode = GreenNodeCache.CreateDelimiter(TokenizerCore.GetClosingDelimiter(opener), closerLeadingTrivia, closerTrailingTrivia);
         return new GreenBlock(openerNode, closerNode, children);
     }
     
@@ -221,14 +221,6 @@ internal sealed record GreenBlock : GreenContainer
     #endregion
     
     #region Helpers
-    
-    private static char GetMatchingCloser(char opener) => opener switch
-    {
-        '{' => '}',
-        '[' => ']',
-        '(' => ')',
-        _ => throw new ArgumentException($"Unknown opener: {opener}", nameof(opener))
-    };
     
     private static NodeKind GetBlockKind(char opener) => opener switch
     {
