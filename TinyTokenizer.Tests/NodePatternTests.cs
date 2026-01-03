@@ -2,6 +2,8 @@ using System.Collections.Immutable;
 using TinyTokenizer.Ast;
 using Q = TinyTokenizer.Ast.Query;
 
+#pragma warning disable CS0618 // Tests intentionally exercise deprecated NodePattern/NodeMatch APIs
+
 namespace TinyTokenizer.Tests;
 
 /// <summary>

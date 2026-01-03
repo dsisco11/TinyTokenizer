@@ -12,7 +12,19 @@ namespace TinyTokenizer;
 /// Tokens are immutable and reference content via <see cref="ReadOnlyMemory{T}"/> to avoid copying.
 /// Properties use defaults to support parameterless construction via new().
 /// </summary>
-public abstract record Token : ITextSerializable
+/// <remarks>
+/// <para>
+/// Implements <see cref="IFormattable"/> with the following format specifiers:
+/// </para>
+/// <list type="bullet">
+///   <item><description><c>"G"</c> or <c>null</c> — Returns the token content as a string.</description></item>
+///   <item><description><c>"T"</c> — Returns the token type name.</description></item>
+///   <item><description><c>"P"</c> — Returns the position as a string.</description></item>
+///   <item><description><c>"R"</c> — Returns the range in format <c>"{Position}..{Position + Length}"</c>.</description></item>
+///   <item><description><c>"D"</c> — Returns debug format <c>"{Type}[{Range}]"</c>.</description></item>
+/// </list>
+/// </remarks>
+public abstract record Token : ITextSerializable, IFormattable
 {
     /// <summary>
     /// Gets or sets the token content as memory.
@@ -37,6 +49,46 @@ public abstract record Token : ITextSerializable
     /// Gets the content as a <see cref="ReadOnlySpan{T}"/> for efficient processing.
     /// </summary>
     public ReadOnlySpan<char> ContentSpan => Content.Span;
+
+    #region IFormattable
+
+    /// <summary>
+    /// Returns a debug representation of this token.
+    /// Use <see cref="ToText"/> to get the serialized text content.
+    /// </summary>
+    /// <returns>Debug string in format "Type@Position".</returns>
+    public override string ToString() => $"{Type}@{Position}";
+
+    /// <summary>
+    /// Formats the token according to the specified format string.
+    /// </summary>
+    /// <param name="format">
+    /// The format specifier:
+    /// <list type="bullet">
+    ///   <item><description><c>"G"</c> or <c>null</c> — Token content.</description></item>
+    ///   <item><description><c>"T"</c> — Token type name.</description></item>
+    ///   <item><description><c>"P"</c> — Position.</description></item>
+    ///   <item><description><c>"R"</c> — Range (<c>"{Position}..{End}"</c>).</description></item>
+    ///   <item><description><c>"D"</c> — Debug format (<c>"{Type}[{Range}]"</c>).</description></item>
+    /// </list>
+    /// </param>
+    /// <param name="formatProvider">Ignored; reserved for future use.</param>
+    /// <returns>The formatted string representation of the token.</returns>
+    /// <exception cref="FormatException">Thrown when an unknown format specifier is provided.</exception>
+    public string ToString(string? format, IFormatProvider? formatProvider)
+    {
+        return format?.ToUpperInvariant() switch
+        {
+            null or "" or "G" => ContentSpan.ToString(),
+            "T" => Type.ToString(),
+            "P" => Position.ToString(),
+            "R" => $"{Position}..{Position + Content.Length}",
+            "D" => $"{Type}[{Position}..{Position + Content.Length}]",
+            _ => throw new FormatException($"Unknown format specifier: '{format}'")
+        };
+    }
+
+    #endregion
 
     #region ITextSerializable
 
@@ -74,12 +126,6 @@ public abstract record Token : ITextSerializable
     public virtual int TextLength => Content.Length;
 
     #endregion
-
-    /// <summary>
-    /// Returns a debug representation of this token.
-    /// Use <see cref="ToText"/> to get the serialized text content.
-    /// </summary>
-    public override string ToString() => $"{Type}@{Position}";
 }
 
 #endregion

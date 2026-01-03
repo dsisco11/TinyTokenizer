@@ -35,6 +35,7 @@ public class UnicodeTests
     [InlineData("カタカナ", "Katakana")]
     public void Tokenize_JapaneseIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -48,6 +49,7 @@ public class UnicodeTests
     [InlineData("Привет", "Russian greeting")]
     public void Tokenize_CyrillicIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -60,6 +62,7 @@ public class UnicodeTests
     [InlineData("פונקציה", "Hebrew function")]
     public void Tokenize_HebrewIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -72,6 +75,7 @@ public class UnicodeTests
     [InlineData("دالة", "Arabic function")]
     public void Tokenize_ArabicIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -85,6 +89,7 @@ public class UnicodeTests
     [InlineData("函数", "Simplified function")]
     public void Tokenize_ChineseIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -98,6 +103,7 @@ public class UnicodeTests
     [InlineData("λfunc", "Greek lambda prefix")]
     public void Tokenize_GreekIdentifier_RecognizedAsIdent(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();
@@ -141,6 +147,7 @@ public class UnicodeTests
     [InlineData("🔥fire", "Fire emoji prefix")]
     public void Tokenize_EmojiPrefix_HandledAsIdentifier(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         // Emoji should be part of the identifier (not a terminator)
@@ -155,6 +162,7 @@ public class UnicodeTests
     [InlineData("test_🔥_hot", "Emoji middle")]
     public void Tokenize_EmojiSuffix_HandledAsIdentifier(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         // Emoji should be part of the identifier
@@ -214,6 +222,7 @@ public class UnicodeTests
     [InlineData("\u200D", "Zero-width joiner")]
     public void Tokenize_ZeroWidthCharacter_HandledWithoutCrash(string input, string description)
     {
+        _ = description;
         // Should not throw - exact behavior may vary but must be handled
         var tokens = Tokenize(input);
         Assert.NotNull(tokens);
@@ -281,6 +290,7 @@ public class UnicodeTests
     [InlineData("naïve", "Precomposed ï")]
     public void Tokenize_AccentedCharacters_RecognizedAsIdentifier(string input, string description)
     {
+        _ = description;
         var tokens = Tokenize(input);
 
         var idents = tokens.OfType<IdentToken>().ToArray();

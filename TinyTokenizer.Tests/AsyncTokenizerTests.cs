@@ -760,7 +760,7 @@ public class AsyncTokenizerTests
         var report = await GetTokens().ApplyPatternsWithDiagnosticsAsync(new ITokenDefinition[] { definition });
         
         Assert.NotNull(report);
-        Assert.NotNull(report.OutputTokens);
+        Assert.False(report.OutputTokens.IsDefault);
     }
     
     [Fact]
