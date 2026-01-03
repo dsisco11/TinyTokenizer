@@ -284,17 +284,17 @@ Timeline: Continuous
 
 [ ] 4.2 Unicode Test Suite (3 hrs)
     File: new TinyTokenizer.Tests/UnicodeTests.cs
-    [ ] Create UnicodeTests.cs file
-    [ ] Unicode identifier tests
-        [ ] Test "変数" (Japanese) recognized as identifier
-        [ ] Test "переменная" (Cyrillic) recognized as identifier
-        [ ] Test "משתנה" (Hebrew RTL) recognized as identifier
-    [ ] Emoji tests
-        [ ] Test "🚀rocket" (emoji prefix) handled correctly
-        [ ] Test "var_🎉" (emoji suffix) handled correctly
-    [ ] Invisible character tests
-        [ ] Test "\u200B" (zero-width space) handled
-        [ ] Test "\uFEFF" (BOM) handled
+    [x] Create UnicodeTests.cs file
+    [x] Unicode identifier tests
+        [x] Test "変数" (Japanese) recognized as identifier
+        [x] Test "переменная" (Cyrillic) recognized as identifier
+        [x] Test "משתנה" (Hebrew RTL) recognized as identifier
+    [x] Emoji tests
+        [x] Test "🚀rocket" (emoji prefix) handled correctly
+        [x] Test "var_🎉" (emoji suffix) handled correctly
+    [x] Invisible character tests
+        [x] Test "\u200B" (zero-width space) handled
+        [x] Test "\uFEFF" (BOM) handled
 
 [ ] 4.3 Numeric Edge Cases Tests (2 hrs)
     File: TinyTokenizer.Tests/LexerParserTests.cs (extend existing)
