@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// Tests for the async tokenization functionality including AsyncPipeTokenizer,
 /// DecodingPipeReader, and async extension methods.
 /// </summary>
+[Trait("Category", "Async")]
 public class AsyncTokenizerTests
 {
     #region Helper Methods

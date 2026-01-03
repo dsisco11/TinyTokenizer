@@ -5,7 +5,7 @@ namespace TinyTokenizer.Tests;
 
 /// <summary>
 /// Tests verifying Roslyn-compatible trivia ownership rules.
-/// 
+///
 /// Roslyn trivia model:
 /// - Trailing trivia = same-line content after token up to and including the first newline
 /// - Leading trivia = content from after previous token's trailing trivia up to current token
@@ -13,6 +13,7 @@ namespace TinyTokenizer.Tests;
 /// - Last token gets all remaining trivia (to EOF) as trailing
 /// - Multi-line comments starting on same line are entirely trailing trivia
 /// </summary>
+[Trait("Category", "Trivia")]
 public class TriviaTests
 {
     #region Helper Methods

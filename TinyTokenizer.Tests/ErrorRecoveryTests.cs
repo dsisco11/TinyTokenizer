@@ -7,6 +7,7 @@ namespace TinyTokenizer.Tests;
 /// Validates that the tokenizer produces appropriate ErrorTokens for malformed input
 /// and continues tokenizing after encountering errors.
 /// </summary>
+[Trait("Category", "ErrorRecovery")]
 public class ErrorRecoveryTests
 {
     #region Helper Methods

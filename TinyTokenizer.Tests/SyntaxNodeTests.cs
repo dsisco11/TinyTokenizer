@@ -7,6 +7,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for GreenSyntaxNode and RedSyntaxNode classes.
 /// </summary>
+[Trait("Category", "AST")]
 public class SyntaxNodeTests
 {
     #region GreenSyntaxNode Tests

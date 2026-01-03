@@ -6,6 +6,8 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Comprehensive tests for RedLeaf covering all properties and methods.
 /// </summary>
+[Trait("Category", "AST")]
+[Trait("Category", "RedNode")]
 public class RedLeafTests
 {
     #region Basic Properties

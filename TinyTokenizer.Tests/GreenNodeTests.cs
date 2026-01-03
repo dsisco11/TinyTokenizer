@@ -7,6 +7,8 @@ namespace TinyTokenizer.Tests;
 /// Comprehensive tests for GreenNode, GreenLeaf, and GreenBlock covering
 /// all properties, methods, structural sharing, and edge cases.
 /// </summary>
+[Trait("Category", "AST")]
+[Trait("Category", "GreenNode")]
 public class GreenNodeTests
 {
     #region GreenNode Base Properties

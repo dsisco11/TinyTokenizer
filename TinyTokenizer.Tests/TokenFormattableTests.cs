@@ -3,6 +3,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for <see cref="Token"/> IFormattable implementation.
 /// </summary>
+[Trait("Category", "Token")]
 public class TokenFormattableTests
 {
     private static IdentToken CreateToken(string content, int position) =>

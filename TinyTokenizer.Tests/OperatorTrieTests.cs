@@ -5,6 +5,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the OperatorTrie class used for O(k) operator matching.
 /// </summary>
+[Trait("Category", "Operator")]
 public class OperatorTrieTests
 {
     [Fact]

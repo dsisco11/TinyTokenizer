@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the PatternMatcher system (Level 3 tokenization).
 /// </summary>
+[Trait("Category", "Pattern")]
 public class PatternMatcherTests
 {
     #region Helper Methods

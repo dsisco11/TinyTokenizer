@@ -7,6 +7,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Comprehensive tests for NodePattern and all pattern types.
 /// </summary>
+[Trait("Category", "Pattern")]
 public class NodePatternTests
 {
     #region NodeMatch

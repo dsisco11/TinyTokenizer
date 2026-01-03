@@ -3,6 +3,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for TokenSelector types and Match factory methods.
 /// </summary>
+[Trait("Category", "Token")]
 public class TokenSelectorTests
 {
     #region Helper Methods

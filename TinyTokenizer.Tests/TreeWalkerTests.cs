@@ -6,6 +6,8 @@ namespace TinyTokenizer.Tests;
 /// Comprehensive tests for TreeWalker covering all navigation methods,
 /// filter modes, and edge cases.
 /// </summary>
+[Trait("Category", "AST")]
+[Trait("Category", "TreeWalker")]
 public class TreeWalkerTests
 {
     #region Constructor and Properties

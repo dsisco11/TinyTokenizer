@@ -6,6 +6,7 @@ namespace TinyTokenizer.Tests;
 /// Tests for thread safety of the tokenizer and syntax tree operations.
 /// Verifies concurrent access doesn't cause exceptions or data corruption.
 /// </summary>
+[Trait("Category", "Concurrency")]
 public class ConcurrencyTests
 {
     #region Constants
@@ -53,6 +54,7 @@ function test{index}() {{
     #region Concurrent RedNode Access Tests
 
     [Fact]
+    [Trait("Category", "RedNode")]
     public async Task ConcurrentRedNodeAccess_MultipleTasksAccessingChildren_NoExceptions()
     {
         // Arrange - parse tree once
@@ -90,6 +92,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "RedNode")]
     public async Task ConcurrentRedNodeAccess_SiblingIndexAccess_NoExceptions()
     {
         // Arrange
@@ -116,6 +119,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "RedNode")]
     public async Task ConcurrentRedNodeAccess_NextAndPreviousSibling_NoExceptions()
     {
         // Arrange
@@ -144,6 +148,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "RedNode")]
     public async Task ConcurrentRedNodeAccess_ParentNavigation_NoExceptions()
     {
         // Arrange
@@ -177,6 +182,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "RedNode")]
     public async Task ConcurrentRedNodeAccess_DescendantsEnumeration_NoExceptions()
     {
         // Arrange
@@ -211,6 +217,7 @@ function test{index}() {{
     #region Concurrent Tree Parsing Tests
 
     [Fact]
+    [Trait("Category", "SyntaxTree")]
     public async Task ConcurrentTreeParsing_DifferentInputs_AllTreesValid()
     {
         // Act - spawn tasks each parsing different input
@@ -240,6 +247,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "SyntaxTree")]
     public async Task ConcurrentTreeParsing_SameInput_ConsistentResults()
     {
         // Arrange
@@ -264,6 +272,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "SyntaxTree")]
     public async Task ConcurrentTreeParsing_LargeInput_NoExceptions()
     {
         // Arrange - generate large input
@@ -286,6 +295,7 @@ function test{index}() {{
     #region Concurrent Tokenizer Tests
 
     [Fact]
+    [Trait("Category", "Tokenizer")]
     public async Task ConcurrentTokenizing_SharedLexerAndParser_NoExceptions()
     {
         // Arrange - create shared lexer and parser
@@ -312,6 +322,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "Tokenizer")]
     public async Task ConcurrentTokenizing_SeparateInstances_NoExceptions()
     {
         // Act - each task creates its own lexer/parser
@@ -340,6 +351,7 @@ function test{index}() {{
     #region Concurrent Query Tests
 
     [Fact]
+    [Trait("Category", "Query")]
     public async Task ConcurrentQueries_SameTree_NoExceptions()
     {
         // Arrange
@@ -378,6 +390,7 @@ function test{index}() {{
     #region Stress Tests
 
     [Fact]
+    [Trait("Category", "Stress")]
     public async Task StressTest_RapidParseAndQuery_NoExceptions()
     {
         // Act - rapid fire parsing and querying
@@ -402,6 +415,7 @@ function test{index}() {{
     }
 
     [Fact]
+    [Trait("Category", "Stress")]
     public async Task StressTest_MixedOperations_NoExceptions()
     {
         // Arrange

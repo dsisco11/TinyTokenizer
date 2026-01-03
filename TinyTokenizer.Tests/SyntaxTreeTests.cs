@@ -8,6 +8,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the Red-Green tree AST implementation.
 /// </summary>
+[Trait("Category", "SyntaxTree")]
 public class SyntaxTreeTests
 {
     #region Basic Parsing

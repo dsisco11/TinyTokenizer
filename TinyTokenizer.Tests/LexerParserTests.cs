@@ -5,6 +5,8 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the two-level tokenizer architecture (Lexer + TokenParser).
 /// </summary>
+[Trait("Category", "Lexer")]
+[Trait("Category", "Parser")]
 public class LexerParserTests
 {
     #region Helper Methods

@@ -7,6 +7,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the unified Query combinator API.
 /// </summary>
+[Trait("Category", "Query")]
 public class QueryCombinatorTests
 {
     private static readonly Schema DefaultSchema = Schema.Create()

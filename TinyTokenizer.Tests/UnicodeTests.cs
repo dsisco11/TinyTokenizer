@@ -4,6 +4,7 @@ namespace TinyTokenizer.Tests;
 /// Tests for Unicode character handling in the tokenizer.
 /// Covers international identifiers, emoji, and invisible characters.
 /// </summary>
+[Trait("Category", "Unicode")]
 public class UnicodeTests
 {
     #region Helper Methods

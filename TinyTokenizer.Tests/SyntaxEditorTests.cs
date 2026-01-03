@@ -8,6 +8,7 @@ namespace TinyTokenizer.Tests;
 /// <summary>
 /// Tests for the SyntaxEditor fluent editing API.
 /// </summary>
+[Trait("Category", "Editor")]
 public class SyntaxEditorTests
 {
     #region Replace Operations
