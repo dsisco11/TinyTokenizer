@@ -296,15 +296,15 @@ Timeline: Continuous
         [x] Test "\u200B" (zero-width space) handled
         [x] Test "\uFEFF" (BOM) handled
 
-[ ] 4.3 Numeric Edge Cases Tests (2 hrs)
+[x] 4.3 Numeric Edge Cases Tests (2 hrs) ✓ DONE
     File: TinyTokenizer.Tests/LexerParserTests.cs (extend existing)
-    [ ] Add numeric edge case theory tests
-        [ ] Test "0" → Integer
-        [ ] Test "0.0" → FloatingPoint
-        [ ] Test ".0" → FloatingPoint
-        [ ] Test "0." → Integer + Dot (trailing dot separate)
-        [ ] Test "00123" → Integer (leading zeros)
-        [ ] Test "1.2.3" → 1.2 FloatingPoint + Dot + 3 Integer
+    [x] Add numeric edge case theory tests
+        [x] Test "0" → Integer
+        [x] Test "0.0" → FloatingPoint
+        [x] Test ".0" → FloatingPoint
+        [x] Test "0." → Integer + Dot (trailing dot separate)
+        [x] Test "00123" → Integer (leading zeros)
+        [x] Test "1.2.3" → 1.2 FloatingPoint + .3 FloatingPoint (greedy parsing)
 
 [ ] 4.4 Thread Safety Tests (3 hrs)
     File: new TinyTokenizer.Tests/ConcurrencyTests.cs

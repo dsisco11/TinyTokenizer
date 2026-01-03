@@ -344,6 +344,178 @@ public class LexerParserTests
         Assert.IsType<IdentToken>(tokens[2]);
     }
 
+    #region Numeric Edge Cases
+
+    [Theory]
+    [InlineData("0", NumericType.Integer, "0")]
+    [InlineData("1", NumericType.Integer, "1")]
+    [InlineData("9", NumericType.Integer, "9")]
+    [InlineData("42", NumericType.Integer, "42")]
+    [InlineData("999999", NumericType.Integer, "999999")]
+    public void TokenParser_SingleDigitAndSimpleIntegers_ReturnsInteger(string input, NumericType expectedType, string expectedContent)
+    {
+        var tokens = Tokenize(input);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(expectedContent, num.ContentSpan.ToString());
+        Assert.Equal(expectedType, num.NumericType);
+    }
+
+    [Theory]
+    [InlineData("0.0", NumericType.FloatingPoint, "0.0")]
+    [InlineData("1.0", NumericType.FloatingPoint, "1.0")]
+    [InlineData("0.5", NumericType.FloatingPoint, "0.5")]
+    [InlineData("123.456", NumericType.FloatingPoint, "123.456")]
+    public void TokenParser_StandardDecimals_ReturnsFloatingPoint(string input, NumericType expectedType, string expectedContent)
+    {
+        var tokens = Tokenize(input);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(expectedContent, num.ContentSpan.ToString());
+        Assert.Equal(expectedType, num.NumericType);
+    }
+
+    [Theory]
+    [InlineData(".0", NumericType.FloatingPoint, ".0")]
+    [InlineData(".5", NumericType.FloatingPoint, ".5")]
+    [InlineData(".123", NumericType.FloatingPoint, ".123")]
+    [InlineData(".999", NumericType.FloatingPoint, ".999")]
+    public void TokenParser_LeadingDotDecimals_ReturnsFloatingPoint(string input, NumericType expectedType, string expectedContent)
+    {
+        var tokens = Tokenize(input);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(expectedContent, num.ContentSpan.ToString());
+        Assert.Equal(expectedType, num.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_TrailingDot_ReturnsIntegerAndDotSymbol()
+    {
+        // "0." should produce Integer(0) + Symbol(.)
+        var tokens = Tokenize("0.");
+
+        Assert.Equal(2, tokens.Length);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal("0", num.ContentSpan.ToString());
+        Assert.Equal(NumericType.Integer, num.NumericType);
+        
+        var dot = Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.Equal('.', dot.Symbol);
+    }
+
+    [Theory]
+    [InlineData("00123", "00123")]
+    [InlineData("007", "007")]
+    [InlineData("000", "000")]
+    public void TokenParser_LeadingZeros_ReturnsIntegerWithLeadingZeros(string input, string expectedContent)
+    {
+        var tokens = Tokenize(input);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(expectedContent, num.ContentSpan.ToString());
+        Assert.Equal(NumericType.Integer, num.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_MultipleDots_ParsedGreedily()
+    {
+        // "1.2.3" - tokenizer parses 1.2 as FloatingPoint, then .3 as FloatingPoint
+        var tokens = Tokenize("1.2.3");
+
+        Assert.Equal(2, tokens.Length);
+        
+        var num1 = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal("1.2", num1.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num1.NumericType);
+        
+        var num2 = Assert.IsType<NumericToken>(tokens[1]);
+        Assert.Equal(".3", num2.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num2.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_ConsecutiveDots_ReturnsNumericAndMultipleDots()
+    {
+        // "1..2" should produce Integer(1) + Symbol(.) + FloatingPoint(.2)
+        var tokens = Tokenize("1..2");
+
+        Assert.Equal(3, tokens.Length);
+        
+        var num1 = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal("1", num1.ContentSpan.ToString());
+        Assert.Equal(NumericType.Integer, num1.NumericType);
+        
+        var dot = Assert.IsType<SymbolToken>(tokens[1]);
+        Assert.Equal('.', dot.Symbol);
+        
+        var num2 = Assert.IsType<NumericToken>(tokens[2]);
+        Assert.Equal(".2", num2.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num2.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_NumbersInExpression_ParsedCorrectly()
+    {
+        var tokens = Tokenize("x = 3.14");
+
+        Assert.Equal(5, tokens.Length);
+        Assert.IsType<IdentToken>(tokens[0]);
+        Assert.IsType<WhitespaceToken>(tokens[1]);
+        Assert.IsType<OperatorToken>(tokens[2]);
+        Assert.IsType<WhitespaceToken>(tokens[3]);
+        
+        var num = Assert.IsType<NumericToken>(tokens[4]);
+        Assert.Equal("3.14", num.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_NumberFollowedByIdentifier_SeparateTokens()
+    {
+        // "123abc" should produce Integer(123) + Ident(abc)
+        var tokens = Tokenize("123abc");
+
+        Assert.Equal(2, tokens.Length);
+        
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal("123", num.ContentSpan.ToString());
+        Assert.Equal(NumericType.Integer, num.NumericType);
+        
+        var ident = Assert.IsType<IdentToken>(tokens[1]);
+        Assert.Equal("abc", ident.ContentSpan.ToString());
+    }
+
+    [Fact]
+    public void TokenParser_VeryLongNumber_ParsedAsInteger()
+    {
+        var longNumber = new string('9', 100);
+        var tokens = Tokenize(longNumber);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(longNumber, num.ContentSpan.ToString());
+        Assert.Equal(NumericType.Integer, num.NumericType);
+    }
+
+    [Fact]
+    public void TokenParser_VeryLongDecimal_ParsedAsFloatingPoint()
+    {
+        var longDecimal = new string('9', 50) + "." + new string('1', 50);
+        var tokens = Tokenize(longDecimal);
+
+        Assert.Single(tokens);
+        var num = Assert.IsType<NumericToken>(tokens[0]);
+        Assert.Equal(longDecimal, num.ContentSpan.ToString());
+        Assert.Equal(NumericType.FloatingPoint, num.NumericType);
+    }
+
+    #endregion
+
     #endregion
 
     #region Comment Tests
