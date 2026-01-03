@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Text;
 
 namespace TinyTokenizer.Ast;
 
@@ -10,10 +9,11 @@ namespace TinyTokenizer.Ast;
 /// Contains children and delimiter information. Supports structural sharing mutations.
 /// </summary>
 /// <remarks>
-/// Uses leading-preferred trivia model:
-/// - LeadingTrivia: trivia before the opening delimiter
-/// - InnerTrivia: trivia after the opener when block is empty (for blocks like "{ }")
-/// - TrailingTrivia: trivia after the closing delimiter (used as fallback when leading isn't possible)
+/// Opener and closer are represented as GreenLeaf nodes with their own trivia:
+/// - OpenerNode.LeadingTrivia: trivia before the opening delimiter
+/// - OpenerNode.TrailingTrivia: trivia after opener, before first child
+/// - CloserNode.LeadingTrivia: trivia after last child, before closing delimiter
+/// - CloserNode.TrailingTrivia: trivia after the closing delimiter
 /// </remarks>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed record GreenBlock : GreenContainer
@@ -29,73 +29,81 @@ internal sealed record GreenBlock : GreenContainer
     /// <inheritdoc/>
     public override NodeKind Kind { get; }
     
+    /// <summary>The opening delimiter node (e.g., '{', '[', '(') with its trivia.</summary>
+    public GreenLeaf OpenerNode { get; }
+    
+    /// <summary>The closing delimiter node (e.g., '}', ']', ')') with its trivia.</summary>
+    public GreenLeaf CloserNode { get; }
+    
     /// <summary>The opening delimiter character.</summary>
-    public char Opener { get; }
+    public char Opener => OpenerNode.Text[0];
     
     /// <summary>The closing delimiter character.</summary>
-    public char Closer { get; }
-    
-    /// <summary>Trivia before the opening delimiter.</summary>
-    public ImmutableArray<GreenTrivia> LeadingTrivia { get; }
-    
-    /// <summary>Trivia inside empty blocks (after opener, before closer when no children).</summary>
-    public ImmutableArray<GreenTrivia> InnerTrivia { get; }
-    
-    /// <summary>Trivia after the closing delimiter.</summary>
-    public ImmutableArray<GreenTrivia> TrailingTrivia { get; }
+    public char Closer => CloserNode.Text[0];
     
     /// <inheritdoc/>
     public override int Width => _width;
     
-    /// <summary>Total width of leading trivia.</summary>
-    public int LeadingTriviaWidth { get; }
+    /// <summary>Total width of leading trivia (from opener node).</summary>
+    public int LeadingTriviaWidth => OpenerNode.LeadingTriviaWidth;
     
-    /// <summary>Total width of inner trivia.</summary>
-    public int InnerTriviaWidth { get; }
+    /// <summary>Total width of trailing trivia (from closer node).</summary>
+    public int TrailingTriviaWidth => CloserNode.TrailingTriviaWidth;
     
-    /// <summary>Total width of trailing trivia.</summary>
-    public int TrailingTriviaWidth { get; }
+    /// <summary>Leading trivia before the opener (convenience accessor for OpenerNode.LeadingTrivia).</summary>
+    public ImmutableArray<GreenTrivia> LeadingTrivia => OpenerNode.LeadingTrivia;
+    
+    /// <summary>Trailing trivia after the closer (convenience accessor for CloserNode.TrailingTrivia).</summary>
+    public ImmutableArray<GreenTrivia> TrailingTrivia => CloserNode.TrailingTrivia;
     
     /// <summary>
-    /// Creates a new block node.
+    /// Creates a new block node with explicit opener/closer leaf nodes.
     /// </summary>
     public GreenBlock(
-        char opener,
-        ImmutableArray<GreenNode> children,
-        ImmutableArray<GreenTrivia> leadingTrivia = default,
-        ImmutableArray<GreenTrivia> trailingTrivia = default,
-        ImmutableArray<GreenTrivia> innerTrivia = default)
+        GreenLeaf openerNode,
+        GreenLeaf closerNode,
+        ImmutableArray<GreenNode> children)
     {
-        Opener = opener;
-        Closer = GetMatchingCloser(opener);
-        Kind = GetBlockKind(opener);
+        OpenerNode = openerNode;
+        CloserNode = closerNode;
+        Kind = GetBlockKind(Opener);
         _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
-        LeadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
-        InnerTrivia = innerTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : innerTrivia;
-        TrailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
         
-        LeadingTriviaWidth = ComputeTriviaWidth(LeadingTrivia);
-        InnerTriviaWidth = ComputeTriviaWidth(InnerTrivia);
-        TrailingTriviaWidth = ComputeTriviaWidth(TrailingTrivia);
-        
-        // Compute width: leading trivia + opener(1) + inner trivia + children + closer(1) + trailing trivia
+        // Compute width: opener (with trivia) + children + closer (with trivia)
         int childrenWidth = 0;
         foreach (var child in _children)
             childrenWidth += child.Width;
         
-        _width = LeadingTriviaWidth + 1 + InnerTriviaWidth + childrenWidth + 1 + TrailingTriviaWidth;
+        _width = OpenerNode.Width + childrenWidth + CloserNode.Width;
         
         // Pre-compute child offsets for large blocks
         if (_children.Length >= 10)
         {
             _childOffsets = new int[_children.Length];
-            int offset = LeadingTriviaWidth + 1 + InnerTriviaWidth; // After leading trivia, opener, and inner trivia
+            int offset = OpenerNode.Width; // After opener (including its trivia)
             for (int i = 0; i < _children.Length; i++)
             {
                 _childOffsets[i] = offset;
                 offset += _children[i].Width;
             }
         }
+    }
+    
+    /// <summary>
+    /// Creates a new block node with automatic opener/closer creation.
+    /// This is a convenience factory that creates GreenLeaf nodes for the delimiters.
+    /// </summary>
+    public static GreenBlock Create(
+        char opener,
+        ImmutableArray<GreenNode> children,
+        ImmutableArray<GreenTrivia> openerLeadingTrivia = default,
+        ImmutableArray<GreenTrivia> openerTrailingTrivia = default,
+        ImmutableArray<GreenTrivia> closerLeadingTrivia = default,
+        ImmutableArray<GreenTrivia> closerTrailingTrivia = default)
+    {
+        var openerNode = GreenNodeCache.CreateDelimiter(opener, openerLeadingTrivia, openerTrailingTrivia);
+        var closerNode = GreenNodeCache.CreateDelimiter(GetMatchingCloser(opener), closerLeadingTrivia, closerTrailingTrivia);
+        return new GreenBlock(openerNode, closerNode, children);
     }
     
     /// <summary>Gets the children of this block.</summary>
@@ -112,14 +120,14 @@ internal sealed record GreenBlock : GreenContainer
             return _childOffsets[index]; // O(1)
         
         // O(index) for small blocks
-        int offset = LeadingTriviaWidth + 1 + InnerTriviaWidth; // After leading trivia, opener, and inner trivia
+        int offset = OpenerNode.Width; // After opener (including its trivia)
         for (int i = 0; i < index; i++)
             offset += _children[i].Width;
         return offset;
     }
     
     /// <inheritdoc/>
-    protected override int GetLeadingWidth() => LeadingTriviaWidth + 1 + InnerTriviaWidth; // Leading trivia + opener + inner trivia
+    protected override int GetLeadingWidth() => OpenerNode.Width; // Opener including its trivia
     
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position)
@@ -128,37 +136,12 @@ internal sealed record GreenBlock : GreenContainer
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)
     {
-        foreach (var trivia in LeadingTrivia)
-        {
-            var span = writer.GetSpan(trivia.Width);
-            trivia.Text.AsSpan().CopyTo(span);
-            writer.Advance(trivia.Width);
-        }
-        
-        var openerSpan = writer.GetSpan(1);
-        openerSpan[0] = Opener;
-        writer.Advance(1);
-        
-        foreach (var trivia in InnerTrivia)
-        {
-            var span = writer.GetSpan(trivia.Width);
-            trivia.Text.AsSpan().CopyTo(span);
-            writer.Advance(trivia.Width);
-        }
+        OpenerNode.WriteTo(writer);
         
         foreach (var child in _children)
             child.WriteTo(writer);
         
-        var closerSpan = writer.GetSpan(1);
-        closerSpan[0] = Closer;
-        writer.Advance(1);
-        
-        foreach (var trivia in TrailingTrivia)
-        {
-            var span = writer.GetSpan(trivia.Width);
-            trivia.Text.AsSpan().CopyTo(span);
-            writer.Advance(trivia.Width);
-        }
+        CloserNode.WriteTo(writer);
     }
     
     #region Structural Sharing Mutations
@@ -170,12 +153,12 @@ internal sealed record GreenBlock : GreenContainer
             throw new ArgumentOutOfRangeException(nameof(index));
         
         var newChildren = _children.SetItem(index, newChild);
-        return new GreenBlock(Opener, newChildren, LeadingTrivia, TrailingTrivia, InnerTrivia);
+        return new GreenBlock(OpenerNode, CloserNode, newChildren);
     }
     
     /// <inheritdoc/>
     public override GreenBlock WithChildren(ImmutableArray<GreenNode> newChildren)
-        => new(Opener, newChildren, LeadingTrivia, TrailingTrivia, InnerTrivia);
+        => new(OpenerNode, CloserNode, newChildren);
     
     /// <inheritdoc/>
     public override GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
@@ -185,7 +168,7 @@ internal sealed record GreenBlock : GreenContainer
         
         var builder = _children.ToBuilder();
         builder.InsertRange(index, nodes);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
+        return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     
     /// <inheritdoc/>
@@ -196,7 +179,7 @@ internal sealed record GreenBlock : GreenContainer
         
         var builder = _children.ToBuilder();
         builder.RemoveRange(index, count);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
+        return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     
     /// <inheritdoc/>
@@ -208,26 +191,32 @@ internal sealed record GreenBlock : GreenContainer
         var builder = _children.ToBuilder();
         builder.RemoveRange(index, count);
         builder.InsertRange(index, replacement);
-        return new GreenBlock(Opener, builder.ToImmutable(), LeadingTrivia, TrailingTrivia, InnerTrivia);
+        return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     
     /// <summary>
-    /// Creates a new block with different leading trivia.
+    /// Creates a new block with a different opener node.
+    /// </summary>
+    public GreenBlock WithOpenerNode(GreenLeaf openerNode)
+        => new(openerNode, CloserNode, _children);
+    
+    /// <summary>
+    /// Creates a new block with a different closer node.
+    /// </summary>
+    public GreenBlock WithCloserNode(GreenLeaf closerNode)
+        => new(OpenerNode, closerNode, _children);
+    
+    /// <summary>
+    /// Creates a new block with different leading trivia (on the opener node).
     /// </summary>
     public GreenBlock WithLeadingTrivia(ImmutableArray<GreenTrivia> trivia)
-        => new(Opener, _children, trivia, TrailingTrivia, InnerTrivia);
+        => new(OpenerNode.WithLeadingTrivia(trivia), CloserNode, _children);
     
     /// <summary>
-    /// Creates a new block with different trailing trivia.
+    /// Creates a new block with different trailing trivia (on the closer node).
     /// </summary>
     public GreenBlock WithTrailingTrivia(ImmutableArray<GreenTrivia> trivia)
-        => new(Opener, _children, LeadingTrivia, trivia, InnerTrivia);
-    
-    /// <summary>
-    /// Creates a new block with different inner trivia.
-    /// </summary>
-    public GreenBlock WithInnerTrivia(ImmutableArray<GreenTrivia> trivia)
-        => new(Opener, _children, LeadingTrivia, TrailingTrivia, trivia);
+        => new(OpenerNode, CloserNode.WithTrailingTrivia(trivia), _children);
     
     #endregion
     
@@ -248,14 +237,6 @@ internal sealed record GreenBlock : GreenContainer
         '(' => NodeKind.ParenBlock,
         _ => throw new ArgumentException($"Unknown opener: {opener}", nameof(opener))
     };
-    
-    private static int ComputeTriviaWidth(ImmutableArray<GreenTrivia> trivia)
-    {
-        int width = 0;
-        foreach (var t in trivia)
-            width += t.Width;
-        return width;
-    }
     
     #endregion
 }

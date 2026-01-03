@@ -17,6 +17,10 @@ public sealed class RedBlock : RedNode
     // Lazy child cache - initialized on first child access
     private RedNode?[]? _children;
     
+    // Lazy opener/closer red nodes
+    private RedLeaf? _openerNode;
+    private RedLeaf? _closerNode;
+    
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
@@ -34,23 +38,46 @@ public sealed class RedBlock : RedNode
     /// <summary>The closing delimiter character.</summary>
     public char Closer => Green.Closer;
     
+    /// <summary>The opening delimiter node with its trivia.</summary>
+    public RedLeaf OpenerNode
+    {
+        get
+        {
+            if (_openerNode == null)
+            {
+                var node = (RedLeaf)Green.OpenerNode.CreateRed(this, Position);
+                Interlocked.CompareExchange(ref _openerNode, node, null);
+            }
+            return _openerNode!;
+        }
+    }
+    
+    /// <summary>The closing delimiter node with its trivia.</summary>
+    public RedLeaf CloserNode
+    {
+        get
+        {
+            if (_closerNode == null)
+            {
+                var closerPosition = EndPosition - Green.CloserNode.Width;
+                var node = (RedLeaf)Green.CloserNode.CreateRed(this, closerPosition);
+                Interlocked.CompareExchange(ref _closerNode, node, null);
+            }
+            return _closerNode!;
+        }
+    }
+    
     /// <summary>Number of children in this block.</summary>
     public int ChildCount => Green.SlotCount;
     
-    /// <summary>Leading trivia before the opening delimiter.</summary>
-    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.LeadingTrivia;
+    /// <summary>Leading trivia before the opening delimiter (from opener node).</summary>
+    internal ImmutableArray<GreenTrivia> LeadingTrivia => Green.OpenerNode.LeadingTrivia;
     
-    /// <summary>Inner trivia after opener when block is empty (for blocks like "{ }").</summary>
-    internal ImmutableArray<GreenTrivia> InnerTrivia => Green.InnerTrivia;
-    
-    /// <summary>Trailing trivia after the closing delimiter.</summary>
-    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.TrailingTrivia;
+    /// <summary>Trailing trivia after the closing delimiter (from closer node).</summary>
+    internal ImmutableArray<GreenTrivia> TrailingTrivia => Green.CloserNode.TrailingTrivia;
     
     /// <summary>Width of leading trivia.</summary>
     public int LeadingTriviaWidth => Green.LeadingTriviaWidth;
-    
-    /// <summary>Width of inner trivia.</summary>
-    public int InnerTriviaWidth => Green.InnerTriviaWidth;
     
     /// <summary>Width of trailing trivia.</summary>
     public int TrailingTriviaWidth => Green.TrailingTriviaWidth;
@@ -58,22 +85,22 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Position of the opening delimiter (after leading trivia).
     /// </summary>
-    public int OpenerPosition => Position + Green.LeadingTriviaWidth;
+    public int OpenerPosition => Position + Green.OpenerNode.LeadingTriviaWidth;
     
     /// <summary>
-    /// Position of the closing delimiter.
+    /// Position of the closing delimiter (after closer's leading trivia).
     /// </summary>
-    public int CloserPosition => EndPosition - Green.TrailingTriviaWidth - 1;
+    public int CloserPosition => EndPosition - Green.CloserNode.TrailingTriviaWidth - 1;
     
     /// <summary>
-    /// Position of the inner content (after opener and inner trivia).
+    /// Position of the inner content (after opener including opener's trailing trivia).
     /// </summary>
-    public int InnerStartPosition => OpenerPosition + 1 + Green.InnerTriviaWidth;
+    public int InnerStartPosition => Position + Green.OpenerNode.Width;
     
     /// <summary>
-    /// End position of the inner content (before closer).
+    /// End position of the inner content (before closer's leading trivia).
     /// </summary>
-    public int InnerEndPosition => CloserPosition;
+    public int InnerEndPosition => EndPosition - Green.CloserNode.Width;
     
     /// <inheritdoc/>
     public override RedNode? GetChild(int index)

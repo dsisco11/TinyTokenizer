@@ -79,7 +79,7 @@ public class SyntaxTreeTests
         var children = ImmutableArray.Create<GreenNode>(
             new GreenLeaf(NodeKind.Ident, "x")
         );
-        var block = new GreenBlock('{', children);
+        var block = GreenBlock.Create('{', children);
         
         Assert.Equal(3, block.Width); // { + x + }
         Assert.Equal('{', block.Opener);
@@ -137,7 +137,7 @@ public class SyntaxTreeTests
         var child1 = new GreenLeaf(NodeKind.Ident, "a");
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         var newChild = new GreenLeaf(NodeKind.Ident, "X");
         var newBlock = block.WithSlot(1, newChild);
@@ -153,7 +153,7 @@ public class SyntaxTreeTests
     {
         var child1 = new GreenLeaf(NodeKind.Ident, "a");
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
         var newChild = new GreenLeaf(NodeKind.Ident, "X");
         var newBlock = block.WithInsert(1, ImmutableArray.Create<GreenNode>(newChild));

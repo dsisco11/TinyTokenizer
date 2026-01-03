@@ -270,7 +270,7 @@ public sealed class SyntaxBinder
         // Handle different node types
         return original switch
         {
-            GreenBlock block => new GreenBlock(block.Opener, newChildren, block.LeadingTrivia, block.TrailingTrivia),
+            GreenBlock block => new GreenBlock(block.OpenerNode, block.CloserNode, newChildren),
             GreenList => new GreenList(newChildren),
             GreenSyntaxNode syntax => new GreenSyntaxNode(syntax.Kind, syntax.RedType, newChildren),
             _ => original // Leaves don't have children to rebuild

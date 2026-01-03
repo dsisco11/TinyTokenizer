@@ -162,5 +162,23 @@ internal static class GreenNodeCache
     public static bool TryGetCached(NodeKind kind, string text, out GreenLeaf leaf)
         => _leaves.TryGetValue((kind, text), out leaf!);
     
+    /// <summary>
+    /// Creates a delimiter leaf (for block opener/closer).
+    /// Uses cache for delimiters with no trivia.
+    /// </summary>
+    public static GreenLeaf CreateDelimiter(
+        char delimiter,
+        ImmutableArray<GreenTrivia> leadingTrivia = default,
+        ImmutableArray<GreenTrivia> trailingTrivia = default)
+    {
+        var text = delimiter.ToString();
+        
+        // If no trivia, use cache
+        if (leadingTrivia.IsDefaultOrEmpty && trailingTrivia.IsDefaultOrEmpty)
+            return GetOrCreate(NodeKind.Symbol, text);
+        
+        return new GreenLeaf(NodeKind.Symbol, text, leadingTrivia, trailingTrivia);
+    }
+    
     #endregion
 }

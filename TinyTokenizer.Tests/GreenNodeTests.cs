@@ -14,7 +14,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenNode_IsContainer_TrueForBlocks()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         Assert.True(block.IsContainer);
     }
@@ -42,7 +42,7 @@ public class GreenNodeTests
         var child1 = new GreenLeaf(NodeKind.Ident, "aaa"); // width 3
         var child2 = new GreenLeaf(NodeKind.Ident, "bb");  // width 2
         var child3 = new GreenLeaf(NodeKind.Ident, "c");   // width 1
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         // Offset 0: after opener '{' (1 char)
         Assert.Equal(1, block.GetSlotOffset(0));
@@ -237,7 +237,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_Kind_CorrectForBraces()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal(NodeKind.BraceBlock, block.Kind);
     }
@@ -245,7 +245,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_Kind_CorrectForBrackets()
     {
-        var block = new GreenBlock('[', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('[', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal(NodeKind.BracketBlock, block.Kind);
     }
@@ -253,7 +253,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_Kind_CorrectForParens()
     {
-        var block = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal(NodeKind.ParenBlock, block.Kind);
     }
@@ -261,7 +261,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_OpenerCloser_BraceBlock()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal('{', block.Opener);
         Assert.Equal('}', block.Closer);
@@ -270,7 +270,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_OpenerCloser_BracketBlock()
     {
-        var block = new GreenBlock('[', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('[', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal('[', block.Opener);
         Assert.Equal(']', block.Closer);
@@ -279,7 +279,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_OpenerCloser_ParenBlock()
     {
-        var block = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
         
         Assert.Equal('(', block.Opener);
         Assert.Equal(')', block.Closer);
@@ -288,7 +288,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_Width_EmptyBlock()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         // Width = opener(1) + closer(1) = 2
         Assert.Equal(2, block.Width);
@@ -299,7 +299,7 @@ public class GreenNodeTests
     {
         var children = ImmutableArray.Create<GreenNode>(
             new GreenLeaf(NodeKind.Ident, "abc")); // width 3
-        var block = new GreenBlock('{', children);
+        var block = GreenBlock.Create('{', children);
         
         // Width = opener(1) + children(3) + closer(1) = 5
         Assert.Equal(5, block.Width);
@@ -310,7 +310,7 @@ public class GreenNodeTests
     {
         var leading = ImmutableArray.Create(GreenTrivia.Whitespace(" "));
         var trailing = ImmutableArray.Create(GreenTrivia.Whitespace("  "));
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty, leading, trailing);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty, leading, closerTrailingTrivia: trailing);
         
         // Width = leading(1) + opener(1) + closer(1) + trailing(2) = 5
         Assert.Equal(5, block.Width);
@@ -323,7 +323,7 @@ public class GreenNodeTests
             new GreenLeaf(NodeKind.Ident, "a"),
             new GreenLeaf(NodeKind.Ident, "b"),
             new GreenLeaf(NodeKind.Ident, "c"));
-        var block = new GreenBlock('{', children);
+        var block = GreenBlock.Create('{', children);
         
         Assert.Equal(3, block.SlotCount);
     }
@@ -332,7 +332,7 @@ public class GreenNodeTests
     public void GreenBlock_GetSlot_ReturnsChild()
     {
         var child = new GreenLeaf(NodeKind.Ident, "test");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
         Assert.Same(child, block.GetSlot(0));
     }
@@ -340,7 +340,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_GetSlot_OutOfRange_ReturnsNull()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         Assert.Null(block.GetSlot(0));
         Assert.Null(block.GetSlot(-1));
@@ -352,7 +352,7 @@ public class GreenNodeTests
     {
         var leading = ImmutableArray.Create(GreenTrivia.Whitespace("  "));
         var trailing = ImmutableArray.Create(GreenTrivia.Whitespace("   "));
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty, leading, trailing);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty, leading, closerTrailingTrivia: trailing);
         
         Assert.Equal(2, block.LeadingTriviaWidth);
         Assert.Equal(3, block.TrailingTriviaWidth);
@@ -367,7 +367,7 @@ public class GreenNodeTests
     {
         var child1 = new GreenLeaf(NodeKind.Ident, "aa");  // width 2
         var child2 = new GreenLeaf(NodeKind.Ident, "bbb"); // width 3
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
         // slot 0: after opener = 1
         Assert.Equal(1, block.GetSlotOffset(0));
@@ -380,7 +380,7 @@ public class GreenNodeTests
     {
         var leading = ImmutableArray.Create(GreenTrivia.Whitespace("  ")); // width 2
         var child = new GreenLeaf(NodeKind.Ident, "x");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child), leading);
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child), leading);
         
         // slot 0: leading trivia(2) + opener(1) = 3
         Assert.Equal(3, block.GetSlotOffset(0));
@@ -395,7 +395,7 @@ public class GreenNodeTests
         {
             children.Add(new GreenLeaf(NodeKind.Ident, new string('x', i + 1)));
         }
-        var block = new GreenBlock('{', children.ToImmutableArray());
+        var block = GreenBlock.Create('{', children.ToImmutableArray());
         
         // Verify offsets are computed correctly
         int expectedOffset = 1; // After opener
@@ -415,7 +415,7 @@ public class GreenNodeTests
     {
         var original = new GreenLeaf(NodeKind.Ident, "old");
         var replacement = new GreenLeaf(NodeKind.Ident, "new");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(original));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(original));
         
         var modified = block.WithSlot(0, replacement);
         
@@ -431,7 +431,7 @@ public class GreenNodeTests
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         var modified = block.WithSlot(1, replacement);
         
@@ -444,7 +444,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_WithSlot_InvalidIndex_Throws()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
         Assert.Throws<ArgumentOutOfRangeException>(() => block.WithSlot(0, child));
@@ -457,7 +457,7 @@ public class GreenNodeTests
         var child1 = new GreenLeaf(NodeKind.Ident, "a");
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
         var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(inserted));
         
@@ -472,7 +472,7 @@ public class GreenNodeTests
     {
         var child = new GreenLeaf(NodeKind.Ident, "a");
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
         var modified = block.WithInsert(0, ImmutableArray.Create<GreenNode>(inserted));
         
@@ -485,7 +485,7 @@ public class GreenNodeTests
     {
         var child = new GreenLeaf(NodeKind.Ident, "a");
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
         var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(inserted));
         
@@ -499,7 +499,7 @@ public class GreenNodeTests
         var original = new GreenLeaf(NodeKind.Ident, "a");
         var insert1 = new GreenLeaf(NodeKind.Ident, "X");
         var insert2 = new GreenLeaf(NodeKind.Ident, "Y");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(original));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(original));
         
         var modified = block.WithInsert(0, ImmutableArray.Create<GreenNode>(insert1, insert2));
         
@@ -512,7 +512,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_WithInsert_InvalidIndex_Throws()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
         Assert.Throws<ArgumentOutOfRangeException>(() => 
@@ -527,7 +527,7 @@ public class GreenNodeTests
         var child1 = new GreenLeaf(NodeKind.Ident, "a");
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         var modified = block.WithRemove(1, 1);
         
@@ -543,7 +543,7 @@ public class GreenNodeTests
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
         var child4 = new GreenLeaf(NodeKind.Ident, "d");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3, child4));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3, child4));
         
         var modified = block.WithRemove(1, 2); // Remove b and c
         
@@ -556,7 +556,7 @@ public class GreenNodeTests
     public void GreenBlock_WithRemove_InvalidRange_Throws()
     {
         var child = new GreenLeaf(NodeKind.Ident, "a");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
         Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(-1, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(0, 5));
@@ -569,7 +569,7 @@ public class GreenNodeTests
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         var modified = block.WithReplace(1, 1, ImmutableArray.Create<GreenNode>(replacement));
         
@@ -587,7 +587,7 @@ public class GreenNodeTests
         var repl1 = new GreenLeaf(NodeKind.Ident, "X");
         var repl2 = new GreenLeaf(NodeKind.Ident, "Y");
         var repl3 = new GreenLeaf(NodeKind.Ident, "Z");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
         // Replace 1 child with 3
         var modified = block.WithReplace(1, 1, ImmutableArray.Create<GreenNode>(repl1, repl2, repl3));
@@ -606,7 +606,7 @@ public class GreenNodeTests
         var child2 = new GreenLeaf(NodeKind.Ident, "b");
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
-        var block = new GreenBlock('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
+        var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         // Replace 2 children with 1
         var modified = block.WithReplace(0, 2, ImmutableArray.Create<GreenNode>(replacement));
@@ -619,7 +619,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_WithReplace_InvalidRange_Throws()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
         Assert.Throws<ArgumentOutOfRangeException>(() => 
@@ -631,7 +631,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_WithLeadingTrivia_CreatesNewBlock()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var trivia = ImmutableArray.Create(GreenTrivia.Whitespace(" "));
         
         var modified = block.WithLeadingTrivia(trivia);
@@ -644,7 +644,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_WithTrailingTrivia_CreatesNewBlock()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var trivia = ImmutableArray.Create(GreenTrivia.Whitespace("  "));
         
         var modified = block.WithTrailingTrivia(trivia);
@@ -660,7 +660,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_CreateRed_ReturnsRedBlock()
     {
-        var green = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var green = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         var red = green.CreateRed(null, 0);
         
@@ -670,7 +670,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_CreateRed_WithPosition()
     {
-        var green = new GreenBlock('[', ImmutableArray<GreenNode>.Empty);
+        var green = GreenBlock.Create('[', ImmutableArray<GreenNode>.Empty);
         
         var red = green.CreateRed(null, 100);
         
@@ -685,7 +685,7 @@ public class GreenNodeTests
     public void GreenBlock_InvalidOpener_Throws()
     {
         Assert.Throws<ArgumentException>(() => 
-            new GreenBlock('x', ImmutableArray<GreenNode>.Empty));
+            GreenBlock.Create('x', ImmutableArray<GreenNode>.Empty));
     }
 
     #endregion
@@ -705,8 +705,8 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_NestedBlocks()
     {
-        var inner = new GreenBlock('(', ImmutableArray<GreenNode>.Empty);
-        var outer = new GreenBlock('{', ImmutableArray.Create<GreenNode>(inner));
+        var inner = GreenBlock.Create('(', ImmutableArray<GreenNode>.Empty);
+        var outer = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(inner));
         
         Assert.Equal(4, outer.Width); // { + ( + ) + }
         Assert.Same(inner, outer.GetSlot(0));
@@ -718,7 +718,7 @@ public class GreenNodeTests
         GreenNode current = new GreenLeaf(NodeKind.Ident, "x");
         for (int i = 0; i < 5; i++)
         {
-            current = new GreenBlock('{', ImmutableArray.Create(current));
+            current = GreenBlock.Create('{', ImmutableArray.Create(current));
         }
         
         // Each layer adds 2 chars for delimiters
@@ -741,7 +741,7 @@ public class GreenNodeTests
     [Fact]
     public void GreenBlock_DefaultTrivia_IsEmpty()
     {
-        var block = new GreenBlock('{', ImmutableArray<GreenNode>.Empty);
+        var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
         Assert.Empty(block.LeadingTrivia);
         Assert.Empty(block.TrailingTrivia);

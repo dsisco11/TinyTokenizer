@@ -801,6 +801,7 @@ public class SyntaxEditorTests
     public void Insert_FunctionWithWhitespace_PreservesFormatting()
     {
         // Test that whitespace/trivia is preserved correctly
+        // With the new GreenBlock design, opener's trailing trivia (space after {) is preserved
         var tree = SyntaxTree.Parse("fn { body }");
         
         tree.CreateEditor()
@@ -808,7 +809,8 @@ public class SyntaxEditorTests
             .Commit();
         
         var text = tree.ToText();
-        Assert.Contains("{new;", text);
+        // The space after { is now preserved as OpenerNode.TrailingTrivia
+        Assert.Contains("{ new;", text);
         Assert.Contains("body", text);
     }
 

@@ -228,11 +228,15 @@ internal sealed class GreenLexer
         
         var opener = openToken.FirstChar;
         var closerType = GetMatchingCloser(openToken.Type);
+        var closerChar = GetMatchingCloserChar(opener);
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         
-        // Collect leading trivia for first child (or closer)
-        var childLeading = CollectLeadingTrivia(ref reader);
+        // Collect trivia after opener (will become opener's trailing trivia)
+        var openerTrailingTrivia = CollectLeadingTrivia(ref reader);
+        
+        // This will hold trivia before the next element (leading trivia for next child or closer)
+        var childLeading = ImmutableArray<GreenTrivia>.Empty;
         
         while (reader.HasMore)
         {
@@ -240,29 +244,23 @@ internal sealed class GreenLexer
             
             if (token.Type == closerType)
             {
-                // Found closer
-                if (children.Count > 0)
-                {
-                    // Has children - remaining trivia goes to last child as trailing
-                    // Use the "deep" version to handle nested blocks correctly
-                    if (!childLeading.IsEmpty)
-                    {
-                        children[^1] = AttachTrailingTriviaToDeepestChild(children[^1], childLeading);
-                    }
-                    reader.Advance();
-                    return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
-                }
-                else
-                {
-                    // Empty block - store trivia as inner trivia to preserve "{ }" spacing
-                    reader.Advance();
-                    return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, 
-                        trailingTrivia: default, innerTrivia: childLeading);
-                }
+                // Found closer - childLeading becomes closer's leading trivia
+                reader.Advance();
+                
+                // Create opener node with leading trivia (before opener) and trailing trivia (after opener)
+                var openerNode = GreenNodeCache.CreateDelimiter(opener, leadingTrivia, openerTrailingTrivia);
+                
+                // Create closer node with leading trivia (before closer, after last child)
+                var closerNode = GreenNodeCache.CreateDelimiter(closerChar, childLeading);
+                
+                return new GreenBlock(openerNode, closerNode, children.ToImmutable());
             }
             
             // Parse child node with its leading trivia
-            var child = ParseNode(ref reader, closerType, childLeading);
+            // For the first child, use empty leading trivia (opener's trailing already captured)
+            // For subsequent children, use the collected childLeading
+            var childLeadingForParse = children.Count == 0 ? ImmutableArray<GreenTrivia>.Empty : childLeading;
+            var child = ParseNode(ref reader, closerType, childLeadingForParse);
             if (child != null)
             {
                 // Collect trailing trivia for this child
@@ -271,27 +269,23 @@ internal sealed class GreenLexer
                 children.Add(child);
             }
             
-            // Collect leading trivia for next child
+            // Collect leading trivia for next child (or closer)
             childLeading = CollectLeadingTrivia(ref reader);
         }
         
-        // Unclosed block - attach any remaining trivia to last child or as inner trivia
-        if (!childLeading.IsEmpty)
-        {
-            if (children.Count > 0)
-            {
-                children[^1] = AttachTrailingTriviaToDeepestChild(children[^1], childLeading);
-                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
-            }
-            else
-            {
-                return new GreenBlock(opener, children.ToImmutable(), leadingTrivia, 
-                    trailingTrivia: default, innerTrivia: childLeading);
-            }
-        }
-        
-        return new GreenBlock(opener, children.ToImmutable(), leadingTrivia);
+        // Unclosed block - create with whatever we have
+        var openerNodeUnclosed = GreenNodeCache.CreateDelimiter(opener, leadingTrivia, openerTrailingTrivia);
+        var closerNodeUnclosed = GreenNodeCache.CreateDelimiter(closerChar, childLeading);
+        return new GreenBlock(openerNodeUnclosed, closerNodeUnclosed, children.ToImmutable());
     }
+    
+    private static char GetMatchingCloserChar(char opener) => opener switch
+    {
+        '{' => '}',
+        '[' => ']',
+        '(' => ')',
+        _ => throw new ArgumentException($"Unknown opener: {opener}")
+    };
     
     private GreenLeaf ParseString(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
     {
@@ -598,11 +592,8 @@ internal sealed class GreenLexer
                 leaf.LeadingTrivia, 
                 leaf.TrailingTrivia.AddRange(trivia)),
             
-            // Block nodes: trailing trivia goes to the block's TrailingTrivia (after closer)
-            // This is for trivia OUTSIDE the block, not "inside before closer"
-            GreenBlock block => 
-                new GreenBlock(block.Opener, block.Children, 
-                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia), block.InnerTrivia),
+            // Block nodes: trailing trivia goes to the closer's trailing trivia (after closer)
+            GreenBlock block => block.WithTrailingTrivia(block.CloserNode.TrailingTrivia.AddRange(trivia)),
             
             GreenList list when list.SlotCount > 0 => 
                 list.WithSlot(list.SlotCount - 1, 
@@ -620,6 +611,8 @@ internal sealed class GreenLexer
     /// <summary>
     /// Attaches trivia to the deepest last child of a node.
     /// Used for "before closer" trivia inside blocks that should go to the last token.
+    /// Note: With the new GreenBlock design, this is rarely needed as blocks store
+    /// "before closer" trivia in CloserNode.LeadingTrivia.
     /// </summary>
     private static GreenNode AttachTrailingTriviaToDeepestChild(GreenNode node, ImmutableArray<GreenTrivia> trivia)
     {
@@ -640,9 +633,8 @@ internal sealed class GreenLexer
                     AttachTrailingTriviaToDeepestChild(block.GetSlot(block.SlotCount - 1)!, trivia)),
             
             GreenBlock block => 
-                // Empty block - attach as block's trailing trivia
-                new GreenBlock(block.Opener, ImmutableArray<GreenNode>.Empty, 
-                    block.LeadingTrivia, block.TrailingTrivia.AddRange(trivia), block.InnerTrivia),
+                // Empty block - attach to closer's trailing trivia
+                block.WithTrailingTrivia(block.CloserNode.TrailingTrivia.AddRange(trivia)),
             
             GreenList list when list.SlotCount > 0 => 
                 list.WithSlot(list.SlotCount - 1, 
