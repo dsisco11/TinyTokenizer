@@ -218,15 +218,6 @@ public class SyntaxTreeBenchmarks
         return SyntaxTree.Parse(MediumInput, DefaultSchema);
     }
 
-    [Benchmark(Description = "WithSchema (attach to existing)")]
-    [BenchmarkCategory("Schema", "Attach")]
-    public SyntaxTree AttachSchema()
-    {
-        // Parse without schema, then attach
-        var tree = SyntaxTree.Parse(MediumInput);
-        return tree.WithSchema(DefaultSchema);
-    }
-
     #endregion
 
     #region Red Node Creation Benchmarks
