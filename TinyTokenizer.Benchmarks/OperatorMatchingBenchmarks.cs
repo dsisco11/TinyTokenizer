@@ -184,14 +184,6 @@ public class OperatorMatchingBenchmarks
 
     #region Operator Token Count Benchmarks
 
-    [Benchmark(Description = "Count Operator Tokens")]
-    [BenchmarkCategory("Analysis")]
-    public int CountOperatorTokens()
-    {
-        return _parser.Parse(_lexer.Lex(_inputMemory))
-            .Count(t => t is OperatorToken);
-    }
-
     [Benchmark(Description = "Filter Operator Tokens")]
     [BenchmarkCategory("Analysis")]
     public ImmutableArray<Token> FilterOperatorTokens()
