@@ -74,6 +74,9 @@ public sealed class Schema
     /// <summary>Syntax definitions indexed by RedType.</summary>
     private readonly ImmutableDictionary<Type, SyntaxNodeDefinition> _syntaxDefinitionsByType;
     
+    /// <summary>NodeKind to RedType mapping for SyntaxRedFactory lookup.</summary>
+    private readonly ImmutableDictionary<NodeKind, Type> _syntaxRedTypesByKind;
+    
     #endregion
     
     #region Constructor
@@ -169,6 +172,8 @@ public sealed class Schema
         var syntaxByName = ImmutableDictionary.CreateBuilder<string, SyntaxNodeDefinition>();
         var syntaxByType = ImmutableDictionary.CreateBuilder<Type, SyntaxNodeDefinition>();
         
+        var syntaxRedTypesByKind = ImmutableDictionary.CreateBuilder<NodeKind, Type>();
+        
         foreach (var def in syntaxDefs)
         {
             var kind = NodeKindExtensions.SemanticKind(kindOffset++);
@@ -177,11 +182,13 @@ public sealed class Schema
             assignedSyntaxDefs.Add(assigned);
             syntaxByName[assigned.Name] = assigned;
             syntaxByType[assigned.RedType] = assigned;
+            syntaxRedTypesByKind[kind] = assigned.RedType;
         }
         
         _syntaxDefinitions = assignedSyntaxDefs.ToImmutable();
         _syntaxDefinitionsByName = syntaxByName.ToImmutable();
         _syntaxDefinitionsByType = syntaxByType.ToImmutable();
+        _syntaxRedTypesByKind = syntaxRedTypesByKind.ToImmutable();
     }
     
     #endregion
@@ -228,6 +235,15 @@ public sealed class Schema
     /// Gets syntax node definitions for tree binding (internal for SyntaxBinder).
     /// </summary>
     internal ImmutableArray<SyntaxNodeDefinition> GetSyntaxDefinitions() => _syntaxDefinitions;
+    
+    /// <summary>
+    /// Gets the RedType (SyntaxNode subclass) for a given NodeKind.
+    /// Used by SyntaxRedFactory to look up the type to instantiate.
+    /// </summary>
+    /// <param name="kind">The NodeKind to look up.</param>
+    /// <returns>The Type to instantiate, or null if not a syntax node kind.</returns>
+    internal Type? GetSyntaxRedType(NodeKind kind) =>
+        _syntaxRedTypesByKind.GetValueOrDefault(kind);
     
     /// <summary>
     /// Gets the NodeKind for a semantic node type.
