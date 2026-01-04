@@ -25,22 +25,22 @@ public sealed class FunctionCallSyntax : SyntaxNode
     }
     
     /// <summary>The function name node.</summary>
-    public SyntaxLeaf NameNode => GetTypedChild<SyntaxLeaf>(0);
+    public RedLeaf NameNode => GetTypedChild<RedLeaf>(0);
     
     /// <summary>The function name as text.</summary>
     public string Name => NameNode.Text;
     
     /// <summary>The arguments block (parentheses).</summary>
-    public SyntaxBlock Arguments => GetTypedChild<SyntaxBlock>(1);
+    public RedBlock Arguments => GetTypedChild<RedBlock>(1);
     
     /// <summary>
     /// Gets the argument nodes (children of the arguments block, excluding symbols).
     /// </summary>
-    public IEnumerable<SyntaxNode> ArgumentNodes =>
+    public IEnumerable<RedNode> ArgumentNodes =>
         Arguments.Children.Where(c => c.Kind != NodeKind.Symbol);
     
     /// <inheritdoc/>
-    public override SyntaxNode? GetChild(int index)
+    public override RedNode? GetChild(int index)
     {
         if (index < 0 || index >= SlotCount)
             return null;
@@ -75,22 +75,22 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     }
     
     /// <summary>The target being accessed.</summary>
-    public SyntaxLeaf TargetNode => GetTypedChild<SyntaxLeaf>(0);
+    public RedLeaf TargetNode => GetTypedChild<RedLeaf>(0);
     
     /// <summary>The target name as text.</summary>
     public string Target => TargetNode.Text;
     
     /// <summary>The index block (brackets).</summary>
-    public SyntaxBlock IndexBlock => GetTypedChild<SyntaxBlock>(1);
+    public RedBlock IndexBlock => GetTypedChild<RedBlock>(1);
     
     /// <summary>
     /// Gets the index nodes (children of the index block, excluding symbols).
     /// </summary>
-    public IEnumerable<SyntaxNode> IndexNodes =>
+    public IEnumerable<RedNode> IndexNodes =>
         IndexBlock.Children.Where(c => c.Kind != NodeKind.Symbol);
     
     /// <inheritdoc/>
-    public override SyntaxNode? GetChild(int index)
+    public override RedNode? GetChild(int index)
     {
         if (index < 0 || index >= SlotCount)
             return null;
@@ -125,16 +125,16 @@ public sealed class PropertyAccessSyntax : SyntaxNode
     }
     
     /// <summary>The object being accessed.</summary>
-    public SyntaxLeaf ObjectNode => GetTypedChild<SyntaxLeaf>(0);
+    public RedLeaf ObjectNode => GetTypedChild<RedLeaf>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The dot separator.</summary>
-    public SyntaxLeaf DotNode => GetTypedChild<SyntaxLeaf>(1);
+    public RedLeaf DotNode => GetTypedChild<RedLeaf>(1);
     
     /// <summary>The property being accessed.</summary>
-    public SyntaxLeaf PropertyNode => GetTypedChild<SyntaxLeaf>(2);
+    public RedLeaf PropertyNode => GetTypedChild<RedLeaf>(2);
     
     /// <summary>The property name as text.</summary>
     public string Property => PropertyNode.Text;
@@ -143,7 +143,7 @@ public sealed class PropertyAccessSyntax : SyntaxNode
     public string FullPath => $"{Object}.{Property}";
     
     /// <inheritdoc/>
-    public override SyntaxNode? GetChild(int index)
+    public override RedNode? GetChild(int index)
     {
         if (index < 0 || index >= SlotCount)
             return null;
