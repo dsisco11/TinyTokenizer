@@ -166,19 +166,11 @@ public sealed class RedList : RedNode
         if (index < 0 || index >= Green.SlotCount)
             return null;
         
-        _children ??= new RedNode?[Green.SlotCount];
-        
-        if (_children[index] != null)
-            return _children[index];
-        
         var greenChild = Green.GetSlot(index);
         if (greenChild == null)
             return null;
         
         var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition, index);
-        
-        Interlocked.CompareExchange(ref _children[index], redChild, null);
-        return _children[index];
+        return greenChild.CreateRed(this, childPosition, index);
     }
 }
