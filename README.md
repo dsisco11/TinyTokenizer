@@ -392,6 +392,15 @@ var tree = SyntaxTree.Parse("obj.method(x)", schema);
 
 // Match syntax nodes using the attached schema
 var methods = tree.Match<MethodCallSyntax>().ToList();
+
+// Check if tree has a schema attached
+if (tree.HasSchema)
+{
+    // Safe to use schema-dependent operations
+}
+
+// Attach schema to an existing tree
+var boundTree = tree.WithSchema(schema);
 ```
 
 ### Built-in Schema
@@ -467,6 +476,36 @@ var idents = walker.DescendantsAndSelf().ToList();
 ```
 
 The walker also provides cursor-based navigation (`NextNode`, `ParentNode`, `FirstChild`, etc.) and enumeration methods (`Descendants`, `Ancestors`, `FollowingSiblings`).
+
+## Trivia — Whitespace and Comments
+
+Trivia (whitespace, newlines, and comments) attached to tokens is accessible via `RedLeaf` nodes:
+
+```csharp
+var tree = SyntaxTree.Parse("x = 1; // comment\n");
+var leaf = tree.Leaves.First();
+
+// Access leading trivia (before the token)
+foreach (var trivia in leaf.LeadingTrivia)
+{
+    Console.WriteLine($"{trivia.Kind}: '{trivia.Text}'");
+}
+
+// Access trailing trivia (after the token, same line)
+foreach (var trivia in leaf.TrailingTrivia)
+{
+    Console.WriteLine($"{trivia.Kind}: '{trivia.Text}'");
+}
+```
+
+### TriviaKind Values
+
+| Kind                 | Description              | Example    |
+| -------------------- | ------------------------ | ---------- |
+| `Whitespace`         | Spaces and tabs          | `   `      |
+| `Newline`            | Line endings             | `\n`       |
+| `SingleLineComment`  | Single-line comments     | `// ...`   |
+| `MultiLineComment`   | Multi-line comments      | `/* ... */`|
 
 ## Syntax Nodes — AST Pattern Matching
 
@@ -634,24 +673,6 @@ foreach (var error in errors)
 }
 ```
 
-## Benchmarks
-
-Performance comparison of the optimized `SearchValues<char>` implementation vs the baseline `ImmutableHashSet<char>`:
-
-| Input Size        | Baseline | Optimized | Speedup   |
-| ----------------- | -------- | --------- | --------- |
-| Small (~50 chars) | 377 ns   | 245 ns    | **1.54x** |
-| Medium (~1KB)     | 6,866 ns | 3,020 ns  | **2.27x** |
-| Large (~100KB)    | 1,907 μs | 781 μs    | **2.44x** |
-| JSON (~10KB)      | 130 μs   | 87 μs     | **1.51x** |
-| Whitespace-heavy  | 9,808 ns | 3,661 ns  | **2.68x** |
-
-Run benchmarks yourself:
-
-```bash
-dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter "*"
-```
-
 ## API Reference
 
 ### Core Types
@@ -665,6 +686,14 @@ var tokens = source.TokenizeToTokens(options);
 
 // Async streaming from files
 await foreach (var token in stream.TokenizeStreamingAsync()) { }
+
+// Token formatting (IFormattable)
+var token = tokens.First();
+$"{token:G}"  // Content (default)
+$"{token:T}"  // Type name
+$"{token:P}"  // Position
+$"{token:R}"  // Range (start..end)
+$"{token:D}"  // Debug format: Type[start..end]
 ```
 
 ### Schema Configuration
@@ -708,6 +737,11 @@ var schema = Schema.Create()
 ## Requirements
 
 - .NET 8.0 or later
+- `CommunityToolkit.HighPerformance` (automatically included)
+
+### Limitations
+
+- Maximum file size: ~2GB (positions are stored as `int`)
 
 ## License
 
