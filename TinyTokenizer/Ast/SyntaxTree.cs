@@ -202,7 +202,8 @@ public class SyntaxTree : IFormattable, ITextSerializable
     public static SyntaxTree Parse(string source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
-        var lexer = new GreenLexer(opts);
+        var keywordLookup = schema.HasKeywords ? schema.GetKeywordLookup() : null;
+        var lexer = new GreenLexer(opts, keywordLookup);
         var tree = lexer.Parse(source);
         var root = tree.GreenRoot;
         
@@ -223,7 +224,8 @@ public class SyntaxTree : IFormattable, ITextSerializable
     public static SyntaxTree Parse(ReadOnlyMemory<char> source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
-        var lexer = new GreenLexer(opts);
+        var keywordLookup = schema.HasKeywords ? schema.GetKeywordLookup() : null;
+        var lexer = new GreenLexer(opts, keywordLookup);
         var tree = lexer.Parse(source);
         var root = tree.GreenRoot;
         
@@ -272,7 +274,8 @@ public class SyntaxTree : IFormattable, ITextSerializable
     public static SyntaxTree ParseAndBind(string source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
-        var lexer = new GreenLexer(opts);
+        var keywordLookup = schema.HasKeywords ? schema.GetKeywordLookup() : null;
+        var lexer = new GreenLexer(opts, keywordLookup);
         var tree = lexer.Parse(source);
         
         // Apply syntax binding
@@ -288,7 +291,8 @@ public class SyntaxTree : IFormattable, ITextSerializable
     public static SyntaxTree ParseAndBind(ReadOnlyMemory<char> source, Schema schema)
     {
         var opts = schema.ToTokenizerOptions();
-        var lexer = new GreenLexer(opts);
+        var keywordLookup = schema.HasKeywords ? schema.GetKeywordLookup() : null;
+        var lexer = new GreenLexer(opts, keywordLookup);
         var tree = lexer.Parse(source);
         
         // Apply syntax binding

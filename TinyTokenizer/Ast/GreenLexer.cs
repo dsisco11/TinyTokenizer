@@ -12,6 +12,7 @@ internal sealed class GreenLexer
     private readonly TokenizerOptions _options;
     private readonly Lexer _charLexer;
     private readonly OperatorTrie _operatorTrie;
+    private readonly Func<string, NodeKind?>? _keywordLookup;
     
     /// <summary>
     /// Creates a new GreenLexer with default options.
@@ -23,10 +24,20 @@ internal sealed class GreenLexer
     /// <summary>
     /// Creates a new GreenLexer with the specified options.
     /// </summary>
-    public GreenLexer(TokenizerOptions options)
+    public GreenLexer(TokenizerOptions options) : this(options, keywordLookup: null)
+    {
+    }
+    
+    /// <summary>
+    /// Creates a new GreenLexer with the specified options and keyword lookup.
+    /// </summary>
+    /// <param name="options">Tokenizer options.</param>
+    /// <param name="keywordLookup">Optional function to look up keyword NodeKinds by text. If null, all identifiers remain as NodeKind.Ident.</param>
+    public GreenLexer(TokenizerOptions options, Func<string, NodeKind?>? keywordLookup)
     {
         _options = options;
         _charLexer = new Lexer(options);
+        _keywordLookup = keywordLookup;
         // Build operator trie for O(k) greedy matching
         _operatorTrie = new OperatorTrie();
         foreach (var op in options.Operators)
@@ -207,13 +218,17 @@ internal sealed class GreenLexer
         if (operatorNode != null)
             return operatorNode;
         
-        // Identifier
+        // Identifier (check for keywords if lookup is available)
         if (token.Type == SimpleTokenType.Ident)
         {
             var text = reader.CurrentText;
             reader.Advance();
+            
+            // Check if this identifier is a registered keyword
+            var identKind = _keywordLookup?.Invoke(text) ?? NodeKind.Ident;
+            
             // Leading-only trivia model: no trailing trivia
-            return GreenNodeCache.Create(NodeKind.Ident, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
+            return GreenNodeCache.Create(identKind, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
         }
         
         // Symbol (single character)

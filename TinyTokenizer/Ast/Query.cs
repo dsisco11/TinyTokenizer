@@ -306,4 +306,52 @@ public static class Query
     public static ExactNodeQuery Exact(RedNode node) => new ExactNodeQuery(node);
     
     #endregion
+    
+    #region Keyword Queries
+    
+    /// <summary>
+    /// Matches any keyword node (NodeKind in the keyword range 1000-99999).
+    /// Keywords are defined via <see cref="SchemaBuilder.DefineKeywords"/> or <see cref="SchemaBuilder.DefineKeywordCategory"/>.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Find all keywords in a tree
+    /// var keywords = tree.Select(Query.AnyKeyword);
+    /// </code>
+    /// </example>
+    public static AnyKeywordQuery AnyKeyword => new AnyKeywordQuery();
+    
+    /// <summary>
+    /// Matches a specific keyword by its text.
+    /// Uses <see cref="KindNodeQuery"/> with keyword NodeKind range constraint.
+    /// </summary>
+    /// <param name="text">The exact keyword text to match.</param>
+    /// <returns>A query matching nodes with the specified keyword text.</returns>
+    /// <example>
+    /// <code>
+    /// // Find all occurrences of the "class" keyword
+    /// var classKeywords = tree.Select(Query.Keyword("class"));
+    /// </code>
+    /// </example>
+    public static INodeQuery Keyword(string text) => 
+        new AnyKeywordQuery().Where(n => n is RedLeaf leaf && leaf.Text == text);
+    
+    /// <summary>
+    /// Matches keywords in a specific category.
+    /// Category resolution requires a schema to be attached to the tree.
+    /// </summary>
+    /// <param name="categoryName">The keyword category name (e.g., "TypeNames", "ControlFlow").</param>
+    /// <returns>A query matching keywords in the specified category.</returns>
+    /// <example>
+    /// <code>
+    /// // Find all type name keywords
+    /// var typeNames = tree.Select(Query.KeywordCategory("TypeNames"));
+    /// 
+    /// // Find all control flow keywords
+    /// var controlFlow = tree.Select(Query.KeywordCategory("ControlFlow"));
+    /// </code>
+    /// </example>
+    public static KeywordCategoryQuery KeywordCategory(string categoryName) => new KeywordCategoryQuery(categoryName);
+    
+    #endregion
 }
