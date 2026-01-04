@@ -180,5 +180,32 @@ internal static class GreenNodeCache
         return new GreenLeaf(NodeKind.Symbol, text, leadingTrivia, trailingTrivia);
     }
     
+    /// <summary>
+    /// Pre-caches keywords from a schema for improved performance.
+    /// Call this once after schema creation for frequently-used schemas.
+    /// </summary>
+    /// <param name="schema">The schema containing keyword definitions.</param>
+    public static void PreCacheKeywords(Schema schema)
+    {
+        if (!schema.HasKeywords)
+            return;
+        
+        foreach (var category in schema.KeywordCategories)
+        {
+            foreach (var word in category.Words)
+            {
+                var kind = schema.GetKeywordKind(word);
+                if (kind.HasValue)
+                {
+                    var key = (kind.Value, word);
+                    if (!_leaves.ContainsKey(key))
+                    {
+                        _leaves[key] = new GreenLeaf(kind.Value, word);
+                    }
+                }
+            }
+        }
+    }
+    
     #endregion
 }

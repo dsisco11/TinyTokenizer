@@ -1120,3 +1120,156 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
 }
 
 #endregion
+
+#region Keyword Queries
+
+/// <summary>
+/// Matches any keyword node (NodeKind in the keyword range 1000-99999).
+/// </summary>
+public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
+{
+    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    
+    /// <summary>Creates a query matching any keyword node.</summary>
+    public AnyKeywordQuery() : this(null, SelectionMode.All, 0) { }
+    
+    private AnyKeywordQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(RedNode root)
+    {
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf().Where(Matches);
+        
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <inheritdoc/>
+    public override bool Matches(RedNode node) => 
+        node.Kind.IsKeyword() && (_predicate == null || _predicate(node));
+    
+    internal override bool MatchesGreen(GreenNode node) => node.Kind.IsKeyword();
+    
+    protected override AnyKeywordQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+        new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
+    
+    protected override AnyKeywordQuery CreateFirst() => new(_predicate, SelectionMode.First, 0);
+    protected override AnyKeywordQuery CreateLast() => new(_predicate, SelectionMode.Last, 0);
+    protected override AnyKeywordQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n);
+    protected override AnyKeywordQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
+    protected override AnyKeywordQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
+    
+    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
+}
+
+/// <summary>
+/// Matches keyword nodes in a specific category.
+/// Requires a schema to be attached to the tree for category resolution.
+/// </summary>
+public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
+{
+    private readonly string _categoryName;
+    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    
+    /// <summary>Creates a query matching keywords in the specified category.</summary>
+    /// <param name="categoryName">The keyword category name (e.g., "TypeNames", "ControlFlow").</param>
+    public KeywordCategoryQuery(string categoryName) : this(categoryName, null, SelectionMode.All, 0) { }
+    
+    private KeywordCategoryQuery(string categoryName, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _categoryName = categoryName;
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
+    
+    /// <summary>Gets the category name being matched.</summary>
+    public string CategoryName => _categoryName;
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(SyntaxTree tree)
+    {
+        var schema = tree.Schema;
+        if (schema == null || !schema.HasKeywords)
+            return [];
+        
+        var categoryKinds = schema.GetKeywordsInCategory(_categoryName);
+        if (categoryKinds.IsEmpty)
+            return [];
+        
+        var kindSet = categoryKinds.ToHashSet();
+        var walker = new TreeWalker(tree.Root);
+        var matches = walker.DescendantsAndSelf()
+            .Where(n => kindSet.Contains(n.Kind) && (_predicate == null || _predicate(n)));
+        
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <inheritdoc/>
+    public override IEnumerable<RedNode> Select(RedNode root)
+    {
+        // Without tree context, we can't resolve category - match any keyword
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf()
+            .Where(n => n.Kind.IsKeyword() && (_predicate == null || _predicate(n)));
+        
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <inheritdoc/>
+    public override bool Matches(RedNode node) => 
+        node.Kind.IsKeyword() && (_predicate == null || _predicate(node));
+    
+    internal override bool MatchesGreen(GreenNode node) => node.Kind.IsKeyword();
+    
+    protected override KeywordCategoryQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+        new(_categoryName, CombinePredicates(_predicate, predicate), _mode, _modeArg);
+    
+    protected override KeywordCategoryQuery CreateFirst() => new(_categoryName, _predicate, SelectionMode.First, 0);
+    protected override KeywordCategoryQuery CreateLast() => new(_categoryName, _predicate, SelectionMode.Last, 0);
+    protected override KeywordCategoryQuery CreateNth(int n) => new(_categoryName, _predicate, SelectionMode.Nth, n);
+    protected override KeywordCategoryQuery CreateSkip(int count) => new(_categoryName, _predicate, SelectionMode.Skip, count);
+    protected override KeywordCategoryQuery CreateTake(int count) => new(_categoryName, _predicate, SelectionMode.Take, count);
+    
+    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
+}
+
+#endregion

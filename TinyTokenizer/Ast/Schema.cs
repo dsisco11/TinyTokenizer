@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 namespace TinyTokenizer.Ast;
 
 /// <summary>
-/// Immutable unified configuration combining tokenization settings and semantic node definitions.
+/// Immutable unified configuration combining tokenization settings, keyword definitions, and semantic node definitions.
 /// Created via <see cref="SchemaBuilder"/> and frozen at construction time.
 /// </summary>
 public sealed class Schema
@@ -22,6 +22,25 @@ public sealed class Schema
     
     /// <summary>Tag prefix characters for tagged identifiers (#, @, $, etc.).</summary>
     public ImmutableHashSet<char> TagPrefixes { get; }
+    
+    #endregion
+    
+    #region Keyword Definitions
+    
+    /// <summary>All registered keyword categories.</summary>
+    public ImmutableArray<KeywordCategory> KeywordCategories { get; }
+    
+    /// <summary>Keyword text to NodeKind mapping (case-sensitive lookup first).</summary>
+    private readonly ImmutableDictionary<string, NodeKind> _keywordsByText;
+    
+    /// <summary>Keyword text to NodeKind mapping (case-insensitive, only for case-insensitive categories).</summary>
+    private readonly ImmutableDictionary<string, NodeKind> _keywordsByTextIgnoreCase;
+    
+    /// <summary>NodeKind to keyword info mapping for reverse lookup.</summary>
+    private readonly ImmutableDictionary<NodeKind, KeywordInfo> _keywordsByKind;
+    
+    /// <summary>Category name to list of NodeKinds in that category.</summary>
+    private readonly ImmutableDictionary<string, ImmutableArray<NodeKind>> _kindsByCategory;
     
     #endregion
     
@@ -65,12 +84,53 @@ public sealed class Schema
         ImmutableHashSet<string> operators,
         ImmutableHashSet<char> tagPrefixes,
         ImmutableArray<ISemanticNodeDefinition> definitions,
-        ImmutableArray<SyntaxNodeDefinition> syntaxDefinitions = default)
+        ImmutableArray<SyntaxNodeDefinition> syntaxDefinitions = default,
+        ImmutableArray<KeywordCategory> keywordCategories = default)
     {
         Symbols = symbols;
         CommentStyles = commentStyles;
         Operators = operators;
         TagPrefixes = tagPrefixes;
+        
+        // Process keyword categories
+        KeywordCategories = keywordCategories.IsDefault 
+            ? ImmutableArray<KeywordCategory>.Empty 
+            : keywordCategories;
+        
+        var keywordsByText = ImmutableDictionary.CreateBuilder<string, NodeKind>();
+        var keywordsByTextIgnoreCase = ImmutableDictionary.CreateBuilder<string, NodeKind>(StringComparer.OrdinalIgnoreCase);
+        var keywordsByKind = ImmutableDictionary.CreateBuilder<NodeKind, KeywordInfo>();
+        var kindsByCategory = ImmutableDictionary.CreateBuilder<string, ImmutableArray<NodeKind>>();
+        
+        int keywordOffset = 0;
+        foreach (var category in KeywordCategories)
+        {
+            var categoryKinds = ImmutableArray.CreateBuilder<NodeKind>();
+            
+            foreach (var word in category.Words)
+            {
+                var kind = NodeKindExtensions.KeywordKind(keywordOffset++);
+                
+                // Add to case-sensitive dictionary always
+                keywordsByText[word] = kind;
+                
+                // For case-insensitive categories, also add to ignore-case dictionary
+                if (!category.CaseSensitive)
+                {
+                    keywordsByTextIgnoreCase[word] = kind;
+                }
+                
+                keywordsByKind[kind] = new KeywordInfo(category.Name, word, kind);
+                categoryKinds.Add(kind);
+            }
+            
+            kindsByCategory[category.Name] = categoryKinds.ToImmutable();
+        }
+        
+        _keywordsByText = keywordsByText.ToImmutable();
+        _keywordsByTextIgnoreCase = keywordsByTextIgnoreCase.ToImmutable();
+        _keywordsByKind = keywordsByKind.ToImmutable();
+        _kindsByCategory = kindsByCategory.ToImmutable();
         
         // Assign NodeKind values to semantic definitions
         var assignedDefinitions = ImmutableArray.CreateBuilder<ISemanticNodeDefinition>();
@@ -198,6 +258,101 @@ public sealed class Schema
     
     #endregion
     
+    #region Keyword Lookup
+    
+    /// <summary>
+    /// Checks if this schema has any keyword categories defined.
+    /// </summary>
+    public bool HasKeywords => !KeywordCategories.IsEmpty;
+    
+    /// <summary>
+    /// Gets the NodeKind for a keyword by its text.
+    /// First checks case-sensitive matches, then case-insensitive if applicable.
+    /// </summary>
+    /// <param name="text">The keyword text to look up.</param>
+    /// <returns>The NodeKind if found, or null if not a registered keyword.</returns>
+    public NodeKind? GetKeywordKind(string text)
+    {
+        // Try case-sensitive first
+        if (_keywordsByText.TryGetValue(text, out var kind))
+            return kind;
+        
+        // Try case-insensitive (only populated for case-insensitive categories)
+        if (_keywordsByTextIgnoreCase.TryGetValue(text, out kind))
+            return kind;
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// Gets the NodeKind for a keyword by its text, using a specific category's case sensitivity.
+    /// </summary>
+    /// <param name="text">The keyword text to look up.</param>
+    /// <param name="categoryName">The category to search in.</param>
+    /// <returns>The NodeKind if found in the category, or null otherwise.</returns>
+    public NodeKind? GetKeywordKind(string text, string categoryName)
+    {
+        var kind = GetKeywordKind(text);
+        if (kind == null)
+            return null;
+        
+        var info = GetKeywordInfo(kind.Value);
+        if (info?.Category != categoryName)
+            return null;
+        
+        return kind;
+    }
+    
+    /// <summary>
+    /// Checks if a NodeKind is a keyword.
+    /// </summary>
+    public bool IsKeyword(NodeKind kind) => _keywordsByKind.ContainsKey(kind);
+    
+    /// <summary>
+    /// Gets keyword information by NodeKind.
+    /// </summary>
+    /// <param name="kind">The NodeKind to look up.</param>
+    /// <returns>The keyword info if found, or null if not a keyword.</returns>
+    public KeywordInfo? GetKeywordInfo(NodeKind kind) => 
+        _keywordsByKind.GetValueOrDefault(kind);
+    
+    /// <summary>
+    /// Gets the category name for a keyword NodeKind.
+    /// </summary>
+    public string? GetKeywordCategory(NodeKind kind) => 
+        _keywordsByKind.TryGetValue(kind, out var info) ? info.Category : null;
+    
+    /// <summary>
+    /// Gets the keyword text for a keyword NodeKind.
+    /// </summary>
+    public string? GetKeywordText(NodeKind kind) => 
+        _keywordsByKind.TryGetValue(kind, out var info) ? info.Keyword : null;
+    
+    /// <summary>
+    /// Gets all NodeKinds in a keyword category.
+    /// </summary>
+    /// <param name="categoryName">The category name.</param>
+    /// <returns>Array of NodeKinds in the category, or empty if category not found.</returns>
+    public ImmutableArray<NodeKind> GetKeywordsInCategory(string categoryName) =>
+        _kindsByCategory.TryGetValue(categoryName, out var kinds) ? kinds : ImmutableArray<NodeKind>.Empty;
+    
+    /// <summary>
+    /// Gets the case-sensitive keyword dictionary for direct lookup by lexer.
+    /// Returns null if no keywords are defined.
+    /// </summary>
+    internal ImmutableDictionary<string, NodeKind>? KeywordsCaseSensitive => 
+        HasKeywords ? _keywordsByText : null;
+    
+    /// <summary>
+    /// Gets the case-insensitive keyword dictionary for direct lookup by lexer.
+    /// Only populated for keywords in case-insensitive categories.
+    /// Returns null if no case-insensitive keywords are defined.
+    /// </summary>
+    internal ImmutableDictionary<string, NodeKind>? KeywordsCaseInsensitive => 
+        _keywordsByTextIgnoreCase.IsEmpty ? null : _keywordsByTextIgnoreCase;
+    
+    #endregion
+    
     #region TokenizerOptions Conversion
     
     /// <summary>
@@ -256,6 +411,7 @@ public sealed class SchemaBuilder
     private ImmutableHashSet<string> _operators = CommonOperators.Universal;
     private ImmutableHashSet<char> _tagPrefixes = ImmutableHashSet<char>.Empty;
     private readonly List<ISemanticNodeDefinition> _definitions = [];
+    private readonly List<KeywordCategory> _keywordCategories = [];
     
     internal SchemaBuilder() { }
     
@@ -333,6 +489,67 @@ public sealed class SchemaBuilder
     
     #endregion
     
+    #region Keyword Configuration
+    
+    /// <summary>
+    /// Registers a keyword category.
+    /// Each keyword in the category will receive a unique <see cref="NodeKind"/>.
+    /// </summary>
+    /// <param name="category">The keyword category to register.</param>
+    /// <returns>This builder for method chaining.</returns>
+    /// <example>
+    /// <code>
+    /// schema.DefineKeywords(CommonKeywords.CTypes)
+    ///       .DefineKeywords(CommonKeywords.ControlFlow)
+    /// </code>
+    /// </example>
+    public SchemaBuilder DefineKeywords(KeywordCategory category)
+    {
+        _keywordCategories.Add(category);
+        return this;
+    }
+    
+    /// <summary>
+    /// Defines a new keyword category with the specified words.
+    /// Keywords are case-sensitive by default.
+    /// </summary>
+    /// <param name="categoryName">The name of the category (e.g., "TypeNames", "ControlFlow").</param>
+    /// <param name="words">The keywords in this category.</param>
+    /// <returns>This builder for method chaining.</returns>
+    /// <example>
+    /// <code>
+    /// schema.DefineKeywordCategory("TypeNames", "int", "float", "double", "void")
+    ///       .DefineKeywordCategory("ControlFlow", "if", "else", "while", "for")
+    /// </code>
+    /// </example>
+    public SchemaBuilder DefineKeywordCategory(string categoryName, params string[] words)
+    {
+        _keywordCategories.Add(new KeywordCategory(categoryName, words));
+        return this;
+    }
+    
+    /// <summary>
+    /// Defines a new keyword category with the specified words and case sensitivity.
+    /// </summary>
+    /// <param name="categoryName">The name of the category.</param>
+    /// <param name="caseSensitive">Whether keyword matching is case-sensitive.</param>
+    /// <param name="words">The keywords in this category.</param>
+    /// <returns>This builder for method chaining.</returns>
+    /// <example>
+    /// <code>
+    /// // Case-insensitive SQL keywords
+    /// schema.DefineKeywordCategory("SqlKeywords", caseSensitive: false, 
+    ///     "SELECT", "FROM", "WHERE", "JOIN")
+    /// </code>
+    /// </example>
+    public SchemaBuilder DefineKeywordCategory(string categoryName, bool caseSensitive, params string[] words)
+    {
+        _keywordCategories.Add(new KeywordCategory(categoryName, caseSensitive, words));
+        return this;
+    }
+    
+    #endregion
+    
     #region Semantic Definitions
     
     /// <summary>Registers a semantic node definition.</summary>
@@ -394,7 +611,8 @@ public sealed class SchemaBuilder
         _operators,
         _tagPrefixes,
         [.. _definitions],
-        [.. _syntaxDefinitions]);
+        [.. _syntaxDefinitions],
+        [.. _keywordCategories]);
     
     #endregion
 }

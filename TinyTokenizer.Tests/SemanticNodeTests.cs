@@ -42,9 +42,10 @@ public class SemanticNodeTests
     [Fact]
     public void NodeKind_SemanticKind_CreatesCorrectValues()
     {
-        Assert.Equal((NodeKind)1000, NodeKindExtensions.SemanticKind(0));
-        Assert.Equal((NodeKind)1001, NodeKindExtensions.SemanticKind(1));
-        Assert.Equal((NodeKind)1005, NodeKindExtensions.SemanticKind(5));
+        // Semantic kinds start at 2000 (after keyword range 500-1999)
+        Assert.Equal((NodeKind)2000, NodeKindExtensions.SemanticKind(0));
+        Assert.Equal((NodeKind)2001, NodeKindExtensions.SemanticKind(1));
+        Assert.Equal((NodeKind)2005, NodeKindExtensions.SemanticKind(5));
     }
     
     #endregion
