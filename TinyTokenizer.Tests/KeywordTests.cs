@@ -266,7 +266,7 @@ public class KeywordTests
         kind = NodeKindExtensions.KeywordKind(100);
         Assert.True(kind.IsKeyword());
         
-        kind = NodeKindExtensions.KeywordKind(98999); // Max keyword
+        kind = NodeKindExtensions.KeywordKind(1499); // Max keyword (500 + 1499 = 1999)
         Assert.True(kind.IsKeyword());
     }
     
@@ -283,10 +283,10 @@ public class KeywordTests
     [Fact]
     public void NodeKind_KeywordKind_CreatesCorrectValues()
     {
-        // Keywords start at 1000
-        Assert.Equal((NodeKind)1000, NodeKindExtensions.KeywordKind(0));
-        Assert.Equal((NodeKind)1001, NodeKindExtensions.KeywordKind(1));
-        Assert.Equal((NodeKind)1100, NodeKindExtensions.KeywordKind(100));
+        // Keywords start at 500
+        Assert.Equal((NodeKind)500, NodeKindExtensions.KeywordKind(0));
+        Assert.Equal((NodeKind)501, NodeKindExtensions.KeywordKind(1));
+        Assert.Equal((NodeKind)600, NodeKindExtensions.KeywordKind(100));
     }
     
     #endregion
