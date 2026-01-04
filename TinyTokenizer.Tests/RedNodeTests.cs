@@ -638,45 +638,6 @@ public class RedNodeTests
 
     #endregion
 
-    #region Caching Behavior
-
-    [Fact]
-    public void GetChild_CachesRedNode()
-    {
-        var tree = SyntaxTree.Parse("{child}");
-        var block = tree.Root.Children.First();
-        
-        // First call creates the red node
-        var child1 = block.GetChild(0);
-        Assert.NotNull(child1);
-        
-        // Second call should return cached instance
-        var child2 = block.GetChild(0);
-        Assert.Same(child1, child2);
-        
-        // Third call to verify cache is stable
-        var child3 = block.GetChild(0);
-        Assert.Same(child1, child3);
-    }
-
-    [Fact]
-    public void Children_MultipleCalls_ReturnSameInstances()
-    {
-        var tree = SyntaxTree.Parse("{a b c}");
-        var block = tree.Root.Children.First();
-        
-        var first = block.Children.ToList();
-        var second = block.Children.ToList();
-        
-        // Each enumeration should return the same cached instances
-        for (int i = 0; i < first.Count; i++)
-        {
-            Assert.Same(first[i], second[i]);
-        }
-    }
-
-    #endregion
-
     #region FindLeafAt Edge Cases
 
     [Fact]

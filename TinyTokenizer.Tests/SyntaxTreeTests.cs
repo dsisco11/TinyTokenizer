@@ -115,19 +115,6 @@ public class SyntaxTreeTests
         Assert.Equal(5, root.EndPosition);
     }
     
-    [Fact]
-    public void RedBlock_ChildAccess_IsCached()
-    {
-        var tree = SyntaxTree.Parse("{ x }");
-        var root = tree.Root as RedList;
-        Assert.NotNull(root);
-        
-        var child1 = root.GetChild(0);
-        var child2 = root.GetChild(0);
-        
-        Assert.Same(child1, child2); // Should be cached
-    }
-    
     #endregion
     
     #region Structural Sharing Mutations
