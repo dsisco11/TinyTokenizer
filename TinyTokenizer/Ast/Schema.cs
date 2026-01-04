@@ -337,16 +337,19 @@ public sealed class Schema
         _kindsByCategory.TryGetValue(categoryName, out var kinds) ? kinds : ImmutableArray<NodeKind>.Empty;
     
     /// <summary>
-    /// Gets the keyword lookup dictionary for use by lexer.
-    /// Returns a function that maps keyword text to NodeKind.
+    /// Gets the case-sensitive keyword dictionary for direct lookup by lexer.
+    /// Returns null if no keywords are defined.
     /// </summary>
-    internal Func<string, NodeKind?> GetKeywordLookup()
-    {
-        if (!HasKeywords)
-            return _ => null;
-        
-        return GetKeywordKind;
-    }
+    internal ImmutableDictionary<string, NodeKind>? KeywordsCaseSensitive => 
+        HasKeywords ? _keywordsByText : null;
+    
+    /// <summary>
+    /// Gets the case-insensitive keyword dictionary for direct lookup by lexer.
+    /// Only populated for keywords in case-insensitive categories.
+    /// Returns null if no case-insensitive keywords are defined.
+    /// </summary>
+    internal ImmutableDictionary<string, NodeKind>? KeywordsCaseInsensitive => 
+        _keywordsByTextIgnoreCase.IsEmpty ? null : _keywordsByTextIgnoreCase;
     
     #endregion
     

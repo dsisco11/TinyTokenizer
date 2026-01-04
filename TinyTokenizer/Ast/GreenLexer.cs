@@ -12,7 +12,8 @@ internal sealed class GreenLexer
     private readonly TokenizerOptions _options;
     private readonly Lexer _charLexer;
     private readonly OperatorTrie _operatorTrie;
-    private readonly Func<string, NodeKind?>? _keywordLookup;
+    private readonly ImmutableDictionary<string, NodeKind>? _keywordsCaseSensitive;
+    private readonly ImmutableDictionary<string, NodeKind>? _keywordsCaseInsensitive;
     
     /// <summary>
     /// Creates a new GreenLexer with default options.
@@ -24,20 +25,25 @@ internal sealed class GreenLexer
     /// <summary>
     /// Creates a new GreenLexer with the specified options.
     /// </summary>
-    public GreenLexer(TokenizerOptions options) : this(options, keywordLookup: null)
+    public GreenLexer(TokenizerOptions options) : this(options, null, null)
     {
     }
     
     /// <summary>
-    /// Creates a new GreenLexer with the specified options and keyword lookup.
+    /// Creates a new GreenLexer with the specified options and keyword dictionaries.
     /// </summary>
     /// <param name="options">Tokenizer options.</param>
-    /// <param name="keywordLookup">Optional function to look up keyword NodeKinds by text. If null, all identifiers remain as NodeKind.Ident.</param>
-    public GreenLexer(TokenizerOptions options, Func<string, NodeKind?>? keywordLookup)
+    /// <param name="keywordsCaseSensitive">Case-sensitive keyword lookup dictionary. If null, no case-sensitive keywords.</param>
+    /// <param name="keywordsCaseInsensitive">Case-insensitive keyword lookup dictionary. If null, no case-insensitive keywords.</param>
+    public GreenLexer(
+        TokenizerOptions options, 
+        ImmutableDictionary<string, NodeKind>? keywordsCaseSensitive,
+        ImmutableDictionary<string, NodeKind>? keywordsCaseInsensitive)
     {
         _options = options;
         _charLexer = new Lexer(options);
-        _keywordLookup = keywordLookup;
+        _keywordsCaseSensitive = keywordsCaseSensitive;
+        _keywordsCaseInsensitive = keywordsCaseInsensitive;
         // Build operator trie for O(k) greedy matching
         _operatorTrie = new OperatorTrie();
         foreach (var op in options.Operators)
@@ -224,8 +230,16 @@ internal sealed class GreenLexer
             var text = reader.CurrentText;
             reader.Advance();
             
-            // Check if this identifier is a registered keyword
-            var identKind = _keywordLookup?.Invoke(text) ?? NodeKind.Ident;
+            // Check if this identifier is a registered keyword (case-sensitive first, then case-insensitive)
+            var identKind = NodeKind.Ident;
+            if (_keywordsCaseSensitive != null && _keywordsCaseSensitive.TryGetValue(text, out var kind))
+            {
+                identKind = kind;
+            }
+            else if (_keywordsCaseInsensitive != null && _keywordsCaseInsensitive.TryGetValue(text, out kind))
+            {
+                identKind = kind;
+            }
             
             // Leading-only trivia model: no trailing trivia
             return GreenNodeCache.Create(identKind, text, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
@@ -235,8 +249,8 @@ internal sealed class GreenLexer
         var symbolText = reader.CurrentText;
         reader.Advance();
         // Leading-only trivia model: no trailing trivia
-        var kind = GetLeafKind(token.Type);
-        return GreenNodeCache.Create(kind, symbolText, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
+        var symbolKind = GetLeafKind(token.Type);
+        return GreenNodeCache.Create(symbolKind, symbolText, leadingTrivia, ImmutableArray<GreenTrivia>.Empty);
     }
     
     private GreenBlock ParseBlock(ref TokenReader reader, ImmutableArray<GreenTrivia> leadingTrivia)
