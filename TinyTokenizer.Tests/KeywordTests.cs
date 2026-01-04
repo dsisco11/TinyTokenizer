@@ -328,4 +328,174 @@ public class KeywordTests
     }
     
     #endregion
+    
+    #region Round-Trip Serialization
+    
+    [Fact]
+    public void RoundTrip_WithKeywords_PreservesSource()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float", "void")
+            .DefineKeywordCategory("Control", "if", "else", "return")
+            .Build();
+        
+        var source = "int foo() { return 42; }";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+    }
+    
+    [Fact]
+    public void RoundTrip_WithKeywords_PreservesWhitespace()
+    {
+        var schema = Schema.Create()
+            .DefineKeywords(CommonKeywords.CTypes)
+            .DefineKeywords(CommonKeywords.ControlFlow)
+            .Build();
+        
+        var source = @"int   main()
+{
+    if (x > 0)
+        return   x;
+    else
+        return   0;
+}";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+    }
+    
+    [Fact]
+    public void RoundTrip_WithCaseInsensitiveKeywords_PreservesOriginalCase()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Sql", caseSensitive: false, "SELECT", "FROM", "WHERE")
+            .Build();
+        
+        // Parse with mixed case - should preserve original casing
+        var source = "SELECT * FROM table WHERE x = 1";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+        
+        // Keywords should still be recognized
+        var keywords = tree.Select(Query.AnyKeyword).ToList();
+        Assert.Equal(3, keywords.Count);
+    }
+    
+    [Fact]
+    public void RoundTrip_WithCaseInsensitiveKeywords_PreservesLowerCase()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Sql", caseSensitive: false, "SELECT", "FROM", "WHERE")
+            .Build();
+        
+        var source = "select * from table where x = 1";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+        
+        var keywords = tree.Select(Query.AnyKeyword).ToList();
+        Assert.Equal(3, keywords.Count);
+    }
+    
+    [Fact]
+    public void RoundTrip_MixedKeywordsAndIdentifiers_PreservesAll()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float")
+            .Build();
+        
+        var source = "int myInt = 42; float myFloat = 3.14;";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+        
+        // Verify keywords are recognized
+        var keywords = tree.Select(Query.AnyKeyword).Cast<RedLeaf>().ToList();
+        Assert.Equal(2, keywords.Count);
+        Assert.Equal("int", keywords[0].Text);
+        Assert.Equal("float", keywords[1].Text);
+        
+        // Verify identifiers are still identifiers
+        var idents = tree.Select(Query.AnyIdent).Cast<RedLeaf>().ToList();
+        Assert.Contains(idents, i => i.Text == "myInt");
+        Assert.Contains(idents, i => i.Text == "myFloat");
+    }
+    
+    [Fact]
+    public void RoundTrip_WithNestedBlocks_AndKeywords_PreservesStructure()
+    {
+        var schema = Schema.Create()
+            .DefineKeywords(CommonKeywords.CTypes)
+            .DefineKeywords(CommonKeywords.ControlFlow)
+            .Build();
+        
+        var source = @"void test() {
+    if (a) {
+        while (b) {
+            return c;
+        }
+    }
+}";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+        
+        // Verify structure is correct
+        var keywords = tree.Select(Query.AnyKeyword).Cast<RedLeaf>().ToList();
+        Assert.Equal(4, keywords.Count); // void, if, while, return
+    }
+    
+    [Fact]
+    public void RoundTrip_WithComments_AndKeywords_PreservesBoth()
+    {
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+            .DefineKeywords(CommonKeywords.CTypes)
+            .DefineKeywords(CommonKeywords.ControlFlow)
+            .Build();
+        
+        var source = @"// Returns the sum
+int add(int a, int b) {
+    /* simple addition */
+    return a + b;
+}";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+    }
+    
+    [Fact]
+    public void RoundTrip_WithOperators_AndKeywords_PreservesBoth()
+    {
+        var schema = Schema.Create()
+            .WithOperators(CommonOperators.CFamily)
+            .DefineKeywords(CommonKeywords.CTypes)
+            .DefineKeywords(CommonKeywords.ControlFlow)
+            .Build();
+        
+        var source = "int x = a++ + --b; if (x >= 0 && y <= 10) return x;";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+    }
+    
+    [Fact]
+    public void RoundTrip_MultipleCategories_PreservesAll()
+    {
+        var schema = Schema.Create()
+            .DefineKeywords(CommonKeywords.CTypes)
+            .DefineKeywords(CommonKeywords.ControlFlow)
+            .DefineKeywords(CommonKeywords.CppModifiers)
+            .DefineKeywords(CommonKeywords.CppMemory)
+            .Build();
+        
+        var source = "public static int GetValue() { if (this == nullptr) return 0; else return value; }";
+        var tree = SyntaxTree.Parse(source, schema);
+        
+        Assert.Equal(source, tree.ToText());
+    }
+    
+    #endregion
 }
