@@ -1,33 +1,89 @@
 # TinyTokenizer - Copilot Instructions
 
-## Architecture Overview
+## Project Focus
 
-TinyTokenizer uses a **two-level tokenization architecture**:
+**TinyAst** is the primary API — a red-green syntax tree with fluent queries, pattern matching, and undo/redo editing. The low-level tokenization system is a foundation that most users won't interact with directly.
 
-1. **Level 1 - Lexer** ([Lexer.cs](../TinyTokenizer/Lexer.cs)): Stateless character classifier producing `SimpleToken` structs. Never backtracks, never fails. Uses SIMD-optimized `SearchValues<char>` for vectorized matching.
+## TinyAst Architecture
 
-2. **Level 2 - TokenParser** ([TokenParser.cs](../TinyTokenizer/TokenParser.cs)): Combines simple tokens into semantic `Token` records (blocks, strings, comments, operators, tagged identifiers). Handles recursive block parsing and error recovery.
+The main entry point is `SyntaxTree.Parse()` in [TinyTokenizer/Ast/](../TinyTokenizer/Ast/):
 
-There's also a legacy `Tokenizer` ref struct that combines both levels internally - prefer the two-level API for new features.
-
-## Key Patterns
-
-### Token Types
-- **SimpleToken** (`readonly record struct`) - Level 1 output, position-tracked atomic units
-- **Token** (`abstract record`) - Level 2 base class, immutable with `ReadOnlyMemory<char>` content
-- **BlockToken** - Contains `Children` array for recursive nested tokens (`{}`, `[]`, `()`)
-
-### Zero-Allocation Design
 ```csharp
-// Content uses ReadOnlyMemory<char> to reference source without copying
-public abstract record Token(ReadOnlyMemory<char> Content, TokenType Type, long Position);
+using TinyTokenizer.Ast;
 
-// Access spans for processing without allocation
-ReadOnlySpan<char> span = token.ContentSpan;
+var tree = SyntaxTree.Parse("function foo() { return 1; }");
+
+// Query with CSS-like selectors
+var idents = tree.Select(Query.AnyIdent);
+
+// Edit with undo/redo
+tree.CreateEditor()
+    .Replace(Query.Ident("foo"), "bar")
+    .Commit();
+
+tree.Undo();
 ```
 
+### Red-Green Tree Design
+
+TinyAst uses **red-green trees** (like Roslyn):
+
+- **Green nodes** (internal) — Immutable, position-agnostic, shared across edits
+  - `GreenNode`, `GreenLeaf`, `GreenBlock` in [Ast/Green*.cs](../TinyTokenizer/Ast/)
+- **Red nodes** (public API) — Navigable wrappers with parent references
+  - `RedNode`, `RedLeaf`, `RedBlock` in [Ast/Red*.cs](../TinyTokenizer/Ast/)
+
+### Key TinyAst Types
+
+| Type | File | Description |
+|------|------|-------------|
+| `SyntaxTree` | [SyntaxTree.cs](../TinyTokenizer/Ast/SyntaxTree.cs) | Main entry point, holds root + undo stack |
+| `RedNode` | [RedNode.cs](../TinyTokenizer/Ast/RedNode.cs) | Abstract navigable node |
+| `RedLeaf` | [RedLeaf.cs](../TinyTokenizer/Ast/RedLeaf.cs) | Terminal token node |
+| `RedBlock` | [RedBlock.cs](../TinyTokenizer/Ast/RedBlock.cs) | Block with children |
+| `Query` | [Query.cs](../TinyTokenizer/Ast/Query.cs) | Static factory for selectors |
+| `SyntaxEditor` | [SyntaxEditor.cs](../TinyTokenizer/Ast/SyntaxEditor.cs) | Batch mutations |
+| `Schema` | [Schema.cs](../TinyTokenizer/Ast/Schema.cs) | Unified config + syntax definitions |
+| `TreeWalker` | [TreeWalker.cs](../TinyTokenizer/Ast/TreeWalker.cs) | DOM-style traversal |
+
+### Query Combinators
+
+Queries are built with combinators in [Query.cs](../TinyTokenizer/Ast/Query.cs):
+
+```csharp
+Query.Ident("main")                              // Named identifier
+Query.AnyIdent                                   // Any identifier
+Query.AnyIdent.FollowedBy(Query.ParenBlock)      // Function calls
+Query.Sequence(Query.AnyIdent, Query.Symbol("."), Query.AnyIdent)  // Property access
+Query.AnyIdent.First()                           // Pseudo-selector
+query.Before() / query.After()                   // Insertion positions
+```
+
+### Syntax Nodes (Pattern Matching)
+
+For typed AST patterns, use `Schema` with syntax node definitions:
+
+```csharp
+var tree = SyntaxTree.Parse(source, Schema.Default);
+var methods = tree.Match<MethodCallSyntax>();
+```
+
+Custom syntax nodes implement `SyntaxNode` and use `INamedNode` / `IBlockContainerNode` interfaces.
+
+## Low-Level Tokenization
+
+The tokenizer uses a **two-level architecture** (most users don't need this directly):
+
+1. **Level 1 - Lexer** ([Lexer.cs](../TinyTokenizer/Lexer.cs)): Stateless character classifier producing `SimpleToken` structs. Uses SIMD-optimized `SearchValues<char>`.
+
+2. **Level 2 - TokenParser** ([TokenParser.cs](../TinyTokenizer/TokenParser.cs)): Combines simple tokens into semantic `Token` records (blocks, strings, comments, operators).
+
+### Token Types
+- **SimpleToken** (`readonly record struct`) - Level 1 output
+- **Token** (`abstract record`) - Level 2 base, immutable with `ReadOnlyMemory<char>`
+- **BlockToken** - Contains `Children` array for nested tokens
+
 ### Options Pattern
-Configure via `TokenizerOptions` with fluent `With*` methods:
 ```csharp
 var options = TokenizerOptions.Default
     .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
@@ -51,36 +107,25 @@ dotnet run -c Release --project TinyTokenizer.Benchmarks
 ## Testing Conventions
 
 - Test files mirror source structure in [TinyTokenizer.Tests/](../TinyTokenizer.Tests/)
-- Use `TokenizeTwoLevel()` helper for features requiring multi-token pattern recognition
+- For TinyAst, test queries and edits against `SyntaxTree`
+- For tokenizer, use `TokenizeTwoLevel()` helper
 - Assert token types with `Assert.IsType<IdentToken>()` pattern
-- Test error recovery by checking for `ErrorToken` in results
+- Test error recovery by checking for `ErrorToken` / `NodeKind.Error`
 
 ```csharp
-// Standard test pattern
+// TinyAst test pattern
+var tree = SyntaxTree.Parse("foo(x)");
+var funcs = tree.Select(Query.AnyIdent.FollowedBy(Query.ParenBlock));
+Assert.Single(funcs);
+
+// Tokenizer test pattern
 var tokens = Tokenize("func(a, b)");
 Assert.Single(tokens.OfTokenType<BlockToken>());
 ```
 
-## Extension Points
-
-- **Custom symbols**: `TokenizerOptions.Symbols` - characters recognized as `SymbolToken`
-- **Custom operators**: `TokenizerOptions.Operators` - multi-char sequences for `OperatorToken`
-- **Tag prefixes**: `TokenizerOptions.TagPrefixes` - prefix chars for `TaggedIdentToken` (`#define`, `@attr`)
-- **Comment styles**: Use predefined `CommentStyle.CStyleSingleLine` or create custom `new CommentStyle("--")`
-
-## Async Streaming
-
-For large inputs, use `IAsyncEnumerable` streaming via extension methods:
-```csharp
-await foreach (var token in stream.TokenizeStreamingAsync(options))
-{
-    // Process tokens as they arrive
-}
-```
-
 ## Performance Notes
 
-- `Lexer` uses `SearchValues<char>` for SIMD-accelerated character classification
-- Operators sorted by length descending for greedy matching
+- Green nodes are shared across edits — only affected paths rebuild
+- `Lexer` uses `SearchValues<char>` for SIMD-accelerated classification
 - `SimpleToken` is a struct to avoid heap allocations during lexing
-- Avoid `ToString()` on tokens unless necessary - use `ContentSpan` for comparisons
+- Avoid `ToString()` on tokens unless necessary — use `ContentSpan` for comparisons
