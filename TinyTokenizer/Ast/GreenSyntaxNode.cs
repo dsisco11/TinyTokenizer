@@ -23,19 +23,16 @@ internal sealed record GreenSyntaxNode : GreenContainer
 
     private readonly ImmutableArray<GreenNode> _children;
     private readonly NodeKind _kind;
-    private readonly Type _redType;
     private readonly int _width;
     
     /// <summary>
     /// Creates a green syntax node wrapping the specified children.
     /// </summary>
     /// <param name="kind">The semantic NodeKind for this syntax construct.</param>
-    /// <param name="redType">The concrete RedSyntaxNode subclass to instantiate.</param>
     /// <param name="children">The child green nodes that make up this syntax construct.</param>
-    public GreenSyntaxNode(NodeKind kind, Type redType, ImmutableArray<GreenNode> children)
+    public GreenSyntaxNode(NodeKind kind, ImmutableArray<GreenNode> children)
     {
         _kind = kind;
-        _redType = redType;
         _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
         
         // Calculate total width
@@ -50,8 +47,8 @@ internal sealed record GreenSyntaxNode : GreenContainer
     /// <summary>
     /// Creates a green syntax node from params array of children.
     /// </summary>
-    public GreenSyntaxNode(NodeKind kind, Type redType, params GreenNode[] children)
-        : this(kind, redType, ImmutableArray.Create(children))
+    public GreenSyntaxNode(NodeKind kind, params GreenNode[] children)
+        : this(kind, ImmutableArray.Create(children))
     {
     }
     
@@ -60,11 +57,6 @@ internal sealed record GreenSyntaxNode : GreenContainer
     
     /// <inheritdoc/>
     public override int Width => _width;
-    
-    /// <summary>
-    /// The concrete RedSyntaxNode subclass to instantiate when creating the red node.
-    /// </summary>
-    public Type RedType => _redType;
     
     /// <inheritdoc/>
     public override ImmutableArray<GreenNode> Children => _children;
@@ -92,12 +84,12 @@ internal sealed record GreenSyntaxNode : GreenContainer
         if (index < 0 || index >= _children.Length)
             throw new ArgumentOutOfRangeException(nameof(index));
         
-        return new GreenSyntaxNode(_kind, _redType, _children.SetItem(index, newChild));
+        return new GreenSyntaxNode(_kind, _children.SetItem(index, newChild));
     }
     
     /// <inheritdoc/>
     public override GreenSyntaxNode WithChildren(ImmutableArray<GreenNode> newChildren)
-        => new(_kind, _redType, newChildren);
+        => new(_kind, newChildren);
     
     /// <inheritdoc/>
     public override GreenSyntaxNode WithInsert(int index, ImmutableArray<GreenNode> nodes)
@@ -107,7 +99,7 @@ internal sealed record GreenSyntaxNode : GreenContainer
         
         var builder = _children.ToBuilder();
         builder.InsertRange(index, nodes);
-        return new GreenSyntaxNode(_kind, _redType, builder.ToImmutable());
+        return new GreenSyntaxNode(_kind, builder.ToImmutable());
     }
     
     /// <inheritdoc/>
@@ -119,7 +111,7 @@ internal sealed record GreenSyntaxNode : GreenContainer
         var builder = _children.ToBuilder();
         builder.RemoveRange(index, count);
         builder.InsertRange(index, replacement);
-        return new GreenSyntaxNode(_kind, _redType, builder.ToImmutable());
+        return new GreenSyntaxNode(_kind, builder.ToImmutable());
     }
     
     #endregion
