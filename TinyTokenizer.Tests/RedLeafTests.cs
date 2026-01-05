@@ -16,7 +16,7 @@ public class RedLeafTests
     public void Text_ReturnsGreenText()
     {
         var tree = SyntaxTree.Parse("hello");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal("hello", leaf.Text);
@@ -26,7 +26,7 @@ public class RedLeafTests
     public void TextSpan_ReturnsSpanOfText()
     {
         var tree = SyntaxTree.Parse("world");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         var span = leaf.TextSpan;
@@ -38,7 +38,7 @@ public class RedLeafTests
     public void TextWidth_ReturnsTextLength()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(4, leaf.TextWidth);
@@ -48,7 +48,7 @@ public class RedLeafTests
     public void Green_ReturnsUnderlyingGreenLeaf()
     {
         var tree = SyntaxTree.Parse("abc");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.NotNull(leaf.Green);
@@ -68,7 +68,7 @@ public class RedLeafTests
         var children = tree.Root.Children.ToList();
         
         // Check any leaf has trivia accessible
-        foreach (var child in children.OfType<RedLeaf>())
+        foreach (var child in children.OfType<SyntaxToken>())
         {
             // GetLeadingTrivia should be accessible (may be empty)
             var trivia = child.GetLeadingTrivia().ToList();
@@ -82,7 +82,7 @@ public class RedLeafTests
         var tree = SyntaxTree.Parse("x y");
         var children = tree.Root.Children.ToList();
         
-        foreach (var child in children.OfType<RedLeaf>())
+        foreach (var child in children.OfType<SyntaxToken>())
         {
             var trivia = child.GetTrailingTrivia().ToList();
             Assert.NotNull(trivia);
@@ -93,7 +93,7 @@ public class RedLeafTests
     public void LeadingTriviaWidth_ReturnsCorrectWidth()
     {
         var tree = SyntaxTree.Parse("abc");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         // First token typically has no leading trivia
@@ -104,7 +104,7 @@ public class RedLeafTests
     public void TrailingTriviaWidth_ReturnsCorrectWidth()
     {
         var tree = SyntaxTree.Parse("abc");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.True(leaf.TrailingTriviaWidth >= 0);
@@ -118,7 +118,7 @@ public class RedLeafTests
     public void Position_ReturnsAbsolutePosition()
     {
         var tree = SyntaxTree.Parse("first second");
-        var children = tree.Root.Children.OfType<RedLeaf>().ToList();
+        var children = tree.Root.Children.OfType<SyntaxToken>().ToList();
         
         Assert.True(children.Count >= 2);
         Assert.Equal(0, children[0].Position);
@@ -129,7 +129,7 @@ public class RedLeafTests
     public void TextPosition_AccountsForLeadingTrivia()
     {
         var tree = SyntaxTree.Parse("abc");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         // TextPosition = Position + LeadingTriviaWidth
@@ -140,7 +140,7 @@ public class RedLeafTests
     public void TextEndPosition_EqualsTextPositionPlusTextWidth()
     {
         var tree = SyntaxTree.Parse("hello");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(leaf.TextPosition + leaf.TextWidth, leaf.TextEndPosition);
@@ -150,7 +150,7 @@ public class RedLeafTests
     public void FullSpanStart_EqualsPosition()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(leaf.Position, leaf.FullSpanStart);
@@ -160,7 +160,7 @@ public class RedLeafTests
     public void FullSpanEnd_EqualsEndPosition()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(leaf.EndPosition, leaf.FullSpanEnd);
@@ -170,7 +170,7 @@ public class RedLeafTests
     public void PositionRelationships_AreConsistent()
     {
         var tree = SyntaxTree.Parse("token");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         
@@ -195,7 +195,7 @@ public class RedLeafTests
     public void GetChild_AlwaysReturnsNull()
     {
         var tree = SyntaxTree.Parse("leaf");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Null(leaf.GetChild(0));
@@ -208,7 +208,7 @@ public class RedLeafTests
     public void Children_IsEmpty()
     {
         var tree = SyntaxTree.Parse("leaf");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Empty(leaf.Children);
@@ -218,7 +218,7 @@ public class RedLeafTests
     public void SlotCount_IsZero()
     {
         var tree = SyntaxTree.Parse("leaf");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(0, leaf.SlotCount);
@@ -232,7 +232,7 @@ public class RedLeafTests
     public void Kind_ReturnsCorrectKind()
     {
         var tree = SyntaxTree.Parse("identifier");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(NodeKind.Ident, leaf.Kind);
@@ -242,7 +242,7 @@ public class RedLeafTests
     public void Width_ReturnsFullWidth()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.True(leaf.Width >= leaf.TextWidth);
@@ -252,7 +252,7 @@ public class RedLeafTests
     public void IsLeaf_ReturnsTrue()
     {
         var tree = SyntaxTree.Parse("leaf");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.True(leaf.IsLeaf);
@@ -262,7 +262,7 @@ public class RedLeafTests
     public void IsContainer_ReturnsFalse()
     {
         var tree = SyntaxTree.Parse("leaf");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.False(leaf.IsContainer);
@@ -273,7 +273,7 @@ public class RedLeafTests
     {
         var tree = SyntaxTree.Parse("{child}");
         var block = tree.Root.Children.First();
-        var leaf = block.Children.First(c => c.Kind == NodeKind.Ident) as RedLeaf;
+        var leaf = block.Children.First(c => c.Kind == NodeKind.Ident) as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Same(block, leaf.Parent);
@@ -283,7 +283,7 @@ public class RedLeafTests
     public void EndPosition_EqualsPositionPlusWidth()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(leaf.Position + leaf.Width, leaf.EndPosition);
@@ -297,7 +297,7 @@ public class RedLeafTests
     public void NumericToken_HasCorrectProperties()
     {
         var tree = SyntaxTree.Parse("123");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(NodeKind.Numeric, leaf.Kind);
@@ -308,7 +308,7 @@ public class RedLeafTests
     public void StringToken_HasCorrectProperties()
     {
         var tree = SyntaxTree.Parse("\"hello\"");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(NodeKind.String, leaf.Kind);
@@ -319,7 +319,7 @@ public class RedLeafTests
     public void OperatorToken_HasCorrectProperties()
     {
         var tree = SyntaxTree.Parse("a + b");
-        var ops = tree.Root.Children.OfType<RedLeaf>().Where(l => l.Kind == NodeKind.Operator);
+        var ops = tree.Root.Children.OfType<SyntaxToken>().Where(l => l.Kind == NodeKind.Operator);
         
         Assert.NotEmpty(ops);
         var op = ops.First();
@@ -330,7 +330,7 @@ public class RedLeafTests
     public void SymbolToken_HasCorrectProperties()
     {
         var tree = SyntaxTree.Parse("a.b");
-        var symbols = tree.Root.Children.OfType<RedLeaf>().Where(l => l.Kind == NodeKind.Symbol);
+        var symbols = tree.Root.Children.OfType<SyntaxToken>().Where(l => l.Kind == NodeKind.Symbol);
         
         Assert.NotEmpty(symbols);
         var dot = symbols.First();
@@ -345,7 +345,7 @@ public class RedLeafTests
     public void SingleCharacterToken()
     {
         var tree = SyntaxTree.Parse("x");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal("x", leaf.Text);
@@ -357,7 +357,7 @@ public class RedLeafTests
     {
         var longText = new string('a', 1000);
         var tree = SyntaxTree.Parse(longText);
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal(longText, leaf.Text);
@@ -368,7 +368,7 @@ public class RedLeafTests
     public void MultipleTokensHaveCorrectPositions()
     {
         var tree = SyntaxTree.Parse("one two three");
-        var leaves = tree.Root.Children.OfType<RedLeaf>().Where(l => l.Kind == NodeKind.Ident).ToList();
+        var leaves = tree.Root.Children.OfType<SyntaxToken>().Where(l => l.Kind == NodeKind.Ident).ToList();
         
         Assert.True(leaves.Count >= 3);
         
@@ -384,7 +384,7 @@ public class RedLeafTests
     {
         var tree = SyntaxTree.Parse("{nested}");
         var block = tree.Root.Children.First();
-        var leaf = block.Children.First(c => c.Kind == NodeKind.Ident) as RedLeaf;
+        var leaf = block.Children.First(c => c.Kind == NodeKind.Ident) as SyntaxToken;
         
         Assert.NotNull(leaf);
         // Leaf should be after the opening brace
@@ -396,7 +396,7 @@ public class RedLeafTests
     public void TextSpan_CanBeUsedForComparison()
     {
         var tree = SyntaxTree.Parse("test");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         var span = leaf.TextSpan;

@@ -71,8 +71,8 @@ internal sealed record GreenLeaf : GreenNode
     public override GreenNode? GetSlot(int index) => null;
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1)
-        => new RedLeaf(this, parent, position, siblingIndex);
+    public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        => new SyntaxToken(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)

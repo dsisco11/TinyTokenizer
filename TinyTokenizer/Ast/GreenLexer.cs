@@ -621,7 +621,7 @@ internal sealed class GreenLexer
                     AttachTrailingTrivia(list.GetSlot(list.SlotCount - 1)!, trivia)),
             
             GreenSyntaxNode syntax when syntax.SlotCount > 0 =>
-                new GreenSyntaxNode(syntax.Kind, syntax.RedType, 
+                new GreenSyntaxNode(syntax.Kind, 
                     syntax.Children.SetItem(syntax.Children.Length - 1, 
                         AttachTrailingTrivia(syntax.GetSlot(syntax.Children.Length - 1)!, trivia))),
             
@@ -662,7 +662,7 @@ internal sealed class GreenLexer
                     AttachTrailingTriviaToDeepestChild(list.GetSlot(list.SlotCount - 1)!, trivia)),
             
             GreenSyntaxNode syntax when syntax.SlotCount > 0 =>
-                new GreenSyntaxNode(syntax.Kind, syntax.RedType, 
+                new GreenSyntaxNode(syntax.Kind, 
                     syntax.Children.SetItem(syntax.Children.Length - 1, 
                         AttachTrailingTriviaToDeepestChild(syntax.GetSlot(syntax.Children.Length - 1)!, trivia))),
             

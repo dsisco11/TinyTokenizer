@@ -8,24 +8,17 @@ namespace TinyTokenizer.Ast;
 /// Provides position-aware access to children with lazy creation and caching.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedBlock : RedNode
+public sealed class SyntaxBlock : SyntaxNode
 {
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
         $"{Kind}[{Position}..{EndPosition}] '{Opener}' ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
-
-    // Lazy child cache - initialized on first child access
-    private RedNode?[]? _children;
-    
-    // Lazy opener/closer red nodes
-    private RedLeaf? _openerNode;
-    private RedLeaf? _closerNode;
     
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1)
-        : base(green, parent, position, siblingIndex)
+    internal SyntaxBlock(GreenBlock green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        : base(green, parent, position, siblingIndex, tree)
     {
     }
     
@@ -39,31 +32,15 @@ public sealed class RedBlock : RedNode
     public char Closer => Green.Closer;
     
     /// <summary>The opening delimiter node with its trivia.</summary>
-    public RedLeaf OpenerNode
-    {
-        get
-        {
-            if (_openerNode == null)
-            {
-                var node = (RedLeaf)Green.OpenerNode.CreateRed(this, Position);
-                Interlocked.CompareExchange(ref _openerNode, node, null);
-            }
-            return _openerNode!;
-        }
-    }
+    public SyntaxToken OpenerNode => (SyntaxToken)Green.OpenerNode.CreateRed(this, Position, -1, Tree);
     
     /// <summary>The closing delimiter node with its trivia.</summary>
-    public RedLeaf CloserNode
+    public SyntaxToken CloserNode
     {
         get
         {
-            if (_closerNode == null)
-            {
-                var closerPosition = EndPosition - Green.CloserNode.Width;
-                var node = (RedLeaf)Green.CloserNode.CreateRed(this, closerPosition);
-                Interlocked.CompareExchange(ref _closerNode, node, null);
-            }
-            return _closerNode!;
+            var closerPosition = EndPosition - Green.CloserNode.Width;
+            return (SyntaxToken)Green.CloserNode.CreateRed(this, closerPosition, -1, Tree);
         }
     }
     
@@ -162,37 +139,10 @@ public sealed class RedBlock : RedNode
     /// </summary>
     public int InnerEndPosition => EndPosition - Green.CloserNode.Width;
     
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= Green.SlotCount)
-            return null;
-        
-        // Lazy init the child array
-        _children ??= new RedNode?[Green.SlotCount];
-        
-        // Check cache
-        if (_children[index] != null)
-            return _children[index];
-        
-        // Get green child
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        // Compute position and create red child
-        var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition, index);
-        
-        // Cache with thread-safe exchange
-        Interlocked.CompareExchange(ref _children[index], redChild, null);
-        return _children[index];
-    }
-    
     /// <summary>
     /// Gets all children as an enumerable (lazy creation).
     /// </summary>
-    public new IEnumerable<RedNode> Children
+    public new IEnumerable<SyntaxNode> Children
     {
         get
         {
@@ -208,7 +158,7 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Gets children of a specific kind.
     /// </summary>
-    public IEnumerable<RedNode> ChildrenOfKind(NodeKind kind)
+    public IEnumerable<SyntaxNode> ChildrenOfKind(NodeKind kind)
     {
         foreach (var child in Children)
         {
@@ -220,13 +170,13 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Gets all leaf children.
     /// </summary>
-    public IEnumerable<RedLeaf> LeafChildren
+    public IEnumerable<SyntaxToken> LeafChildren
     {
         get
         {
             foreach (var child in Children)
             {
-                if (child is RedLeaf leaf)
+                if (child is SyntaxToken leaf)
                     yield return leaf;
             }
         }
@@ -235,27 +185,43 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Gets all block children.
     /// </summary>
-    public IEnumerable<RedBlock> BlockChildren
+    public IEnumerable<SyntaxBlock> BlockChildren
     {
         get
         {
             foreach (var child in Children)
             {
-                if (child is RedBlock block)
+                if (child is SyntaxBlock block)
                     yield return block;
             }
         }
     }
     
     /// <summary>
-    /// Finds the index of a child node.
+    /// Finds the index of a child node by green node identity.
+    /// Since red nodes are ephemeral, comparison is done by underlying green node.
     /// </summary>
-    public int IndexOf(RedNode child)
+    public int IndexOf(SyntaxNode child)
     {
+        // First check if the child has a valid sibling index from its parent
+        if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)
+        {
+            // Verify it's actually from this block by checking green identity
+            var candidate = GetChild(child.SiblingIndex);
+            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
+            {
+                return child.SiblingIndex;
+            }
+        }
+        
+        // Fall back to green node search
         for (int i = 0; i < ChildCount; i++)
         {
-            if (ReferenceEquals(GetChild(i), child))
+            var candidate = GetChild(i);
+            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
+            {
                 return i;
+            }
         }
         return -1;
     }

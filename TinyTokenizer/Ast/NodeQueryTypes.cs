@@ -1,4 +1,26 @@
+using System.Runtime.CompilerServices;
+
 namespace TinyTokenizer.Ast;
+
+/// <summary>
+/// Compares red nodes by their underlying green node identity.
+/// Used for deduplication since red nodes are ephemeral but wrap the same green nodes.
+/// </summary>
+internal sealed class RedNodeGreenComparer : IEqualityComparer<SyntaxNode>
+{
+    public static readonly RedNodeGreenComparer Instance = new();
+    
+    private RedNodeGreenComparer() { }
+    
+    public bool Equals(SyntaxNode? x, SyntaxNode? y)
+    {
+        if (ReferenceEquals(x, y)) return true;
+        if (x is null || y is null) return false;
+        return ReferenceEquals(x.Green, y.Green);
+    }
+    
+    public int GetHashCode(SyntaxNode obj) => RuntimeHelpers.GetHashCode(obj.Green);
+}
 
 #region Kind Query
 
@@ -10,7 +32,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <summary>The kind to match.</summary>
     public NodeKind Kind { get; }
     
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     private readonly string? _textConstraint;
@@ -18,7 +40,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <summary>Creates a query matching nodes of the specified kind.</summary>
     public KindNodeQuery(NodeKind kind) : this(kind, null, SelectionMode.All, 0, null) { }
     
-    private KindNodeQuery(NodeKind kind, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg, string? textConstraint = null)
+    private KindNodeQuery(NodeKind kind, Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg, string? textConstraint = null)
     {
         Kind = kind;
         _predicate = predicate;
@@ -28,10 +50,10 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
@@ -48,7 +70,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => 
+    public override bool Matches(SyntaxNode node) => 
         node.Kind == Kind && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node)
@@ -68,9 +90,9 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// Overridden to enable green-level text matching for efficient pattern binding.
     /// </summary>
     public new KindNodeQuery WithText(string text) =>
-        new(Kind, CombinePredicates(_predicate, n => n is RedLeaf leaf && leaf.Text == text), _mode, _modeArg, text);
+        new(Kind, CombinePredicates(_predicate, n => n is SyntaxToken leaf && leaf.Text == text), _mode, _modeArg, text);
     
-    protected override KindNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override KindNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg, _textConstraint);
     
     protected override KindNodeQuery CreateFirst() => new(Kind, _predicate, SelectionMode.First, 0, _textConstraint);
@@ -79,7 +101,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     protected override KindNodeQuery CreateSkip(int count) => new(Kind, _predicate, SelectionMode.Skip, count, _textConstraint);
     protected override KindNodeQuery CreateTake(int count) => new(Kind, _predicate, SelectionMode.Take, count, _textConstraint);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 
@@ -93,7 +115,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
 public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
 {
     private readonly char? _opener;
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
@@ -103,7 +125,7 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <summary>Creates a query matching blocks with the specified opener (null for any).</summary>
     public BlockNodeQuery(char? opener = null) : this(opener, null, SelectionMode.All, 0) { }
     
-    private protected BlockNodeQuery(char? opener, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private protected BlockNodeQuery(char? opener, Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _opener = opener;
         _predicate = predicate;
@@ -112,10 +134,10 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
@@ -132,9 +154,9 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node)
+    public override bool Matches(SyntaxNode node)
     {
-        if (node is not RedBlock block)
+        if (node is not SyntaxBlock block)
             return false;
         
         if (_opener != null && block.Opener != _opener.Value)
@@ -146,7 +168,7 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     internal override bool MatchesGreen(GreenNode node) => 
         node is GreenBlock block && (_opener == null || block.Opener == _opener);
     
-    protected override BlockNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override BlockNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(_opener, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override BlockNodeQuery CreateFirst() => new(_opener, _predicate, SelectionMode.First, 0);
@@ -155,7 +177,7 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     protected override BlockNodeQuery CreateSkip(int count) => new(_opener, _predicate, SelectionMode.Skip, count);
     protected override BlockNodeQuery CreateTake(int count) => new(_opener, _predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
     
     /// <summary>
@@ -178,13 +200,13 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
 /// </summary>
 public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
 {
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
     public AnyNodeQuery() : this(null, SelectionMode.All, 0) { }
     
-    private AnyNodeQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private AnyNodeQuery(Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _predicate = predicate;
         _mode = mode;
@@ -192,10 +214,10 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var matches = new TreeWalker(root).DescendantsAndSelf();
         if (_predicate != null)
@@ -213,11 +235,11 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => _predicate == null || _predicate(node);
+    public override bool Matches(SyntaxNode node) => _predicate == null || _predicate(node);
     
     internal override bool MatchesGreen(GreenNode node) => true;
     
-    protected override AnyNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override AnyNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override AnyNodeQuery CreateFirst() => new(_predicate, SelectionMode.First, 0);
@@ -226,7 +248,7 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     protected override AnyNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override AnyNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 
@@ -239,13 +261,13 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
 /// </summary>
 public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 {
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
     public LeafNodeQuery() : this(null, SelectionMode.All, 0) { }
     
-    private LeafNodeQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private LeafNodeQuery(Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _predicate = predicate;
         _mode = mode;
@@ -253,10 +275,10 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root, NodeFilter.Leaves);
         var matches = walker.DescendantsAndSelf().Where(Matches);
@@ -273,12 +295,12 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => 
-        node is RedLeaf && (_predicate == null || _predicate(node));
+    public override bool Matches(SyntaxNode node) => 
+        node is SyntaxToken && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => node is GreenLeaf;
     
-    protected override LeafNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override LeafNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override LeafNodeQuery CreateFirst() => new(_predicate, SelectionMode.First, 0);
@@ -287,7 +309,7 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     protected override LeafNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override LeafNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 
@@ -308,14 +330,14 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 /// </remarks>
 public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
 {
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     private readonly bool _negated;
     
     public NewlineNodeQuery(bool negated = false) : this(null, SelectionMode.All, 0, negated) { }
     
-    private NewlineNodeQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg, bool negated = false)
+    private NewlineNodeQuery(Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg, bool negated = false)
     {
         _predicate = predicate;
         _mode = mode;
@@ -329,10 +351,10 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     public NewlineNodeQuery Negate() => new(_predicate, _mode, _modeArg, !_negated);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
@@ -349,7 +371,7 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node)
+    public override bool Matches(SyntaxNode node)
     {
         bool hasNewline = HasNewline(node);
         bool result = _negated ? !hasNewline : hasNewline;
@@ -381,7 +403,7 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         return false;
     }
     
-    private static bool HasNewline(RedNode node)
+    private static bool HasNewline(SyntaxNode node)
     {
         // Check 1: Does leading trivia contain newline?
         var leadingTrivia = node.Green switch
@@ -418,7 +440,7 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         return false;
     }
     
-    protected override NewlineNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override NewlineNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg, _negated);
     
     protected override NewlineNodeQuery CreateFirst() => new(_predicate, SelectionMode.First, 0, _negated);
@@ -427,7 +449,7 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     protected override NewlineNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count, _negated);
     protected override NewlineNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count, _negated);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 
@@ -468,12 +490,12 @@ public sealed record UnionNodeQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<SyntaxNode>(RedNodeGreenComparer.Instance);
         
         foreach (var node in _left.Select(root))
         {
@@ -489,10 +511,10 @@ public sealed record UnionNodeQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => _left.Matches(node) || _right.Matches(node);
+    public bool Matches(SyntaxNode node) => _left.Matches(node) || _right.Matches(node);
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Try left first (like alternation - first match wins)
         if (_left.TryMatch(startNode, out consumedCount))
@@ -517,12 +539,12 @@ public sealed record IntersectionNodeQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var leftMatches = new HashSet<RedNode>(_left.Select(root), ReferenceEqualityComparer.Instance);
+        var leftMatches = new HashSet<SyntaxNode>(_left.Select(root), RedNodeGreenComparer.Instance);
         
         foreach (var node in _right.Select(root))
         {
@@ -532,10 +554,10 @@ public sealed record IntersectionNodeQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => _left.Matches(node) && _right.Matches(node);
+    public bool Matches(SyntaxNode node) => _left.Matches(node) && _right.Matches(node);
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Both must match with same consumed count
         if (_left.TryMatch(startNode, out var leftCount) && 
@@ -569,12 +591,12 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
     public AnyOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<SyntaxNode>(RedNodeGreenComparer.Instance);
         
         foreach (var query in _queries)
         {
@@ -587,7 +609,7 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         foreach (var query in _queries)
         {
@@ -598,7 +620,7 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Try each query in order (first match wins)
         foreach (var query in _queries)
@@ -654,10 +676,10 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
     public NoneOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -668,7 +690,7 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         foreach (var query in _queries)
         {
@@ -679,7 +701,7 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Fails if any query matches
         foreach (var query in _queries)
@@ -741,10 +763,10 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
 public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
 {
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // BOF only matches the first node in the file
         var firstChild = root.Children.FirstOrDefault();
@@ -753,7 +775,7 @@ public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         // Node is at BOF if it's the first child of its parent and parent is root
         if (node.SiblingIndex != 0)
@@ -765,7 +787,7 @@ public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width assertion - never consumes
         consumedCount = 0;
@@ -799,10 +821,10 @@ public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
 public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
 {
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // EOF only matches the last node in the file
         var lastChild = root.Children.LastOrDefault();
@@ -811,7 +833,7 @@ public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         // Node is at EOF if it has no next sibling and parent is root
         if (node.NextSibling() != null)
@@ -823,7 +845,7 @@ public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width assertion - never consumes
         consumedCount = 0;
@@ -870,10 +892,10 @@ public sealed record SiblingQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -885,7 +907,7 @@ public sealed record SiblingQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         var sibling = GetSiblingAtOffset(node);
         if (sibling == null)
@@ -894,14 +916,14 @@ public sealed record SiblingQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width - navigates without consuming
         consumedCount = 0;
         return Matches(startNode);
     }
     
-    private RedNode? GetSiblingAtOffset(RedNode node)
+    private SyntaxNode? GetSiblingAtOffset(SyntaxNode node)
     {
         if (_offset == 0)
             return node;
@@ -940,12 +962,12 @@ public sealed record ParentQuery : INodeQuery
     public ParentQuery(INodeQuery? innerQuery) => _innerQuery = innerQuery;
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<SyntaxNode>(RedNodeGreenComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -960,7 +982,7 @@ public sealed record ParentQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         var parent = node.Parent;
         if (parent == null)
@@ -969,7 +991,7 @@ public sealed record ParentQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width - navigates without consuming
         consumedCount = 0;
@@ -994,12 +1016,12 @@ public sealed record AncestorQuery : INodeQuery
     public AncestorQuery(INodeQuery innerQuery) => _innerQuery = innerQuery;
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<SyntaxNode>(RedNodeGreenComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -1011,20 +1033,20 @@ public sealed record AncestorQuery : INodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         return FindMatchingAncestor(node) != null;
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width - navigates without consuming
         consumedCount = 0;
         return Matches(startNode);
     }
     
-    private RedNode? FindMatchingAncestor(RedNode node)
+    private SyntaxNode? FindMatchingAncestor(SyntaxNode node)
     {
         var current = node.Parent;
         while (current != null)
@@ -1051,15 +1073,15 @@ public sealed record AncestorQuery : INodeQuery
 /// </remarks>
 public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
 {
-    private readonly RedNode _target;
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly SyntaxNode _target;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
     /// <summary>Creates a query matching the exact node instance.</summary>
-    public ExactNodeQuery(RedNode target) : this(target, null, SelectionMode.All, 0) { }
+    public ExactNodeQuery(SyntaxNode target) : this(target, null, SelectionMode.All, 0) { }
     
-    private ExactNodeQuery(RedNode target, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private ExactNodeQuery(SyntaxNode target, Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _target = target;
         _predicate = predicate;
@@ -1068,10 +1090,10 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     }
     
     /// <summary>The target node this query matches.</summary>
-    public RedNode Target => _target;
+    public SyntaxNode Target => _target;
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree)
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree)
     {
         // If the target node matches our criteria, return it
         if (Matches(_target))
@@ -1080,7 +1102,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // Check if target is within this subtree and matches
         if (Matches(_target) && IsDescendantOrSelf(_target, root))
@@ -1089,12 +1111,12 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => 
-        ReferenceEquals(node, _target) && (_predicate == null || _predicate(node));
+    public override bool Matches(SyntaxNode node) => 
+        RedNodeGreenComparer.Instance.Equals(node, _target) && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => ReferenceEquals(node, _target.Green);
     
-    protected override ExactNodeQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override ExactNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(_target, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override ExactNodeQuery CreateFirst() => new(_target, _predicate, SelectionMode.First, 0);
@@ -1103,15 +1125,15 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     protected override ExactNodeQuery CreateSkip(int count) => new(_target, _predicate, SelectionMode.Skip, count);
     protected override ExactNodeQuery CreateTake(int count) => new(_target, _predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
     
-    private static bool IsDescendantOrSelf(RedNode node, RedNode root)
+    private static bool IsDescendantOrSelf(SyntaxNode node, SyntaxNode root)
     {
         var current = node;
         while (current != null)
         {
-            if (ReferenceEquals(current, root))
+            if (RedNodeGreenComparer.Instance.Equals(current, root))
                 return true;
             current = current.Parent;
         }
@@ -1128,14 +1150,14 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
 /// </summary>
 public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
 {
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
     /// <summary>Creates a query matching any keyword node.</summary>
     public AnyKeywordQuery() : this(null, SelectionMode.All, 0) { }
     
-    private AnyKeywordQuery(Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private AnyKeywordQuery(Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _predicate = predicate;
         _mode = mode;
@@ -1143,10 +1165,10 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
@@ -1163,12 +1185,12 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => 
+    public override bool Matches(SyntaxNode node) => 
         node.Kind.IsKeyword() && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => node.Kind.IsKeyword();
     
-    protected override AnyKeywordQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override AnyKeywordQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override AnyKeywordQuery CreateFirst() => new(_predicate, SelectionMode.First, 0);
@@ -1177,7 +1199,7 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     protected override AnyKeywordQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override AnyKeywordQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 
@@ -1188,7 +1210,7 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
 public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
 {
     private readonly string _categoryName;
-    private readonly Func<RedNode, bool>? _predicate;
+    private readonly Func<SyntaxNode, bool>? _predicate;
     private readonly SelectionMode _mode;
     private readonly int _modeArg;
     
@@ -1196,7 +1218,7 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     /// <param name="categoryName">The keyword category name (e.g., "TypeNames", "ControlFlow").</param>
     public KeywordCategoryQuery(string categoryName) : this(categoryName, null, SelectionMode.All, 0) { }
     
-    private KeywordCategoryQuery(string categoryName, Func<RedNode, bool>? predicate, SelectionMode mode, int modeArg)
+    private KeywordCategoryQuery(string categoryName, Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
     {
         _categoryName = categoryName;
         _predicate = predicate;
@@ -1208,7 +1230,7 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     public string CategoryName => _categoryName;
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(SyntaxTree tree)
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree)
     {
         var schema = tree.Schema;
         if (schema == null || !schema.HasKeywords)
@@ -1235,7 +1257,7 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     }
     
     /// <inheritdoc/>
-    public override IEnumerable<RedNode> Select(RedNode root)
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // Without tree context, we can't resolve category - match any keyword
         var walker = new TreeWalker(root);
@@ -1254,12 +1276,12 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     }
     
     /// <inheritdoc/>
-    public override bool Matches(RedNode node) => 
+    public override bool Matches(SyntaxNode node) => 
         node.Kind.IsKeyword() && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => node.Kind.IsKeyword();
     
-    protected override KeywordCategoryQuery CreateFiltered(Func<RedNode, bool> predicate) =>
+    protected override KeywordCategoryQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(_categoryName, CombinePredicates(_predicate, predicate), _mode, _modeArg);
     
     protected override KeywordCategoryQuery CreateFirst() => new(_categoryName, _predicate, SelectionMode.First, 0);
@@ -1268,7 +1290,7 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     protected override KeywordCategoryQuery CreateSkip(int count) => new(_categoryName, _predicate, SelectionMode.Skip, count);
     protected override KeywordCategoryQuery CreateTake(int count) => new(_categoryName, _predicate, SelectionMode.Take, count);
     
-    private static Func<RedNode, bool>? CombinePredicates(Func<RedNode, bool>? a, Func<RedNode, bool> b) =>
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
 

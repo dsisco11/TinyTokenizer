@@ -151,15 +151,23 @@ public class RedNodeTests
     }
 
     [Fact]
-    public void GetChild_ReturnsSameInstanceOnRepeatedCalls()
+    public void GetChild_ReturnsEquivalentNodesOnRepeatedCalls()
     {
+        // Red nodes are ephemeral - each GetChild call creates a new instance
+        // but they represent the same position in the tree
         var tree = SyntaxTree.Parse("{child}");
         var block = tree.Root.Children.First();
         
         var child1 = block.GetChild(0);
         var child2 = block.GetChild(0);
         
-        Assert.Same(child1, child2);
+        // Not same instance (red nodes are not cached)
+        Assert.NotSame(child1, child2);
+        
+        // But equivalent by position
+        Assert.Equal(child1!.Position, child2!.Position);
+        Assert.Equal(child1.Width, child2.Width);
+        Assert.Equal(child1.ToText(), child2.ToText());
     }
 
     [Fact]
@@ -183,7 +191,7 @@ public class RedNodeTests
         var tree = SyntaxTree.Parse("{{{{deep}}}}");
         
         // Navigate to deepest ident
-        RedNode current = tree.Root;
+        SyntaxNode current = tree.Root;
         while (current.Children.Any())
         {
             var firstChild = current.Children.First();
@@ -536,7 +544,7 @@ public class RedNodeTests
     {
         var tree = SyntaxTree.Parse("{{{{{a}}}}}");
         
-        void ValidatePositions(RedNode node)
+        void ValidatePositions(SyntaxNode node)
         {
             Assert.True(node.Position >= 0);
             Assert.True(node.Width >= 0);
@@ -575,7 +583,7 @@ public class RedNodeTests
     public void RedLeaf_Text_ReturnsContent()
     {
         var tree = SyntaxTree.Parse("hello");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal("hello", leaf.Text);
@@ -599,7 +607,7 @@ public class RedNodeTests
     public void RedBlock_Opener_ReturnsCorrectCharacter()
     {
         var tree = SyntaxTree.Parse("{test}");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal('{', block.Opener);
@@ -609,7 +617,7 @@ public class RedNodeTests
     public void RedBlock_Closer_ReturnsCorrectCharacter()
     {
         var tree = SyntaxTree.Parse("[test]");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(']', block.Closer);
@@ -619,7 +627,7 @@ public class RedNodeTests
     public void RedBlock_ParenBlock_HasCorrectDelimiters()
     {
         var tree = SyntaxTree.Parse("(test)");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal('(', block.Opener);
@@ -630,49 +638,10 @@ public class RedNodeTests
     public void RedBlock_ChildCount_ReturnsCorrectCount()
     {
         var tree = SyntaxTree.Parse("{a b c}");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.True(block.ChildCount >= 3);
-    }
-
-    #endregion
-
-    #region Caching Behavior
-
-    [Fact]
-    public void GetChild_CachesRedNode()
-    {
-        var tree = SyntaxTree.Parse("{child}");
-        var block = tree.Root.Children.First();
-        
-        // First call creates the red node
-        var child1 = block.GetChild(0);
-        Assert.NotNull(child1);
-        
-        // Second call should return cached instance
-        var child2 = block.GetChild(0);
-        Assert.Same(child1, child2);
-        
-        // Third call to verify cache is stable
-        var child3 = block.GetChild(0);
-        Assert.Same(child1, child3);
-    }
-
-    [Fact]
-    public void Children_MultipleCalls_ReturnSameInstances()
-    {
-        var tree = SyntaxTree.Parse("{a b c}");
-        var block = tree.Root.Children.First();
-        
-        var first = block.Children.ToList();
-        var second = block.Children.ToList();
-        
-        // Each enumeration should return the same cached instances
-        for (int i = 0; i < first.Count; i++)
-        {
-            Assert.Same(first[i], second[i]);
-        }
     }
 
     #endregion

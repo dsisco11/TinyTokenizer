@@ -195,7 +195,6 @@ public sealed class SyntaxBinder
                 var (definition, matchedCount, matchedChildren) = matchResult.Value;
                 var syntaxNode = new GreenSyntaxNode(
                     definition.Kind,
-                    definition.RedType,
                     matchedChildren);
                 result.Add(syntaxNode);
                 i += matchedCount;
@@ -272,7 +271,7 @@ public sealed class SyntaxBinder
         {
             GreenBlock block => new GreenBlock(block.OpenerNode, block.CloserNode, newChildren),
             GreenList => new GreenList(newChildren),
-            GreenSyntaxNode syntax => new GreenSyntaxNode(syntax.Kind, syntax.RedType, newChildren),
+            GreenSyntaxNode syntax => new GreenSyntaxNode(syntax.Kind, newChildren),
             _ => original // Leaves don't have children to rebuild
         };
     }

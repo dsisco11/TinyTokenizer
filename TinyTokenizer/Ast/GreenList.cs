@@ -72,8 +72,8 @@ internal sealed record GreenList : GreenContainer
     }
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1)
-        => new RedList(this, parent, position, siblingIndex);
+    public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        => new SyntaxList(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)
@@ -132,53 +132,4 @@ internal sealed record GreenList : GreenContainer
     }
     
     #endregion
-}
-
-/// <summary>
-/// Red node wrapper for the root token list.
-/// </summary>
-[DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedList : RedNode
-{
-    /// <inheritdoc/>
-    protected override string DebuggerDisplay =>
-        $"List[{Position}..{EndPosition}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
-
-    private RedNode?[]? _children;
-    
-    /// <summary>
-    /// Creates a new red list.
-    /// </summary>
-    internal RedList(GreenList green, RedNode? parent, int position, int siblingIndex = -1)
-        : base(green, parent, position, siblingIndex)
-    {
-    }
-    
-    /// <summary>The underlying green list.</summary>
-    internal new GreenList Green => (GreenList)base.Green;
-    
-    /// <summary>Number of children.</summary>
-    public int ChildCount => Green.SlotCount;
-    
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= Green.SlotCount)
-            return null;
-        
-        _children ??= new RedNode?[Green.SlotCount];
-        
-        if (_children[index] != null)
-            return _children[index];
-        
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition, index);
-        
-        Interlocked.CompareExchange(ref _children[index], redChild, null);
-        return _children[index];
-    }
 }

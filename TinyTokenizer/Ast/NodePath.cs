@@ -51,9 +51,9 @@ public readonly struct NodePath : IEquatable<NodePath>
     /// </summary>
     /// <param name="root">The root node to start from.</param>
     /// <returns>The node at this path, or null if the path is invalid.</returns>
-    public RedNode? Navigate(RedNode root)
+    public SyntaxNode? Navigate(SyntaxNode root)
     {
-        RedNode current = root;
+        SyntaxNode current = root;
         foreach (var index in Indices)
         {
             var child = current.GetChild(index);
@@ -67,24 +67,20 @@ public readonly struct NodePath : IEquatable<NodePath>
     /// <summary>
     /// Builds a path from root to the specified node.
     /// </summary>
-    public static NodePath FromNode(RedNode node)
+    public static NodePath FromNode(SyntaxNode node)
     {
         var indices = new Stack<int>();
         var current = node;
         
         while (current.Parent != null)
         {
-            // Find our index in parent
-            var parent = current.Parent;
-            for (int i = 0; i < parent.SlotCount; i++)
+            // Use sibling index directly since red nodes are ephemeral
+            var siblingIndex = current.SiblingIndex;
+            if (siblingIndex >= 0)
             {
-                if (ReferenceEquals(parent.GetChild(i), current))
-                {
-                    indices.Push(i);
-                    break;
-                }
+                indices.Push(siblingIndex);
             }
-            current = parent;
+            current = current.Parent;
         }
         
         // Stack enumeration is LIFO (last pushed = first yielded)

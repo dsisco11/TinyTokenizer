@@ -653,7 +653,7 @@ public class TriviaTests
     public void RedBlock_GetLeadingTrivia_ReturnsBlockLeadingTrivia()
     {
         var tree = SyntaxTree.Parse("  {x}");
-        var block = tree.Root.Children.OfType<RedBlock>().First();
+        var block = tree.Root.Children.OfType<SyntaxBlock>().First();
         
         var leadingTrivia = block.GetLeadingTrivia().ToList();
         
@@ -666,7 +666,7 @@ public class TriviaTests
     public void RedBlock_GetTrailingTrivia_ReturnsBlockTrailingTrivia()
     {
         var tree = SyntaxTree.Parse("{x}  ");
-        var block = tree.Root.Children.OfType<RedBlock>().First();
+        var block = tree.Root.Children.OfType<SyntaxBlock>().First();
         
         var trailingTrivia = block.GetTrailingTrivia().ToList();
         
@@ -679,7 +679,7 @@ public class TriviaTests
     public void RedBlock_GetInnerTrivia_ReturnsInnerTrivia()
     {
         var tree = SyntaxTree.Parse("{  }"); // Empty block with spaces
-        var block = tree.Root.Children.OfType<RedBlock>().First();
+        var block = tree.Root.Children.OfType<SyntaxBlock>().First();
         
         var innerTrivia = block.GetInnerTrivia().ToList();
         
@@ -694,8 +694,8 @@ public class TriviaTests
         var treeWith = SyntaxTree.Parse("  {x}");
         var treeWithout = SyntaxTree.Parse("{x}");
         
-        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
-        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        var blockWith = treeWith.Root.Children.OfType<SyntaxBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<SyntaxBlock>().First();
         
         Assert.True(blockWith.HasLeadingTrivia);
         Assert.False(blockWithout.HasLeadingTrivia);
@@ -707,8 +707,8 @@ public class TriviaTests
         var treeWith = SyntaxTree.Parse("{x}  ");
         var treeWithout = SyntaxTree.Parse("{x}");
         
-        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
-        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        var blockWith = treeWith.Root.Children.OfType<SyntaxBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<SyntaxBlock>().First();
         
         Assert.True(blockWith.HasTrailingTrivia);
         Assert.False(blockWithout.HasTrailingTrivia);
@@ -720,8 +720,8 @@ public class TriviaTests
         var treeWith = SyntaxTree.Parse("{  }");
         var treeWithout = SyntaxTree.Parse("{}");
         
-        var blockWith = treeWith.Root.Children.OfType<RedBlock>().First();
-        var blockWithout = treeWithout.Root.Children.OfType<RedBlock>().First();
+        var blockWith = treeWith.Root.Children.OfType<SyntaxBlock>().First();
+        var blockWithout = treeWithout.Root.Children.OfType<SyntaxBlock>().First();
         
         Assert.True(blockWith.HasInnerTrivia);
         Assert.False(blockWithout.HasInnerTrivia);

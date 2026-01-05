@@ -28,18 +28,18 @@ public interface INodeQuery
     /// <summary>
     /// Selects all nodes matching this query from the tree.
     /// </summary>
-    IEnumerable<RedNode> Select(SyntaxTree tree);
+    IEnumerable<SyntaxNode> Select(SyntaxTree tree);
     
     /// <summary>
     /// Selects all nodes matching this query from a subtree.
     /// </summary>
-    IEnumerable<RedNode> Select(RedNode root);
+    IEnumerable<SyntaxNode> Select(SyntaxNode root);
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
     /// For sequence queries, returns true if the sequence can start at this node.
     /// </summary>
-    bool Matches(RedNode node);
+    bool Matches(SyntaxNode node);
     
     /// <summary>
     /// Attempts to match this query starting at the given node, consuming siblings.
@@ -47,7 +47,7 @@ public interface INodeQuery
     /// <param name="startNode">The first sibling node to try matching.</param>
     /// <param name="consumedCount">Number of sibling nodes consumed if matched.</param>
     /// <returns>True if the query matched.</returns>
-    bool TryMatch(RedNode startNode, out int consumedCount);
+    bool TryMatch(SyntaxNode startNode, out int consumedCount);
 }
 
 /// <summary>
@@ -61,17 +61,17 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// <summary>
     /// Selects all nodes matching this query from the tree.
     /// </summary>
-    public abstract IEnumerable<RedNode> Select(SyntaxTree tree);
+    public abstract IEnumerable<SyntaxNode> Select(SyntaxTree tree);
     
     /// <summary>
     /// Selects all nodes matching this query from a subtree.
     /// </summary>
-    public abstract IEnumerable<RedNode> Select(RedNode root);
+    public abstract IEnumerable<SyntaxNode> Select(SyntaxNode root);
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
     /// </summary>
-    public abstract bool Matches(RedNode node);
+    public abstract bool Matches(SyntaxNode node);
     
     /// <summary>
     /// Tests whether a green node matches this query's criteria.
@@ -86,7 +86,7 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// Default implementation for single-node queries: matches one node, consumes 1.
     /// Override for sequence queries that consume multiple siblings.
     /// </summary>
-    public virtual bool TryMatch(RedNode startNode, out int consumedCount)
+    public virtual bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         if (Matches(startNode))
         {
@@ -119,7 +119,7 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     #region CRTP Factory Methods
     
     /// <summary>Creates a filtered version of this query.</summary>
-    protected abstract TSelf CreateFiltered(Func<RedNode, bool> predicate);
+    protected abstract TSelf CreateFiltered(Func<SyntaxNode, bool> predicate);
     
     /// <summary>Creates a version selecting only the first match.</summary>
     protected abstract TSelf CreateFirst();
@@ -178,31 +178,31 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// <summary>
     /// Adds a predicate filter to this query.
     /// </summary>
-    public TSelf Where(Func<RedNode, bool> predicate) => CreateFiltered(predicate);
+    public TSelf Where(Func<SyntaxNode, bool> predicate) => CreateFiltered(predicate);
     
     /// <summary>
     /// Filters to leaf nodes with exact text match.
     /// </summary>
     public TSelf WithText(string text) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text == text);
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text == text);
     
     /// <summary>
     /// Filters to leaf nodes whose text contains the specified substring.
     /// </summary>
     public TSelf WithTextContaining(string substring) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.Contains(substring));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.Contains(substring));
     
     /// <summary>
     /// Filters to leaf nodes whose text starts with the specified prefix.
     /// </summary>
     public TSelf WithTextStartingWith(string prefix) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.StartsWith(prefix));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.StartsWith(prefix));
     
     /// <summary>
     /// Filters to leaf nodes whose text ends with the specified suffix.
     /// </summary>
     public TSelf WithTextEndingWith(string suffix) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.EndsWith(suffix));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.EndsWith(suffix));
     
     #endregion
     
@@ -293,22 +293,14 @@ public sealed record InsertionQuery
         }
     }
     
-    private InsertionPosition? ResolvePosition(RedNode node)
+    private InsertionPosition? ResolvePosition(SyntaxNode node)
     {
         var parent = node.Parent;
         if (parent == null)
             return null; // Can't insert relative to root
         
-        // Find the index of this node in its parent
-        int childIndex = -1;
-        for (int i = 0; i < parent.SlotCount; i++)
-        {
-            if (ReferenceEquals(parent.GetChild(i), node))
-            {
-                childIndex = i;
-                break;
-            }
-        }
+        // Use sibling index directly since red nodes are ephemeral
+        int childIndex = node.SiblingIndex;
         
         if (childIndex < 0)
             return null;
@@ -325,10 +317,10 @@ public sealed record InsertionQuery
                 parentPath, childIndex, node.Position, Point, targetPath, targetLeading, targetTrailing),
             InsertionPoint.After => new InsertionPosition(
                 parentPath, childIndex + 1, node.EndPosition, Point, targetPath, targetLeading, targetTrailing),
-            InsertionPoint.InnerStart when node is RedBlock block => new InsertionPosition(
+            InsertionPoint.InnerStart when node is SyntaxBlock block => new InsertionPosition(
                 NodePath.FromNode(node), 0, block.Position + 1, Point, null, 
                 ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
-            InsertionPoint.InnerEnd when node is RedBlock block => new InsertionPosition(
+            InsertionPoint.InnerEnd when node is SyntaxBlock block => new InsertionPosition(
                 NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1, Point, null,
                 ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
             InsertionPoint.NamedBlockInnerStart when node is IBlockContainerNode container => 
@@ -339,7 +331,7 @@ public sealed record InsertionQuery
         };
     }
     
-    private static InsertionPosition ResolveNamedBlockPosition(RedNode syntaxNode, RedBlock block, bool isStart)
+    private static InsertionPosition ResolveNamedBlockPosition(SyntaxNode syntaxNode, SyntaxBlock block, bool isStart)
     {
         var blockPath = NodePath.FromNode(block);
         
@@ -357,7 +349,7 @@ public sealed record InsertionQuery
         }
     }
     
-    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(RedNode node)
+    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(SyntaxNode node)
     {
         return node.Green switch
         {

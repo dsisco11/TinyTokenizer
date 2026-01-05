@@ -217,7 +217,7 @@ public class GreenNodeTests
         
         var red = green.CreateRed(null, 0);
         
-        Assert.IsType<RedLeaf>(red);
+        Assert.IsType<SyntaxToken>(red);
         Assert.Equal(0, red.Position);
         Assert.Null(red.Parent);
     }
@@ -666,7 +666,7 @@ public class GreenNodeTests
         
         var red = green.CreateRed(null, 0);
         
-        Assert.IsType<RedBlock>(red);
+        Assert.IsType<SyntaxBlock>(red);
     }
 
     [Fact]

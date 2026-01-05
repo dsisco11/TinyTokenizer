@@ -22,10 +22,10 @@ public sealed record NotQuery : INodeQuery, IGreenNodeQuery
     public NotQuery(INodeQuery inner) => _inner = inner;
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -36,10 +36,10 @@ public sealed record NotQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => !_inner.Matches(node);
+    public bool Matches(SyntaxNode node) => !_inner.Matches(node);
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Zero-width assertion - never consumes
         consumedCount = 0;
@@ -94,10 +94,10 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -108,10 +108,10 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => TryMatch(node, out _);
+    public bool Matches(SyntaxNode node) => TryMatch(node, out _);
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         consumedCount = 0;
         
@@ -218,10 +218,10 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // For tree selection, we find places where the sequence matches
         var walker = new TreeWalker(root);
@@ -233,14 +233,14 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node)
+    public bool Matches(SyntaxNode node)
     {
         // For single-node matching, check if sequence can start here
         return TryMatch(node, out _);
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         var current = startNode;
         int totalConsumed = 0;
@@ -325,18 +325,18 @@ public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery
     public OptionalQuery(INodeQuery inner) => _inner = inner;
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => _inner.Select(tree);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => _inner.Select(tree);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root) => _inner.Select(root);
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root) => _inner.Select(root);
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => true; // Optional always "matches"
+    public bool Matches(SyntaxNode node) => true; // Optional always "matches"
     
     bool IGreenNodeQuery.MatchesGreen(GreenNode node) => true;
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // Try to match inner, but always succeed
         if (_inner.TryMatch(startNode, out consumedCount))
@@ -378,10 +378,10 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -392,7 +392,7 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => TryMatch(node, out _);
+    public bool Matches(SyntaxNode node) => TryMatch(node, out _);
     
     bool IGreenNodeQuery.MatchesGreen(GreenNode node)
     {
@@ -401,7 +401,7 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         var current = startNode;
         int count = 0;
@@ -485,10 +485,10 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -499,12 +499,12 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => TryMatch(node, out _);
+    public bool Matches(SyntaxNode node) => TryMatch(node, out _);
     
     bool IGreenNodeQuery.MatchesGreen(GreenNode node) => true; // Can match zero items
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         var current = startNode;
         int totalConsumed = 0;
@@ -533,7 +533,7 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
         return true;
     }
     
-    private bool TerminatorMatches(RedNode node)
+    private bool TerminatorMatches(SyntaxNode node)
     {
         // Direct match on the node
         if (_terminator.TryMatch(node, out _))
@@ -672,10 +672,10 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(SyntaxTree tree) => Select(tree.Root);
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
     
     /// <inheritdoc/>
-    public IEnumerable<RedNode> Select(RedNode root)
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         var walker = new TreeWalker(root);
         foreach (var node in walker.DescendantsAndSelf())
@@ -686,7 +686,7 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool Matches(RedNode node) => TryMatch(node, out _);
+    public bool Matches(SyntaxNode node) => TryMatch(node, out _);
     
     bool IGreenNodeQuery.MatchesGreen(GreenNode node)
     {
@@ -694,7 +694,7 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
     }
     
     /// <inheritdoc/>
-    public bool TryMatch(RedNode startNode, out int consumedCount)
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         // First, try to match the inner query
         if (!_inner.TryMatch(startNode, out var innerConsumed))

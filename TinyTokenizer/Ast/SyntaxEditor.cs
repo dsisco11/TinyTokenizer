@@ -112,7 +112,7 @@ public sealed class SyntaxEditor
     /// <param name="target">The node to insert before.</param>
     /// <param name="text">The text to insert (will be parsed into nodes).</param>
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
-    public SyntaxEditor InsertBefore(RedNode target, string text)
+    public SyntaxEditor InsertBefore(SyntaxNode target, string text)
     {
         var pos = CreateInsertionPosition(target, InsertionPoint.Before);
         _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
@@ -122,7 +122,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of text before each of the specified nodes.
     /// </summary>
-    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, string text)
+    public SyntaxEditor InsertBefore(IEnumerable<SyntaxNode> targets, string text)
     {
         foreach (var target in targets)
         {
@@ -137,7 +137,7 @@ public sealed class SyntaxEditor
     /// <param name="target">The node to insert after.</param>
     /// <param name="text">The text to insert (will be parsed into nodes).</param>
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
-    public SyntaxEditor InsertAfter(RedNode target, string text)
+    public SyntaxEditor InsertAfter(SyntaxNode target, string text)
     {
         var pos = CreateInsertionPosition(target, InsertionPoint.After);
         _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
@@ -147,7 +147,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of text after each of the specified nodes.
     /// </summary>
-    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, string text)
+    public SyntaxEditor InsertAfter(IEnumerable<SyntaxNode> targets, string text)
     {
         foreach (var target in targets)
         {
@@ -159,7 +159,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node before the specified target.
     /// </summary>
-    public SyntaxEditor InsertBefore(RedNode target, RedNode nodeToInsert)
+    public SyntaxEditor InsertBefore(SyntaxNode target, SyntaxNode nodeToInsert)
     {
         return InsertBefore(target, [nodeToInsert.Green]);
     }
@@ -167,7 +167,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node before the specified target.
     /// </summary>
-    internal SyntaxEditor InsertBefore(RedNode target, GreenNode nodeToInsert)
+    internal SyntaxEditor InsertBefore(SyntaxNode target, GreenNode nodeToInsert)
     {
         return InsertBefore(target, [nodeToInsert]);
     }
@@ -175,7 +175,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes before the specified target.
     /// </summary>
-    public SyntaxEditor InsertBefore(RedNode target, IEnumerable<RedNode> nodesToInsert)
+    public SyntaxEditor InsertBefore(SyntaxNode target, IEnumerable<SyntaxNode> nodesToInsert)
     {
         return InsertBefore(target, ToGreenNodes(nodesToInsert));
     }
@@ -183,7 +183,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes before the specified target.
     /// </summary>
-    internal SyntaxEditor InsertBefore(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertBefore(SyntaxNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         var pos = CreateInsertionPosition(target, InsertionPoint.Before);
@@ -195,7 +195,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes before each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    public SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<RedNode> nodesToInsert)
+    public SyntaxEditor InsertBefore(IEnumerable<SyntaxNode> targets, IEnumerable<SyntaxNode> nodesToInsert)
     {
         var nodes = ToGreenNodes(nodesToInsert);
         foreach (var target in targets)
@@ -210,7 +210,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes before each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    internal SyntaxEditor InsertBefore(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertBefore(IEnumerable<SyntaxNode> targets, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
@@ -224,7 +224,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node after the specified target.
     /// </summary>
-    public SyntaxEditor InsertAfter(RedNode target, RedNode nodeToInsert)
+    public SyntaxEditor InsertAfter(SyntaxNode target, SyntaxNode nodeToInsert)
     {
         return InsertAfter(target, [nodeToInsert.Green]);
     }
@@ -232,7 +232,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of a single node after the specified target.
     /// </summary>
-    internal SyntaxEditor InsertAfter(RedNode target, GreenNode nodeToInsert)
+    internal SyntaxEditor InsertAfter(SyntaxNode target, GreenNode nodeToInsert)
     {
         return InsertAfter(target, [nodeToInsert]);
     }
@@ -240,7 +240,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes after the specified target.
     /// </summary>
-    public SyntaxEditor InsertAfter(RedNode target, IEnumerable<RedNode> nodesToInsert)
+    public SyntaxEditor InsertAfter(SyntaxNode target, IEnumerable<SyntaxNode> nodesToInsert)
     {
         return InsertAfter(target, ToGreenNodes(nodesToInsert));
     }
@@ -248,7 +248,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues an insertion of nodes after the specified target.
     /// </summary>
-    internal SyntaxEditor InsertAfter(RedNode target, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertAfter(SyntaxNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         var pos = CreateInsertionPosition(target, InsertionPoint.After);
@@ -260,7 +260,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes after each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    public SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<RedNode> nodesToInsert)
+    public SyntaxEditor InsertAfter(IEnumerable<SyntaxNode> targets, IEnumerable<SyntaxNode> nodesToInsert)
     {
         var nodes = ToGreenNodes(nodesToInsert);
         foreach (var target in targets)
@@ -275,7 +275,7 @@ public sealed class SyntaxEditor
     /// Queues an insertion of nodes after each of the specified targets.
     /// The same nodes are inserted at each target position.
     /// </summary>
-    internal SyntaxEditor InsertAfter(IEnumerable<RedNode> targets, IEnumerable<GreenNode> nodesToInsert)
+    internal SyntaxEditor InsertAfter(IEnumerable<SyntaxNode> targets, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
@@ -325,7 +325,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues removal of the specified node.
     /// </summary>
-    public SyntaxEditor Remove(RedNode node)
+    public SyntaxEditor Remove(SyntaxNode node)
     {
         var path = NodePath.FromNode(node);
         _edits.Add(new RemoveEdit(path, node.Position) { SequenceNumber = _sequenceNumber++ });
@@ -335,7 +335,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues removal of all specified nodes.
     /// </summary>
-    public SyntaxEditor Remove(IEnumerable<RedNode> nodes)
+    public SyntaxEditor Remove(IEnumerable<SyntaxNode> nodes)
     {
         foreach (var node in nodes)
         {
@@ -382,7 +382,7 @@ public sealed class SyntaxEditor
     /// The transformer receives the full RedNode, allowing access to content including trivia.
     /// Use <see cref="Edit(INodeQuery, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
-    public SyntaxEditor Replace(INodeQuery query, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(INodeQuery query, Func<SyntaxNode, string> replacer)
     {
         var nodes = query.Select(_tree).ToList();
         
@@ -402,7 +402,7 @@ public sealed class SyntaxEditor
     /// The transformer receives the full RedNode, allowing access to content including trivia.
     /// Use <see cref="Edit(IEnumerable{INodeQuery}, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
-    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(IEnumerable<INodeQuery> queries, Func<SyntaxNode, string> replacer)
     {
         foreach (var query in queries)
         {
@@ -447,7 +447,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with new text.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, string text)
+    public SyntaxEditor Replace(SyntaxNode node, string text)
     {
         var path = NodePath.FromNode(node);
         var (leading, trailing) = GetTrivia(node);
@@ -458,7 +458,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all specified nodes with new text.
     /// </summary>
-    public SyntaxEditor Replace(IEnumerable<RedNode> nodes, string text)
+    public SyntaxEditor Replace(IEnumerable<SyntaxNode> nodes, string text)
     {
         foreach (var node in nodes)
         {
@@ -470,9 +470,9 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node using a transformer function.
     /// The transformer receives the full RedNode, allowing access to content including trivia.
-    /// Use <see cref="Edit(RedNode, Func{string, string})"/> if you want to transform only the content without trivia.
+    /// Use <see cref="Edit(SyntaxNode, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(SyntaxNode node, Func<SyntaxNode, string> replacer)
     {
         var text = replacer(node);
         var path = NodePath.FromNode(node);
@@ -484,9 +484,9 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of all specified nodes using a transformer function.
     /// The transformer receives the full RedNode, allowing access to content including trivia.
-    /// Use <see cref="Edit(IEnumerable{RedNode}, Func{string, string})"/> if you want to transform only the content without trivia.
+    /// Use <see cref="Edit(IEnumerable{SyntaxNode}, Func{string, string})"/> if you want to transform only the content without trivia.
     /// </summary>
-    public SyntaxEditor Replace(IEnumerable<RedNode> nodes, Func<RedNode, string> replacer)
+    public SyntaxEditor Replace(IEnumerable<SyntaxNode> nodes, Func<SyntaxNode, string> replacer)
     {
         foreach (var node in nodes)
         {
@@ -498,7 +498,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with a single node.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, RedNode replacement)
+    public SyntaxEditor Replace(SyntaxNode node, SyntaxNode replacement)
     {
         return Replace(node, [replacement.Green]);
     }
@@ -506,7 +506,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with a single node.
     /// </summary>
-    internal SyntaxEditor Replace(RedNode node, GreenNode replacement)
+    internal SyntaxEditor Replace(SyntaxNode node, GreenNode replacement)
     {
         return Replace(node, [replacement]);
     }
@@ -514,7 +514,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with multiple nodes.
     /// </summary>
-    public SyntaxEditor Replace(RedNode node, IEnumerable<RedNode> replacements)
+    public SyntaxEditor Replace(SyntaxNode node, IEnumerable<SyntaxNode> replacements)
     {
         return Replace(node, ToGreenNodes(replacements));
     }
@@ -522,7 +522,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues replacement of the specified node with multiple nodes.
     /// </summary>
-    internal SyntaxEditor Replace(RedNode node, IEnumerable<GreenNode> replacements)
+    internal SyntaxEditor Replace(SyntaxNode node, IEnumerable<GreenNode> replacements)
     {
         var greenNodes = replacements.ToImmutableArray();
         var path = NodePath.FromNode(node);
@@ -580,7 +580,7 @@ public sealed class SyntaxEditor
     /// </summary>
     /// <param name="node">The node to edit.</param>
     /// <param name="transformer">Function that transforms the node's content (without trivia).</param>
-    public SyntaxEditor Edit(RedNode node, Func<string, string> transformer)
+    public SyntaxEditor Edit(SyntaxNode node, Func<string, string> transformer)
     {
         var path = NodePath.FromNode(node);
         var (leading, trailing) = GetTrivia(node);
@@ -594,7 +594,7 @@ public sealed class SyntaxEditor
     /// Queues a transformation edit of all specified nodes.
     /// The transformer receives each node's content WITHOUT trivia, and trivia is automatically preserved.
     /// </summary>
-    public SyntaxEditor Edit(IEnumerable<RedNode> nodes, Func<string, string> transformer)
+    public SyntaxEditor Edit(IEnumerable<SyntaxNode> nodes, Func<string, string> transformer)
     {
         foreach (var node in nodes)
         {
@@ -612,14 +612,14 @@ public sealed class SyntaxEditor
     /// For leaves, returns the token text. For blocks, returns the full content minus outer trivia.
     /// For syntax nodes (containers), returns full content minus the trivia from first/last children.
     /// </summary>
-    private static string GetContentWithoutTrivia(RedNode node)
+    private static string GetContentWithoutTrivia(SyntaxNode node)
     {
-        if (node is RedLeaf leaf)
+        if (node is SyntaxToken leaf)
         {
             return leaf.Text;
         }
         
-        if (node is RedBlock block)
+        if (node is SyntaxBlock block)
         {
             // For blocks, we want the full content minus leading/trailing trivia
             var fullText = node.ToText();
@@ -660,15 +660,15 @@ public sealed class SyntaxEditor
     /// For blocks, returns the block's trivia.
     /// For syntax nodes (containers), returns trivia from the first child (leading) and last child (trailing).
     /// </summary>
-    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(RedNode node)
+    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(SyntaxNode node)
     {
-        if (node is RedLeaf leaf)
+        if (node is SyntaxToken leaf)
         {
             var greenLeaf = (GreenLeaf)leaf.Green;
             return (greenLeaf.LeadingTrivia, greenLeaf.TrailingTrivia);
         }
         
-        if (node is RedBlock block)
+        if (node is SyntaxBlock block)
         {
             return (block.GreenLeadingTrivia, block.GreenTrailingTrivia);
         }
@@ -706,7 +706,7 @@ public sealed class SyntaxEditor
     /// Creates an InsertionPosition for inserting before or after a target node.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
-    private static InsertionPosition CreateInsertionPosition(RedNode target, InsertionPoint point)
+    private static InsertionPosition CreateInsertionPosition(SyntaxNode target, InsertionPoint point)
     {
         var parent = target.Parent;
         if (parent == null)
@@ -733,7 +733,7 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Converts an enumerable of RedNodes to an ImmutableArray of their underlying GreenNodes.
     /// </summary>
-    private static ImmutableArray<GreenNode> ToGreenNodes(IEnumerable<RedNode> redNodes)
+    private static ImmutableArray<GreenNode> ToGreenNodes(IEnumerable<SyntaxNode> redNodes)
     {
         return redNodes.Select(n => n.Green).ToImmutableArray();
     }

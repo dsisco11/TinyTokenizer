@@ -61,8 +61,9 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
     /// <param name="parent">The parent red node, or null for root.</param>
     /// <param name="position">The absolute position in source text.</param>
     /// <param name="siblingIndex">The index of this node within its parent's children, or -1 if root.</param>
+    /// <param name="tree">The containing syntax tree.</param>
     /// <returns>A new red node wrapping this green node.</returns>
-    public abstract RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1);
+    public abstract SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null);
     
     #region ITextSerializable
     

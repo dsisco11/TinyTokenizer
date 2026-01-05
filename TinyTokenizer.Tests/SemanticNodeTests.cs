@@ -481,7 +481,7 @@ public class SemanticNodeTests
         var tree = SyntaxTree.Parse("a { b }");
         var walker = new TreeWalker(tree.Root);
         
-        var nodes = new List<RedNode>();
+        var nodes = new List<SyntaxNode>();
         while (walker.NextNode() is { } node)
         {
             nodes.Add(node);

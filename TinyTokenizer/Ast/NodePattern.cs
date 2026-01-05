@@ -15,7 +15,7 @@ public readonly struct NodeMatch
     public int Position { get; init; }
     
     /// <summary>The nodes that were captured by the pattern.</summary>
-    public ImmutableArray<RedNode> Parts { get; init; }
+    public ImmutableArray<SyntaxNode> Parts { get; init; }
     
     /// <summary>Number of sibling nodes consumed by this match.</summary>
     public int ConsumedCount { get; init; }
@@ -24,7 +24,7 @@ public readonly struct NodeMatch
     public int Width => Parts.IsDefaultOrEmpty ? 0 : Parts.Sum(p => p.Width);
     
     /// <summary>Creates an empty (failed) match.</summary>
-    public static NodeMatch Empty => new() { Parts = ImmutableArray<RedNode>.Empty };
+    public static NodeMatch Empty => new() { Parts = ImmutableArray<SyntaxNode>.Empty };
     
     /// <summary>Whether this match succeeded (has any parts).</summary>
     public bool IsSuccess => !Parts.IsDefaultOrEmpty && Parts.Length > 0;
@@ -50,7 +50,7 @@ public abstract record NodePattern
     /// <param name="node">The starting node (first sibling to try matching).</param>
     /// <param name="match">The match result if successful.</param>
     /// <returns>True if the pattern matched.</returns>
-    public abstract bool TryMatch(RedNode node, out NodeMatch match);
+    public abstract bool TryMatch(SyntaxNode node, out NodeMatch match);
     
     /// <summary>
     /// Attempts to match this pattern against green nodes starting at the given index.
@@ -128,7 +128,7 @@ public sealed record QueryPattern : NodePattern
     
     public QueryPattern(INodeQuery query) => _query = query;
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
         if (_query.Matches(node))
         {
@@ -163,7 +163,7 @@ public sealed record QueryPattern : NodePattern
     /// Checks if the query matches the trivia of a red node.
     /// Used by RepeatUntilPattern for newline detection.
     /// </summary>
-    internal bool MatchesTrivia(RedNode node)
+    internal bool MatchesTrivia(SyntaxNode node)
     {
         if (_query is not NewlineNodeQuery)
             return false;
@@ -239,9 +239,9 @@ public sealed record SequencePattern : NodePattern
         _parts = patterns.ToImmutableArray();
     }
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
-        var parts = ImmutableArray.CreateBuilder<RedNode>();
+        var parts = ImmutableArray.CreateBuilder<SyntaxNode>();
         var current = node;
         int totalConsumed = 0;
         
@@ -328,7 +328,7 @@ public sealed record AlternativePattern : NodePattern
         _alternatives = alternatives.ToImmutableArray();
     }
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
         foreach (var alt in _alternatives)
         {
@@ -373,7 +373,7 @@ public sealed record OptionalPattern : NodePattern
     
     public OptionalPattern(NodePattern inner) => _inner = inner;
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
         if (_inner.TryMatch(node, out match))
             return true;
@@ -382,7 +382,7 @@ public sealed record OptionalPattern : NodePattern
         match = new NodeMatch
         {
             Position = node.Position,
-            Parts = ImmutableArray<RedNode>.Empty,
+            Parts = ImmutableArray<SyntaxNode>.Empty,
             ConsumedCount = 0
         };
         return true;
@@ -431,9 +431,9 @@ public sealed record RepeatPattern : NodePattern
         _max = max;
     }
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
-        var parts = ImmutableArray.CreateBuilder<RedNode>();
+        var parts = ImmutableArray.CreateBuilder<SyntaxNode>();
         var current = node;
         int count = 0;
         int totalConsumed = 0;
@@ -540,9 +540,9 @@ public sealed record RepeatUntilPattern : NodePattern
         _terminator = terminator;
     }
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
-        var parts = ImmutableArray.CreateBuilder<RedNode>();
+        var parts = ImmutableArray.CreateBuilder<SyntaxNode>();
         var current = node;
         int totalConsumed = 0;
         
@@ -579,7 +579,7 @@ public sealed record RepeatUntilPattern : NodePattern
     /// <summary>
     /// Checks if the terminator matches, including checking trivia for newlines.
     /// </summary>
-    private bool TerminatorMatches(RedNode node)
+    private bool TerminatorMatches(SyntaxNode node)
     {
         // Direct match on the node
         if (_terminator.TryMatch(node, out _))
@@ -674,7 +674,7 @@ public sealed record LookaheadPattern : NodePattern
         _positive = positive;
     }
     
-    public override bool TryMatch(RedNode node, out NodeMatch match)
+    public override bool TryMatch(SyntaxNode node, out NodeMatch match)
     {
         // First, try to match the primary pattern
         if (!_match.TryMatch(node, out var primary))

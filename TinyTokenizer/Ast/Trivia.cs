@@ -34,8 +34,8 @@ namespace TinyTokenizer.Ast;
 /// </code>
 /// </example>
 /// <seealso cref="TriviaKind"/>
-/// <seealso cref="RedLeaf.GetLeadingTrivia"/>
-/// <seealso cref="RedLeaf.GetTrailingTrivia"/>
+/// <seealso cref="SyntaxToken.GetLeadingTrivia"/>
+/// <seealso cref="SyntaxToken.GetTrailingTrivia"/>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public readonly struct Trivia : IEquatable<Trivia>
 {

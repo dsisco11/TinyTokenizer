@@ -224,7 +224,7 @@ public class SyntaxTreeBenchmarks
 
     [Benchmark(Description = "Root Access (lazy red creation)")]
     [BenchmarkCategory("RedNode", "Access")]
-    public RedNode AccessRoot()
+    public SyntaxNode AccessRoot()
     {
         var tree = SyntaxTree.Parse(SmallInput, DefaultSchema);
         return tree.Root;
@@ -251,7 +251,7 @@ public class SyntaxTreeBenchmarks
         return CountAllNodes(LargeTree.Root);
     }
 
-    private static int CountAllNodes(RedNode node)
+    private static int CountAllNodes(SyntaxNode node)
     {
         int count = 1;
         foreach (var child in node.Children)
@@ -271,7 +271,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(SmallTree.Root);
         int count = 0;
-        RedNode? node;
+        SyntaxNode? node;
         while ((node = walker.NextNode()) != null)
         {
             count++;
@@ -285,7 +285,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         int count = 0;
-        RedNode? node;
+        SyntaxNode? node;
         while ((node = walker.NextNode()) != null)
         {
             count++;
@@ -299,7 +299,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(LargeTree.Root);
         int count = 0;
-        RedNode? node;
+        SyntaxNode? node;
         while ((node = walker.NextNode()) != null)
         {
             count++;
@@ -321,7 +321,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root, NodeFilter.Leaves);
         int count = 0;
-        RedNode? node;
+        SyntaxNode? node;
         while ((node = walker.NextNode()) != null)
         {
             count++;
@@ -339,7 +339,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedLeaf>()
+            .OfType<SyntaxToken>()
             .Count();
     }
 
@@ -349,7 +349,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedBlock>()
+            .OfType<SyntaxBlock>()
             .Count();
     }
 
@@ -359,7 +359,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedBlock>()
+            .OfType<SyntaxBlock>()
             .Count(b => b.Kind == NodeKind.BraceBlock);
     }
 

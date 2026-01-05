@@ -31,7 +31,7 @@ public abstract class SemanticNode
     /// <summary>
     /// The first matched node (anchor point for position information).
     /// </summary>
-    public RedNode Anchor => _match.Parts[0];
+    public SyntaxNode Anchor => _match.Parts[0];
     
     /// <summary>
     /// Absolute position in source text (from anchor).
@@ -56,29 +56,29 @@ public abstract class SemanticNode
     /// <summary>
     /// All captured parts from the pattern match.
     /// </summary>
-    public ImmutableArray<RedNode> Parts => _match.Parts;
+    public ImmutableArray<SyntaxNode> Parts => _match.Parts;
     
     /// <summary>
     /// Gets a captured part by index.
     /// </summary>
-    protected RedNode Part(int index) => _match.Parts[index];
+    protected SyntaxNode Part(int index) => _match.Parts[index];
     
     /// <summary>
     /// Gets a captured part by index, cast to the specified type.
     /// </summary>
-    protected T Part<T>(int index) where T : RedNode => (T)_match.Parts[index];
+    protected T Part<T>(int index) where T : SyntaxNode => (T)_match.Parts[index];
     
     /// <summary>
     /// Tries to get a captured part by index, returning null if out of range.
     /// </summary>
-    protected RedNode? TryGetPart(int index) =>
+    protected SyntaxNode? TryGetPart(int index) =>
         index >= 0 && index < _match.Parts.Length ? _match.Parts[index] : null;
     
     /// <summary>
     /// Tries to get a captured part by index, cast to the specified type.
     /// Returns null if out of range or wrong type.
     /// </summary>
-    protected T? TryGetPart<T>(int index) where T : RedNode =>
+    protected T? TryGetPart<T>(int index) where T : SyntaxNode =>
         TryGetPart(index) as T;
     
     /// <summary>
@@ -102,7 +102,7 @@ public sealed class FunctionNameNode : SemanticNode
     public FunctionNameNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The function name node.</summary>
-    public RedLeaf NameNode => Part<RedLeaf>(0);
+    public SyntaxToken NameNode => Part<SyntaxToken>(0);
     
     /// <summary>The function name as text.</summary>
     public string Name => NameNode.Text;
@@ -110,7 +110,7 @@ public sealed class FunctionNameNode : SemanticNode
     /// <summary>
     /// Gets the arguments block following this function name, if present.
     /// </summary>
-    public RedBlock? Arguments => NameNode.NextSibling() as RedBlock;
+    public SyntaxBlock? Arguments => NameNode.NextSibling() as SyntaxBlock;
 }
 
 /// <summary>
@@ -123,16 +123,16 @@ public sealed class ArrayAccessNode : SemanticNode
     public ArrayAccessNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The array/object being accessed.</summary>
-    public RedLeaf TargetNode => Part<RedLeaf>(0);
+    public SyntaxToken TargetNode => Part<SyntaxToken>(0);
     
     /// <summary>The target name as text.</summary>
     public string Target => TargetNode.Text;
     
     /// <summary>The index block (brackets).</summary>
-    public RedBlock IndexBlock => Part<RedBlock>(1);
+    public SyntaxBlock IndexBlock => Part<SyntaxBlock>(1);
     
     /// <summary>The index expression nodes.</summary>
-    public IEnumerable<RedNode> IndexNodes =>
+    public IEnumerable<SyntaxNode> IndexNodes =>
         IndexBlock.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 
@@ -146,13 +146,13 @@ public sealed class PropertyAccessNode : SemanticNode
     public PropertyAccessNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The object being accessed.</summary>
-    public RedLeaf ObjectNode => Part<RedLeaf>(0);
+    public SyntaxToken ObjectNode => Part<SyntaxToken>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The property being accessed.</summary>
-    public RedLeaf PropertyNode => Part<RedLeaf>(2);
+    public SyntaxToken PropertyNode => Part<SyntaxToken>(2);
     
     /// <summary>The property name as text.</summary>
     public string Property => PropertyNode.Text;
@@ -168,22 +168,22 @@ public sealed class MethodCallNode : SemanticNode
     public MethodCallNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The object being called on.</summary>
-    public RedLeaf ObjectNode => Part<RedLeaf>(0);
+    public SyntaxToken ObjectNode => Part<SyntaxToken>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The method being called.</summary>
-    public RedLeaf MethodNode => Part<RedLeaf>(2);
+    public SyntaxToken MethodNode => Part<SyntaxToken>(2);
     
     /// <summary>The method name as text.</summary>
     public string Method => MethodNode.Text;
     
     /// <summary>The arguments block (parentheses).</summary>
-    public RedBlock Arguments => Part<RedBlock>(3);
+    public SyntaxBlock Arguments => Part<SyntaxBlock>(3);
     
     /// <summary>The argument nodes.</summary>
-    public IEnumerable<RedNode> ArgumentNodes =>
+    public IEnumerable<SyntaxNode> ArgumentNodes =>
         Arguments.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 

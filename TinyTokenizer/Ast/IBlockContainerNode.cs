@@ -48,7 +48,7 @@ public interface IBlockContainerNode
     /// <exception cref="InvalidOperationException">
     /// Thrown when name is null and the node has multiple blocks (ambiguous).
     /// </exception>
-    RedBlock GetBlock(string? name = null);
+    SyntaxBlock GetBlock(string? name = null);
 }
 
 /// <summary>

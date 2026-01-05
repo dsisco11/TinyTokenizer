@@ -37,7 +37,7 @@ function test{index}() {{
     /// <summary>
     /// Recursively enumerate all descendants of a node.
     /// </summary>
-    private static IEnumerable<RedNode> GetAllDescendants(RedNode node)
+    private static IEnumerable<SyntaxNode> GetAllDescendants(SyntaxNode node)
     {
         foreach (var child in node.Children)
         {
