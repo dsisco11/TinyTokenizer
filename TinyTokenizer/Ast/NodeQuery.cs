@@ -299,16 +299,8 @@ public sealed record InsertionQuery
         if (parent == null)
             return null; // Can't insert relative to root
         
-        // Find the index of this node in its parent
-        int childIndex = -1;
-        for (int i = 0; i < parent.SlotCount; i++)
-        {
-            if (ReferenceEquals(parent.GetChild(i), node))
-            {
-                childIndex = i;
-                break;
-            }
-        }
+        // Use sibling index directly since red nodes are ephemeral
+        int childIndex = node.SiblingIndex;
         
         if (childIndex < 0)
             return null;

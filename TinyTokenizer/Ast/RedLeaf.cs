@@ -17,8 +17,8 @@ public sealed class RedLeaf : RedNode
     /// <summary>
     /// Creates a new red leaf wrapping a green leaf.
     /// </summary>
-    internal RedLeaf(GreenLeaf green, RedNode? parent, int position, int siblingIndex = -1)
-        : base(green, parent, position, siblingIndex)
+    internal RedLeaf(GreenLeaf green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        : base(green, parent, position, siblingIndex, tree)
     {
     }
     

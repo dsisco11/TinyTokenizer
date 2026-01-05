@@ -130,8 +130,8 @@ internal sealed record GreenBlock : GreenContainer
     protected override int GetLeadingWidth() => OpenerNode.Width; // Opener including its trivia
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1)
-        => new RedBlock(this, parent, position, siblingIndex);
+    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        => new RedBlock(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)

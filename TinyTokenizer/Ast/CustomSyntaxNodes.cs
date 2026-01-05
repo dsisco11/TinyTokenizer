@@ -50,7 +50,7 @@ public sealed class FunctionCallSyntax : SyntaxNode
             return null;
         
         var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index);
+        return greenChild.CreateRed(this, childPosition, index, Tree);
     }
 }
 
@@ -100,7 +100,7 @@ public sealed class ArrayAccessSyntax : SyntaxNode
             return null;
         
         var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index);
+        return greenChild.CreateRed(this, childPosition, index, Tree);
     }
 }
 
@@ -153,7 +153,7 @@ public sealed class PropertyAccessSyntax : SyntaxNode
             return null;
         
         var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index);
+        return greenChild.CreateRed(this, childPosition, index, Tree);
     }
 }
 

@@ -105,7 +105,7 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// <summary>
     /// The red root node. Created lazily and cached until mutation.
     /// </summary>
-    public RedNode Root => _redRoot ??= _greenRoot.CreateRed(null, 0);
+    public RedNode Root => _redRoot ??= _greenRoot.CreateRed(null, 0, -1, this);
     
     /// <summary>
     /// Total width (character count) of the tree.

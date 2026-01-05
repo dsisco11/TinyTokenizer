@@ -22,15 +22,15 @@ public readonly record struct CreationContext
     /// <summary>The index of this node within its parent's children, or -1 if root.</summary>
     public int SiblingIndex { get; init; }
     
-    /// <summary>The schema for type lookup (optional, for schema-based factory resolution).</summary>
-    internal Schema? Schema { get; init; }
+    /// <summary>The containing syntax tree (for accessing Schema and source text).</summary>
+    public SyntaxTree? Tree { get; init; }
     
-    internal CreationContext(GreenNode green, RedNode? parent, int position, int siblingIndex = -1, Schema? schema = null)
+    internal CreationContext(GreenNode green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
         Green = green;
         Parent = parent;
         Position = position;
         SiblingIndex = siblingIndex;
-        Schema = schema;
+        Tree = tree;
     }
 }

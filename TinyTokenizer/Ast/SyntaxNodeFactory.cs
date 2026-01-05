@@ -13,15 +13,15 @@ internal static class SyntaxNodeFactory
     
     /// <summary>
     /// Creates a syntax node of the appropriate type for the green node.
-    /// Uses Schema-based type lookup if available, otherwise falls back to green.RedType.
+    /// Uses Schema-based type lookup.
     /// </summary>
-    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position, int siblingIndex = -1, Schema? schema = null)
+    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, Schema schema, int position, int siblingIndex, SyntaxTree? tree)
     {
-        Type? redType = schema?.GetSyntaxRedType(green.Kind) ?? throw new InvalidOperationException(
-            $"No Schema provided to determine node type for green node of kind '{green.Kind}'.");
+        Type? redType = schema.GetSyntaxRedType(green.Kind) ?? throw new InvalidOperationException(
+            $"No type registered in Schema for green node of kind '{green.Kind}'.");
         
         var factory = GetOrCreateFactory(redType);
-        var context = new CreationContext(green, parent, position, siblingIndex, schema);
+        var context = new CreationContext(green, parent, position, siblingIndex, tree);
         return factory(context);
     }
     

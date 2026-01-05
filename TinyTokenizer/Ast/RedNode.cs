@@ -17,6 +17,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     private readonly RedNode? _parent;
     private readonly int _position;
     private readonly int _siblingIndex;
+    private readonly SyntaxTree? _tree;
 
     /// <summary>
     /// Gets the debugger display string for this node.
@@ -47,12 +48,14 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <param name="parent">The parent red node, or null if this is the root.</param>
     /// <param name="position">The absolute position in source text.</param>
     /// <param name="siblingIndex">The index of this node within its parent's children, or -1 if root.</param>
-    private protected RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1)
+    /// <param name="tree">The containing syntax tree.</param>
+    private protected RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
         _green = green;
         _parent = parent;
         _position = position;
         _siblingIndex = siblingIndex;
+        _tree = tree;
     }
     
     /// <summary>
@@ -61,7 +64,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// </summary>
     /// <param name="context">The creation context containing green node and position info.</param>
     protected RedNode(CreationContext context)
-        : this(context.Green, context.Parent, context.Position, context.SiblingIndex)
+        : this(context.Green, context.Parent, context.Position, context.SiblingIndex, context.Tree)
     {
     }
     
@@ -70,6 +73,9 @@ public abstract class RedNode : IFormattable, ITextSerializable
     
     /// <summary>The parent red node, or null if this is the root.</summary>
     public RedNode? Parent => _parent;
+    
+    /// <summary>The containing syntax tree, or null if created outside a tree context.</summary>
+    public SyntaxTree? Tree => _tree;
     
     /// <summary>Absolute position (character offset) in source text.</summary>
     public int Position => _position;
@@ -97,25 +103,6 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// Children are created lazily and cached.
     /// </summary>
     public abstract RedNode? GetChild(int index);
-    
-    /// <summary>
-    /// Lazy child creation with thread-safe caching.
-    /// </summary>
-    protected T? GetRedChild<T>(ref T? field, int slot) where T : RedNode
-    {
-        if (field != null)
-            return field;
-        
-        var greenChild = _green.GetSlot(slot);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = _position + _green.GetSlotOffset(slot);
-        var redChild = (T)greenChild.CreateRed(this, childPosition, slot);
-        
-        Interlocked.CompareExchange(ref field, redChild, null);
-        return field;
-    }
     
     /// <summary>
     /// Gets a child with type checking, throwing if the child is null or wrong type.

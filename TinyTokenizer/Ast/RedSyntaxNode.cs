@@ -32,8 +32,6 @@ public abstract class SyntaxNode : RedNode
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
         $"{Kind}[{Position}..{EndPosition}] ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
-
-    private readonly RedNode?[] _children;
     
     /// <summary>
     /// Creates a red syntax node from a creation context.
@@ -42,18 +40,22 @@ public abstract class SyntaxNode : RedNode
     protected SyntaxNode(CreationContext context)
         : base(context)
     {
-        _children = new RedNode?[Green.SlotCount];
     }
     
     /// <summary>
-    /// Gets the child at the specified slot index, creating lazily if needed.
+    /// Gets the child at the specified slot index.
     /// </summary>
     public override RedNode? GetChild(int index)
     {
-        if (index < 0 || index >= _children.Length)
+        if (index < 0 || index >= Green.SlotCount)
             return null;
         
-        return GetRedChild(ref _children[index], index);
+        var greenChild = Green.GetSlot(index);
+        if (greenChild == null)
+            return null;
+        
+        var childPosition = Position + Green.GetSlotOffset(index);
+        return greenChild.CreateRed(this, childPosition, index, Tree);
     }
     
     /// <summary>
@@ -63,7 +65,7 @@ public abstract class SyntaxNode : RedNode
     {
         get
         {
-            for (int i = 0; i < _children.Length; i++)
+            for (int i = 0; i < Green.SlotCount; i++)
             {
                 var child = GetChild(i);
                 if (child != null)
@@ -75,5 +77,5 @@ public abstract class SyntaxNode : RedNode
     /// <summary>
     /// Gets the number of child slots in this syntax node.
     /// </summary>
-    public int ChildCount => _children.Length;
+    public int ChildCount => Green.SlotCount;
 }

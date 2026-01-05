@@ -1,5 +1,25 @@
 namespace TinyTokenizer.Ast;
 
+/// <summary>
+/// Compares red nodes by position (not reference).
+/// Used for deduplication since red nodes are ephemeral and recreated on each access.
+/// </summary>
+internal sealed class RedNodePositionComparer : IEqualityComparer<RedNode>
+{
+    public static readonly RedNodePositionComparer Instance = new();
+    
+    private RedNodePositionComparer() { }
+    
+    public bool Equals(RedNode? x, RedNode? y)
+    {
+        if (ReferenceEquals(x, y)) return true;
+        if (x is null || y is null) return false;
+        return x.Position == y.Position && x.Width == y.Width;
+    }
+    
+    public int GetHashCode(RedNode obj) => HashCode.Combine(obj.Position, obj.Width);
+}
+
 #region Kind Query
 
 /// <summary>
@@ -473,7 +493,7 @@ public sealed record UnionNodeQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
         
         foreach (var node in _left.Select(root))
         {
@@ -522,7 +542,7 @@ public sealed record IntersectionNodeQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var leftMatches = new HashSet<RedNode>(_left.Select(root), ReferenceEqualityComparer.Instance);
+        var leftMatches = new HashSet<RedNode>(_left.Select(root), RedNodePositionComparer.Instance);
         
         foreach (var node in _right.Select(root))
         {
@@ -574,7 +594,7 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
         
         foreach (var query in _queries)
         {
@@ -945,7 +965,7 @@ public sealed record ParentQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -999,7 +1019,7 @@ public sealed record AncestorQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(ReferenceEqualityComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -1090,7 +1110,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => 
-        ReferenceEquals(node, _target) && (_predicate == null || _predicate(node));
+        RedNodePositionComparer.Instance.Equals(node, _target) && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => ReferenceEquals(node, _target.Green);
     
@@ -1111,7 +1131,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
         var current = node;
         while (current != null)
         {
-            if (ReferenceEquals(current, root))
+            if (RedNodePositionComparer.Instance.Equals(current, root))
                 return true;
             current = current.Parent;
         }

@@ -69,6 +69,14 @@ public sealed class TreeWalker
     /// <summary>The current node position.</summary>
     public RedNode Current => _current;
     
+    /// <summary>Compares nodes by position (not reference) since red nodes are ephemeral.</summary>
+    private static bool SameNode(RedNode? a, RedNode? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.Position == b.Position && a.Width == b.Width;
+    }
+    
     /// <summary>The filter settings.</summary>
     public NodeFilter WhatToShow => _whatToShow;
     
@@ -81,7 +89,7 @@ public sealed class TreeWalker
     public RedNode? ParentNode()
     {
         var node = _current;
-        while (node != _root && node.Parent != null)
+        while (!SameNode(node, _root) && node.Parent != null)
         {
             node = node.Parent;
             if (AcceptsNode(node))
@@ -162,7 +170,7 @@ public sealed class TreeWalker
         }
         
         // Try next sibling, or ancestor's next sibling
-        while (node != _root)
+        while (!SameNode(node, _root))
         {
             var sibling = GetNextSiblingOf(node);
             if (sibling != null)
@@ -219,7 +227,7 @@ public sealed class TreeWalker
         }
         
         // Try parent
-        if (node != _root && node.Parent != null)
+        if (!SameNode(node, _root) && node.Parent != null)
         {
             var result = TestNode(node.Parent);
             if (result == FilterResult.Accept)
@@ -279,7 +287,7 @@ public sealed class TreeWalker
         {
             if (AcceptsNode(node))
                 yield return node;
-            if (node == _root)
+            if (SameNode(node, _root))
                 break;
             node = node.Parent;
         }
@@ -363,7 +371,7 @@ public sealed class TreeWalker
             if (sibling == null)
             {
                 // Move to parent and try its sibling
-                if (node.Parent == null || node.Parent == _root)
+                if (node.Parent == null || SameNode(node.Parent, _root))
                     return null;
                 node = node.Parent;
                 continue;
@@ -428,19 +436,12 @@ public sealed class TreeWalker
             return null;
         
         var parent = node.Parent;
-        bool foundCurrent = false;
+        var siblingIndex = node.SiblingIndex;
         
-        for (int i = 0; i < parent.SlotCount; i++)
+        // If sibling index is valid, just get the next sibling directly
+        if (siblingIndex >= 0 && siblingIndex < parent.SlotCount - 1)
         {
-            var child = parent.GetChild(i);
-            if (child == null)
-                continue;
-            
-            if (foundCurrent)
-                return child;
-            
-            if (ReferenceEquals(child, node))
-                foundCurrent = true;
+            return parent.GetChild(siblingIndex + 1);
         }
         
         return null;
@@ -452,18 +453,12 @@ public sealed class TreeWalker
             return null;
         
         var parent = node.Parent;
-        RedNode? previous = null;
+        var siblingIndex = node.SiblingIndex;
         
-        for (int i = 0; i < parent.SlotCount; i++)
+        // If sibling index is valid and not the first, get the previous sibling directly
+        if (siblingIndex > 0)
         {
-            var child = parent.GetChild(i);
-            if (child == null)
-                continue;
-            
-            if (ReferenceEquals(child, node))
-                return previous;
-            
-            previous = child;
+            return parent.GetChild(siblingIndex - 1);
         }
         
         return null;

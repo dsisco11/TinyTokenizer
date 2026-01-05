@@ -74,17 +74,13 @@ public readonly struct NodePath : IEquatable<NodePath>
         
         while (current.Parent != null)
         {
-            // Find our index in parent
-            var parent = current.Parent;
-            for (int i = 0; i < parent.SlotCount; i++)
+            // Use sibling index directly since red nodes are ephemeral
+            var siblingIndex = current.SiblingIndex;
+            if (siblingIndex >= 0)
             {
-                if (ReferenceEquals(parent.GetChild(i), current))
-                {
-                    indices.Push(i);
-                    break;
-                }
+                indices.Push(siblingIndex);
             }
-            current = parent;
+            current = current.Parent;
         }
         
         // Stack enumeration is LIFO (last pushed = first yielded)

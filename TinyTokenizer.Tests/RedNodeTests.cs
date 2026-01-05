@@ -151,15 +151,23 @@ public class RedNodeTests
     }
 
     [Fact]
-    public void GetChild_ReturnsSameInstanceOnRepeatedCalls()
+    public void GetChild_ReturnsEquivalentNodesOnRepeatedCalls()
     {
+        // Red nodes are ephemeral - each GetChild call creates a new instance
+        // but they represent the same position in the tree
         var tree = SyntaxTree.Parse("{child}");
         var block = tree.Root.Children.First();
         
         var child1 = block.GetChild(0);
         var child2 = block.GetChild(0);
         
-        Assert.Same(child1, child2);
+        // Not same instance (red nodes are not cached)
+        Assert.NotSame(child1, child2);
+        
+        // But equivalent by position
+        Assert.Equal(child1!.Position, child2!.Position);
+        Assert.Equal(child1.Width, child2.Width);
+        Assert.Equal(child1.ToText(), child2.ToText());
     }
 
     [Fact]

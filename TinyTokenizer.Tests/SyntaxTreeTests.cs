@@ -236,7 +236,10 @@ public class SyntaxTreeTests
             var path = NodePath.FromNode(leaf);
             var navigated = path.Navigate(tree.Root);
             
-            Assert.Same(leaf, navigated);
+            // Red nodes are ephemeral - check position equality, not reference
+            Assert.NotNull(navigated);
+            Assert.Equal(leaf.Position, navigated.Position);
+            Assert.Equal(leaf.Width, navigated.Width);
         }
     }
     

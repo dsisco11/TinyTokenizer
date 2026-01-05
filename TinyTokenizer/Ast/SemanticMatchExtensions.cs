@@ -246,8 +246,11 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     public override bool Matches(RedNode node) => 
         node is T typed && (_predicate == null || _predicate(typed));
     
+    // MatchesGreen requires a Schema to resolve Type -> NodeKind mapping.
+    // Since we don't have schema context here, we conservatively return true for 
+    // GreenSyntaxNode instances and let the red-level Matches() do final type checking.
     internal override bool MatchesGreen(GreenNode node) => 
-        node is GreenSyntaxNode gsn && gsn.RedType == typeof(T);
+        node is GreenSyntaxNode;
     
     /// <summary>
     /// Filters by a strongly-typed predicate.

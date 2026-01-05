@@ -13,19 +13,12 @@ public sealed class RedBlock : RedNode
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
         $"{Kind}[{Position}..{EndPosition}] '{Opener}' ({SlotCount} children) \"{Truncate(ToText(), 20)}\"";
-
-    // Lazy child cache - initialized on first child access
-    private RedNode?[]? _children;
-    
-    // Lazy opener/closer red nodes
-    private RedLeaf? _openerNode;
-    private RedLeaf? _closerNode;
     
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1)
-        : base(green, parent, position, siblingIndex)
+    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+        : base(green, parent, position, siblingIndex, tree)
     {
     }
     
@@ -39,31 +32,15 @@ public sealed class RedBlock : RedNode
     public char Closer => Green.Closer;
     
     /// <summary>The opening delimiter node with its trivia.</summary>
-    public RedLeaf OpenerNode
-    {
-        get
-        {
-            if (_openerNode == null)
-            {
-                var node = (RedLeaf)Green.OpenerNode.CreateRed(this, Position);
-                Interlocked.CompareExchange(ref _openerNode, node, null);
-            }
-            return _openerNode!;
-        }
-    }
+    public RedLeaf OpenerNode => (RedLeaf)Green.OpenerNode.CreateRed(this, Position, -1, Tree);
     
     /// <summary>The closing delimiter node with its trivia.</summary>
     public RedLeaf CloserNode
     {
         get
         {
-            if (_closerNode == null)
-            {
-                var closerPosition = EndPosition - Green.CloserNode.Width;
-                var node = (RedLeaf)Green.CloserNode.CreateRed(this, closerPosition);
-                Interlocked.CompareExchange(ref _closerNode, node, null);
-            }
-            return _closerNode!;
+            var closerPosition = EndPosition - Green.CloserNode.Width;
+            return (RedLeaf)Green.CloserNode.CreateRed(this, closerPosition, -1, Tree);
         }
     }
     
@@ -168,25 +145,12 @@ public sealed class RedBlock : RedNode
         if (index < 0 || index >= Green.SlotCount)
             return null;
         
-        // Lazy init the child array
-        _children ??= new RedNode?[Green.SlotCount];
-        
-        // Check cache
-        if (_children[index] != null)
-            return _children[index];
-        
-        // Get green child
         var greenChild = Green.GetSlot(index);
         if (greenChild == null)
             return null;
         
-        // Compute position and create red child
         var childPosition = Position + Green.GetSlotOffset(index);
-        var redChild = greenChild.CreateRed(this, childPosition, index);
-        
-        // Cache with thread-safe exchange
-        Interlocked.CompareExchange(ref _children[index], redChild, null);
-        return _children[index];
+        return greenChild.CreateRed(this, childPosition, index, Tree);
     }
     
     /// <summary>
@@ -248,14 +212,34 @@ public sealed class RedBlock : RedNode
     }
     
     /// <summary>
-    /// Finds the index of a child node.
+    /// Finds the index of a child node by position.
+    /// Since red nodes are ephemeral, comparison is done by position and width.
     /// </summary>
     public int IndexOf(RedNode child)
     {
+        // First check if the child has a valid sibling index from its parent
+        if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)
+        {
+            // Verify it's actually from this block by checking position
+            var candidate = GetChild(child.SiblingIndex);
+            if (candidate != null && 
+                candidate.Position == child.Position && 
+                candidate.Width == child.Width)
+            {
+                return child.SiblingIndex;
+            }
+        }
+        
+        // Fall back to position-based search
         for (int i = 0; i < ChildCount; i++)
         {
-            if (ReferenceEquals(GetChild(i), child))
+            var candidate = GetChild(i);
+            if (candidate != null && 
+                candidate.Position == child.Position && 
+                candidate.Width == child.Width)
+            {
                 return i;
+            }
         }
         return -1;
     }
