@@ -75,9 +75,10 @@ internal sealed record GreenSyntaxNode : GreenContainer
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
-        var schema = tree?.Schema ?? throw new InvalidOperationException(
-            "GreenSyntaxNode.CreateRed requires a SyntaxTree with an attached Schema to resolve the concrete type.");
-        return SyntaxNodeFactory.Create(this, parent, schema, position, siblingIndex, tree);
+        if (tree is null)
+            throw new InvalidOperationException(
+                "GreenSyntaxNode.CreateRed requires a SyntaxTree to resolve the concrete type.");
+        return SyntaxNodeFactory.Create(this, parent, position, siblingIndex, tree);
     }
     
     #region Structural Sharing Mutations
