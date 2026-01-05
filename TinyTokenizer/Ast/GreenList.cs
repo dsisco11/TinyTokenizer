@@ -157,18 +157,4 @@ public sealed class RedList : RedNode
     
     /// <summary>Number of children.</summary>
     public int ChildCount => Green.SlotCount;
-    
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= Green.SlotCount)
-            return null;
-        
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index, Tree);
-    }
 }

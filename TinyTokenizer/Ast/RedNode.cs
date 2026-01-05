@@ -100,9 +100,19 @@ public abstract class RedNode : IFormattable, ITextSerializable
     
     /// <summary>
     /// Gets the child at the specified slot index.
-    /// Children are created lazily and cached.
+    /// Red nodes are created on demand (not cached) since they are ephemeral.
     /// </summary>
-    public abstract RedNode? GetChild(int index);
+    /// <param name="index">The slot index.</param>
+    /// <returns>The child red node, or null if the index is out of range or the slot is empty.</returns>
+    public virtual RedNode? GetChild(int index)
+    {
+        var greenChild = _green.GetSlot(index);
+        if (greenChild == null)
+            return null;
+        
+        var childPosition = _position + _green.GetSlotOffset(index);
+        return greenChild.CreateRed(this, childPosition, index, _tree);
+    }
     
     /// <summary>
     /// Gets a child with type checking, throwing if the child is null or wrong type.

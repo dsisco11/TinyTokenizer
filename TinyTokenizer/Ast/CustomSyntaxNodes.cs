@@ -38,20 +38,6 @@ public sealed class FunctionCallSyntax : SyntaxNode
     /// </summary>
     public IEnumerable<RedNode> ArgumentNodes =>
         Arguments.Children.Where(c => c.Kind != NodeKind.Symbol);
-    
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= SlotCount)
-            return null;
-        
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index, Tree);
-    }
 }
 
 /// <summary>
@@ -88,20 +74,6 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     /// </summary>
     public IEnumerable<RedNode> IndexNodes =>
         IndexBlock.Children.Where(c => c.Kind != NodeKind.Symbol);
-    
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= SlotCount)
-            return null;
-        
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index, Tree);
-    }
 }
 
 /// <summary>
@@ -141,20 +113,6 @@ public sealed class PropertyAccessSyntax : SyntaxNode
     
     /// <summary>The full member access path (e.g., "obj.property").</summary>
     public string FullPath => $"{Object}.{Property}";
-    
-    /// <inheritdoc/>
-    public override RedNode? GetChild(int index)
-    {
-        if (index < 0 || index >= SlotCount)
-            return null;
-        
-        var greenChild = Green.GetSlot(index);
-        if (greenChild == null)
-            return null;
-        
-        var childPosition = Position + Green.GetSlotOffset(index);
-        return greenChild.CreateRed(this, childPosition, index, Tree);
-    }
 }
 
 #endregion
