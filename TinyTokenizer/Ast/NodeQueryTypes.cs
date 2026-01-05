@@ -1,23 +1,25 @@
+using System.Runtime.CompilerServices;
+
 namespace TinyTokenizer.Ast;
 
 /// <summary>
-/// Compares red nodes by position (not reference).
-/// Used for deduplication since red nodes are ephemeral and recreated on each access.
+/// Compares red nodes by their underlying green node identity.
+/// Used for deduplication since red nodes are ephemeral but wrap the same green nodes.
 /// </summary>
-internal sealed class RedNodePositionComparer : IEqualityComparer<RedNode>
+internal sealed class RedNodeGreenComparer : IEqualityComparer<RedNode>
 {
-    public static readonly RedNodePositionComparer Instance = new();
+    public static readonly RedNodeGreenComparer Instance = new();
     
-    private RedNodePositionComparer() { }
+    private RedNodeGreenComparer() { }
     
     public bool Equals(RedNode? x, RedNode? y)
     {
         if (ReferenceEquals(x, y)) return true;
         if (x is null || y is null) return false;
-        return x.Position == y.Position && x.Width == y.Width;
+        return ReferenceEquals(x.Green, y.Green);
     }
     
-    public int GetHashCode(RedNode obj) => HashCode.Combine(obj.Position, obj.Width);
+    public int GetHashCode(RedNode obj) => RuntimeHelpers.GetHashCode(obj.Green);
 }
 
 #region Kind Query
@@ -493,7 +495,7 @@ public sealed record UnionNodeQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodeGreenComparer.Instance);
         
         foreach (var node in _left.Select(root))
         {
@@ -542,7 +544,7 @@ public sealed record IntersectionNodeQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var leftMatches = new HashSet<RedNode>(_left.Select(root), RedNodePositionComparer.Instance);
+        var leftMatches = new HashSet<RedNode>(_left.Select(root), RedNodeGreenComparer.Instance);
         
         foreach (var node in _right.Select(root))
         {
@@ -594,7 +596,7 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodeGreenComparer.Instance);
         
         foreach (var query in _queries)
         {
@@ -965,7 +967,7 @@ public sealed record ParentQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodeGreenComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -1019,7 +1021,7 @@ public sealed record AncestorQuery : INodeQuery
     /// <inheritdoc/>
     public IEnumerable<RedNode> Select(RedNode root)
     {
-        var seen = new HashSet<RedNode>(RedNodePositionComparer.Instance);
+        var seen = new HashSet<RedNode>(RedNodeGreenComparer.Instance);
         var walker = new TreeWalker(root);
         
         foreach (var node in walker.DescendantsAndSelf())
@@ -1110,7 +1112,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     
     /// <inheritdoc/>
     public override bool Matches(RedNode node) => 
-        RedNodePositionComparer.Instance.Equals(node, _target) && (_predicate == null || _predicate(node));
+        RedNodeGreenComparer.Instance.Equals(node, _target) && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => ReferenceEquals(node, _target.Green);
     
@@ -1131,7 +1133,7 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
         var current = node;
         while (current != null)
         {
-            if (RedNodePositionComparer.Instance.Equals(current, root))
+            if (RedNodeGreenComparer.Instance.Equals(current, root))
                 return true;
             current = current.Parent;
         }

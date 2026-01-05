@@ -212,31 +212,27 @@ public sealed class RedBlock : RedNode
     }
     
     /// <summary>
-    /// Finds the index of a child node by position.
-    /// Since red nodes are ephemeral, comparison is done by position and width.
+    /// Finds the index of a child node by green node identity.
+    /// Since red nodes are ephemeral, comparison is done by underlying green node.
     /// </summary>
     public int IndexOf(RedNode child)
     {
         // First check if the child has a valid sibling index from its parent
         if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)
         {
-            // Verify it's actually from this block by checking position
+            // Verify it's actually from this block by checking green identity
             var candidate = GetChild(child.SiblingIndex);
-            if (candidate != null && 
-                candidate.Position == child.Position && 
-                candidate.Width == child.Width)
+            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
             {
                 return child.SiblingIndex;
             }
         }
         
-        // Fall back to position-based search
+        // Fall back to green node search
         for (int i = 0; i < ChildCount; i++)
         {
             var candidate = GetChild(i);
-            if (candidate != null && 
-                candidate.Position == child.Position && 
-                candidate.Width == child.Width)
+            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
             {
                 return i;
             }

@@ -69,12 +69,12 @@ public sealed class TreeWalker
     /// <summary>The current node position.</summary>
     public RedNode Current => _current;
     
-    /// <summary>Compares nodes by position (not reference) since red nodes are ephemeral.</summary>
+    /// <summary>Compares nodes by their underlying green node identity since red nodes are ephemeral.</summary>
     private static bool SameNode(RedNode? a, RedNode? b)
     {
         if (ReferenceEquals(a, b)) return true;
         if (a is null || b is null) return false;
-        return a.Position == b.Position && a.Width == b.Width;
+        return ReferenceEquals(a.Green, b.Green);
     }
     
     /// <summary>The filter settings.</summary>
