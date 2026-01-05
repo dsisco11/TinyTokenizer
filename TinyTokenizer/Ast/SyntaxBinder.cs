@@ -113,16 +113,30 @@ public sealed class SyntaxBinder
     /// </summary>
     private GreenNode BindNode(GreenNode node)
     {
+        // Skip pattern matching for already-bound syntax nodes to prevent double-wrapping.
+        // GreenSyntaxNode represents an already-recognized syntax construct.
+        // We still recurse into children (to handle nested edits) but skip ProcessChildSequence
+        // which would otherwise re-match the same patterns and wrap children again.
+        if (node is GreenSyntaxNode syntaxNode)
+        {
+            var boundChildren = BindChildren(syntaxNode);
+            if (!ChildrenEqual(GetOriginalChildren(syntaxNode), boundChildren))
+            {
+                return new GreenSyntaxNode(syntaxNode.Kind, boundChildren);
+            }
+            return node;
+        }
+        
         // First, recursively bind children
-        var boundChildren = BindChildren(node);
+        var boundChildren2 = BindChildren(node);
         
         // If this node has children, try to match patterns within its children
-        if (boundChildren.Length > 0)
+        if (boundChildren2.Length > 0)
         {
-            var processedChildren = ProcessChildSequence(boundChildren);
+            var processedChildren = ProcessChildSequence(boundChildren2);
             
             // Rebuild node with processed children if any changed
-            if (!ChildrenEqual(boundChildren, processedChildren))
+            if (!ChildrenEqual(boundChildren2, processedChildren))
             {
                 return RebuildNode(node, processedChildren);
             }
