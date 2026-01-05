@@ -69,13 +69,11 @@ public sealed class TreeWalker
     /// <summary>The current node position.</summary>
     public SyntaxNode Current => _current;
     
-    /// <summary>Compares nodes by their underlying green node identity since red nodes are ephemeral.</summary>
-    private static bool SameNode(SyntaxNode? a, SyntaxNode? b)
-    {
-        if (ReferenceEquals(a, b)) return true;
-        if (a is null || b is null) return false;
-        return ReferenceEquals(a.Green, b.Green);
-    }
+    /// <summary>
+    /// Compares nodes for equality.
+    /// Uses SyntaxNode's Equals which compares by green node identity and position.
+    /// </summary>
+    private static bool SameNode(SyntaxNode? a, SyntaxNode? b) => a == b;
     
     /// <summary>The filter settings.</summary>
     public NodeFilter WhatToShow => _whatToShow;

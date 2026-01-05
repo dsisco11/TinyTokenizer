@@ -198,27 +198,27 @@ public sealed class SyntaxBlock : SyntaxNode
     }
     
     /// <summary>
-    /// Finds the index of a child node by green node identity.
-    /// Since red nodes are ephemeral, comparison is done by underlying green node.
+    /// Finds the index of a child node.
+    /// Uses SyntaxNode equality which compares by green node identity and position.
     /// </summary>
     public int IndexOf(SyntaxNode child)
     {
         // First check if the child has a valid sibling index from its parent
         if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)
         {
-            // Verify it's actually from this block by checking green identity
+            // Verify it's actually from this block
             var candidate = GetChild(child.SiblingIndex);
-            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
+            if (candidate == child)
             {
                 return child.SiblingIndex;
             }
         }
         
-        // Fall back to green node search
+        // Fall back to linear search
         for (int i = 0; i < ChildCount; i++)
         {
             var candidate = GetChild(i);
-            if (candidate != null && ReferenceEquals(candidate.Green, child.Green))
+            if (candidate == child)
             {
                 return i;
             }
