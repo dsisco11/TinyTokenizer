@@ -51,9 +51,9 @@ public readonly struct NodePath : IEquatable<NodePath>
     /// </summary>
     /// <param name="root">The root node to start from.</param>
     /// <returns>The node at this path, or null if the path is invalid.</returns>
-    public RedNode? Navigate(RedNode root)
+    public SyntaxNode? Navigate(SyntaxNode root)
     {
-        RedNode current = root;
+        SyntaxNode current = root;
         foreach (var index in Indices)
         {
             var child = current.GetChild(index);
@@ -67,7 +67,7 @@ public readonly struct NodePath : IEquatable<NodePath>
     /// <summary>
     /// Builds a path from root to the specified node.
     /// </summary>
-    public static NodePath FromNode(RedNode node)
+    public static NodePath FromNode(SyntaxNode node)
     {
         var indices = new Stack<int>();
         var current = node;

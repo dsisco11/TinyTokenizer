@@ -6,7 +6,7 @@ namespace TinyTokenizer.Ast;
 /// Red node wrapper for the root token list.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedList : RedNode
+public sealed class RedList : SyntaxNode
 {
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
@@ -15,7 +15,7 @@ public sealed class RedList : RedNode
     /// <summary>
     /// Creates a new red list.
     /// </summary>
-    internal RedList(GreenList green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    internal RedList(GreenList green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
         : base(green, parent, position, siblingIndex, tree)
     {
     }

@@ -73,7 +73,7 @@ internal sealed record GreenSyntaxNode : GreenContainer
     }
     
     /// <inheritdoc/>
-    public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
         if (tree is null)
             throw new InvalidOperationException(

@@ -28,18 +28,18 @@ public interface INodeQuery
     /// <summary>
     /// Selects all nodes matching this query from the tree.
     /// </summary>
-    IEnumerable<RedNode> Select(SyntaxTree tree);
+    IEnumerable<SyntaxNode> Select(SyntaxTree tree);
     
     /// <summary>
     /// Selects all nodes matching this query from a subtree.
     /// </summary>
-    IEnumerable<RedNode> Select(RedNode root);
+    IEnumerable<SyntaxNode> Select(SyntaxNode root);
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
     /// For sequence queries, returns true if the sequence can start at this node.
     /// </summary>
-    bool Matches(RedNode node);
+    bool Matches(SyntaxNode node);
     
     /// <summary>
     /// Attempts to match this query starting at the given node, consuming siblings.
@@ -47,7 +47,7 @@ public interface INodeQuery
     /// <param name="startNode">The first sibling node to try matching.</param>
     /// <param name="consumedCount">Number of sibling nodes consumed if matched.</param>
     /// <returns>True if the query matched.</returns>
-    bool TryMatch(RedNode startNode, out int consumedCount);
+    bool TryMatch(SyntaxNode startNode, out int consumedCount);
 }
 
 /// <summary>
@@ -61,17 +61,17 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// <summary>
     /// Selects all nodes matching this query from the tree.
     /// </summary>
-    public abstract IEnumerable<RedNode> Select(SyntaxTree tree);
+    public abstract IEnumerable<SyntaxNode> Select(SyntaxTree tree);
     
     /// <summary>
     /// Selects all nodes matching this query from a subtree.
     /// </summary>
-    public abstract IEnumerable<RedNode> Select(RedNode root);
+    public abstract IEnumerable<SyntaxNode> Select(SyntaxNode root);
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
     /// </summary>
-    public abstract bool Matches(RedNode node);
+    public abstract bool Matches(SyntaxNode node);
     
     /// <summary>
     /// Tests whether a green node matches this query's criteria.
@@ -86,7 +86,7 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// Default implementation for single-node queries: matches one node, consumes 1.
     /// Override for sequence queries that consume multiple siblings.
     /// </summary>
-    public virtual bool TryMatch(RedNode startNode, out int consumedCount)
+    public virtual bool TryMatch(SyntaxNode startNode, out int consumedCount)
     {
         if (Matches(startNode))
         {
@@ -119,7 +119,7 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     #region CRTP Factory Methods
     
     /// <summary>Creates a filtered version of this query.</summary>
-    protected abstract TSelf CreateFiltered(Func<RedNode, bool> predicate);
+    protected abstract TSelf CreateFiltered(Func<SyntaxNode, bool> predicate);
     
     /// <summary>Creates a version selecting only the first match.</summary>
     protected abstract TSelf CreateFirst();
@@ -178,7 +178,7 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// <summary>
     /// Adds a predicate filter to this query.
     /// </summary>
-    public TSelf Where(Func<RedNode, bool> predicate) => CreateFiltered(predicate);
+    public TSelf Where(Func<SyntaxNode, bool> predicate) => CreateFiltered(predicate);
     
     /// <summary>
     /// Filters to leaf nodes with exact text match.
@@ -293,7 +293,7 @@ public sealed record InsertionQuery
         }
     }
     
-    private InsertionPosition? ResolvePosition(RedNode node)
+    private InsertionPosition? ResolvePosition(SyntaxNode node)
     {
         var parent = node.Parent;
         if (parent == null)
@@ -331,7 +331,7 @@ public sealed record InsertionQuery
         };
     }
     
-    private static InsertionPosition ResolveNamedBlockPosition(RedNode syntaxNode, RedBlock block, bool isStart)
+    private static InsertionPosition ResolveNamedBlockPosition(SyntaxNode syntaxNode, RedBlock block, bool isStart)
     {
         var blockPath = NodePath.FromNode(block);
         
@@ -349,7 +349,7 @@ public sealed record InsertionQuery
         }
     }
     
-    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(RedNode node)
+    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetNodeTrivia(SyntaxNode node)
     {
         return node.Green switch
         {

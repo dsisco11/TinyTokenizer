@@ -31,7 +31,7 @@ public abstract class SemanticNode
     /// <summary>
     /// The first matched node (anchor point for position information).
     /// </summary>
-    public RedNode Anchor => _match.Parts[0];
+    public SyntaxNode Anchor => _match.Parts[0];
     
     /// <summary>
     /// Absolute position in source text (from anchor).
@@ -56,29 +56,29 @@ public abstract class SemanticNode
     /// <summary>
     /// All captured parts from the pattern match.
     /// </summary>
-    public ImmutableArray<RedNode> Parts => _match.Parts;
+    public ImmutableArray<SyntaxNode> Parts => _match.Parts;
     
     /// <summary>
     /// Gets a captured part by index.
     /// </summary>
-    protected RedNode Part(int index) => _match.Parts[index];
+    protected SyntaxNode Part(int index) => _match.Parts[index];
     
     /// <summary>
     /// Gets a captured part by index, cast to the specified type.
     /// </summary>
-    protected T Part<T>(int index) where T : RedNode => (T)_match.Parts[index];
+    protected T Part<T>(int index) where T : SyntaxNode => (T)_match.Parts[index];
     
     /// <summary>
     /// Tries to get a captured part by index, returning null if out of range.
     /// </summary>
-    protected RedNode? TryGetPart(int index) =>
+    protected SyntaxNode? TryGetPart(int index) =>
         index >= 0 && index < _match.Parts.Length ? _match.Parts[index] : null;
     
     /// <summary>
     /// Tries to get a captured part by index, cast to the specified type.
     /// Returns null if out of range or wrong type.
     /// </summary>
-    protected T? TryGetPart<T>(int index) where T : RedNode =>
+    protected T? TryGetPart<T>(int index) where T : SyntaxNode =>
         TryGetPart(index) as T;
     
     /// <summary>
@@ -132,7 +132,7 @@ public sealed class ArrayAccessNode : SemanticNode
     public RedBlock IndexBlock => Part<RedBlock>(1);
     
     /// <summary>The index expression nodes.</summary>
-    public IEnumerable<RedNode> IndexNodes =>
+    public IEnumerable<SyntaxNode> IndexNodes =>
         IndexBlock.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 
@@ -183,7 +183,7 @@ public sealed class MethodCallNode : SemanticNode
     public RedBlock Arguments => Part<RedBlock>(3);
     
     /// <summary>The argument nodes.</summary>
-    public IEnumerable<RedNode> ArgumentNodes =>
+    public IEnumerable<SyntaxNode> ArgumentNodes =>
         Arguments.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 

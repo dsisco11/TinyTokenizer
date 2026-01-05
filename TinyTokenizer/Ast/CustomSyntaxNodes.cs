@@ -36,7 +36,7 @@ public sealed class FunctionCallSyntax : SyntaxNode
     /// <summary>
     /// Gets the argument nodes (children of the arguments block, excluding symbols).
     /// </summary>
-    public IEnumerable<RedNode> ArgumentNodes =>
+    public IEnumerable<SyntaxNode> ArgumentNodes =>
         Arguments.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 
@@ -72,7 +72,7 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     /// <summary>
     /// Gets the index nodes (children of the index block, excluding symbols).
     /// </summary>
-    public IEnumerable<RedNode> IndexNodes =>
+    public IEnumerable<SyntaxNode> IndexNodes =>
         IndexBlock.Children.Where(c => c.Kind != NodeKind.Symbol);
 }
 

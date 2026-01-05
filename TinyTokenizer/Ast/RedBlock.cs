@@ -8,7 +8,7 @@ namespace TinyTokenizer.Ast;
 /// Provides position-aware access to children with lazy creation and caching.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedBlock : RedNode
+public sealed class RedBlock : SyntaxNode
 {
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
@@ -17,7 +17,7 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    internal RedBlock(GreenBlock green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
         : base(green, parent, position, siblingIndex, tree)
     {
     }
@@ -142,7 +142,7 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Gets all children as an enumerable (lazy creation).
     /// </summary>
-    public new IEnumerable<RedNode> Children
+    public new IEnumerable<SyntaxNode> Children
     {
         get
         {
@@ -158,7 +158,7 @@ public sealed class RedBlock : RedNode
     /// <summary>
     /// Gets children of a specific kind.
     /// </summary>
-    public IEnumerable<RedNode> ChildrenOfKind(NodeKind kind)
+    public IEnumerable<SyntaxNode> ChildrenOfKind(NodeKind kind)
     {
         foreach (var child in Children)
         {
@@ -201,7 +201,7 @@ public sealed class RedBlock : RedNode
     /// Finds the index of a child node by green node identity.
     /// Since red nodes are ephemeral, comparison is done by underlying green node.
     /// </summary>
-    public int IndexOf(RedNode child)
+    public int IndexOf(SyntaxNode child)
     {
         // First check if the child has a valid sibling index from its parent
         if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)

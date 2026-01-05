@@ -94,7 +94,7 @@ public class GlslEditorTests
         /// <summary>
         /// Gets all children after the directive tag (the arguments).
         /// </summary>
-        public IEnumerable<RedNode> Arguments => Children.Skip(1);
+        public IEnumerable<SyntaxNode> Arguments => Children.Skip(1);
         
         /// <summary>
         /// Gets the arguments as a string.

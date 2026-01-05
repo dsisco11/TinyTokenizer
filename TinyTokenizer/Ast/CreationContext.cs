@@ -14,7 +14,7 @@ public readonly record struct CreationContext
     internal GreenNode Green { get; init; }
     
     /// <summary>The parent node, or null if this is the root.</summary>
-    public RedNode? Parent { get; init; }
+    public SyntaxNode? Parent { get; init; }
     
     /// <summary>The absolute position in the source text.</summary>
     public int Position { get; init; }
@@ -25,7 +25,7 @@ public readonly record struct CreationContext
     /// <summary>The containing syntax tree (for accessing Schema and source text).</summary>
     public SyntaxTree? Tree { get; init; }
     
-    internal CreationContext(GreenNode green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    internal CreationContext(GreenNode green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
         Green = green;
         Parent = parent;

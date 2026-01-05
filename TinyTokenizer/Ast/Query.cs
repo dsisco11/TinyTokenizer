@@ -303,7 +303,7 @@ public static class Query
     /// editor.Replace(Query.Exact(node), "newValue");
     /// </code>
     /// </example>
-    public static ExactNodeQuery Exact(RedNode node) => new ExactNodeQuery(node);
+    public static ExactNodeQuery Exact(SyntaxNode node) => new ExactNodeQuery(node);
     
     #endregion
     

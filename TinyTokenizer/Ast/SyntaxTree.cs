@@ -13,7 +13,7 @@ namespace TinyTokenizer.Ast;
 public class SyntaxTree : IFormattable, ITextSerializable
 {
     private GreenNode _greenRoot;
-    private RedNode? _redRoot;
+    private SyntaxNode? _redRoot;
     private readonly Stack<GreenNode> _undoStack = new();
     private readonly Stack<GreenNode> _redoStack = new();
     
@@ -105,7 +105,7 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// <summary>
     /// The red root node. Created lazily and cached until mutation.
     /// </summary>
-    public RedNode Root => _redRoot ??= _greenRoot.CreateRed(null, 0, -1, this);
+    public SyntaxNode Root => _redRoot ??= _greenRoot.CreateRed(null, 0, -1, this);
     
     /// <summary>
     /// Total width (character count) of the tree.
@@ -486,17 +486,17 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// </summary>
     /// <param name="query">The query to execute.</param>
     /// <returns>All matching nodes in document order.</returns>
-    public IEnumerable<RedNode> Select(INodeQuery query) => query.Select(this);
+    public IEnumerable<SyntaxNode> Select(INodeQuery query) => query.Select(this);
     
     /// <summary>
     /// Finds the deepest node containing the specified position.
     /// </summary>
-    public RedNode? FindNodeAt(int position) => Root.FindNodeAt(position);
+    public SyntaxNode? FindNodeAt(int position) => Root.FindNodeAt(position);
     
     /// <summary>
     /// Finds the leaf at the specified position.
     /// </summary>
-    public RedNode? FindLeafAt(int position) => Root.FindLeafAt(position);
+    public SyntaxNode? FindLeafAt(int position) => Root.FindLeafAt(position);
     
     /// <summary>
     /// Gets all leaves in document order.
@@ -517,7 +517,7 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// <summary>
     /// Gets all nodes of a specific kind.
     /// </summary>
-    public IEnumerable<RedNode> NodesOfKind(NodeKind kind)
+    public IEnumerable<SyntaxNode> NodesOfKind(NodeKind kind)
     {
         var walker = new TreeWalker(Root);
         foreach (var node in walker.DescendantsAndSelf())

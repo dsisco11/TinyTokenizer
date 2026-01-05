@@ -203,7 +203,7 @@ public class TreeWalkerTests
         var tree = SyntaxTree.Parse("a {b} c");
         var walker = new TreeWalker(tree.Root);
 
-        var visited = new List<RedNode>();
+        var visited = new List<SyntaxNode>();
         while (walker.NextNode() is { } node)
         {
             visited.Add(node);
@@ -235,7 +235,7 @@ public class TreeWalkerTests
             NodeFilter.All,
             node => node.Kind == NodeKind.BraceBlock ? FilterResult.Reject : FilterResult.Accept);
 
-        var visited = new List<RedNode>();
+        var visited = new List<SyntaxNode>();
         while (walker.NextNode() is { } node)
         {
             visited.Add(node);
@@ -259,7 +259,7 @@ public class TreeWalkerTests
         // Move to end
         while (walker.NextNode() != null) { }
 
-        var visited = new List<RedNode>();
+        var visited = new List<SyntaxNode>();
         while (walker.PreviousNode() is { } node)
         {
             visited.Add(node);
@@ -810,7 +810,7 @@ public class TreeWalkerTests
             node => node.Kind == NodeKind.BraceBlock ? FilterResult.Reject : FilterResult.Accept);
 
         // First call should skip the block and return "accept"
-        RedNode? firstIdent = null;
+        SyntaxNode? firstIdent = null;
         while (walker.NextNode() is { } node)
         {
             if (node.Kind == NodeKind.Ident)

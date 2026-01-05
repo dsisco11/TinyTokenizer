@@ -191,7 +191,7 @@ public class RedNodeTests
         var tree = SyntaxTree.Parse("{{{{deep}}}}");
         
         // Navigate to deepest ident
-        RedNode current = tree.Root;
+        SyntaxNode current = tree.Root;
         while (current.Children.Any())
         {
             var firstChild = current.Children.First();
@@ -544,7 +544,7 @@ public class RedNodeTests
     {
         var tree = SyntaxTree.Parse("{{{{{a}}}}}");
         
-        void ValidatePositions(RedNode node)
+        void ValidatePositions(SyntaxNode node)
         {
             Assert.True(node.Position >= 0);
             Assert.True(node.Width >= 0);

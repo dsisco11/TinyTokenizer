@@ -11,10 +11,10 @@ namespace TinyTokenizer.Ast;
 /// They provide parent links and computed absolute positions.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public abstract class RedNode : IFormattable, ITextSerializable
+public abstract class SyntaxNode : IFormattable, ITextSerializable
 {
     private readonly GreenNode _green;
-    private readonly RedNode? _parent;
+    private readonly SyntaxNode? _parent;
     private readonly int _position;
     private readonly int _siblingIndex;
     private readonly SyntaxTree? _tree;
@@ -49,7 +49,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <param name="position">The absolute position in source text.</param>
     /// <param name="siblingIndex">The index of this node within its parent's children, or -1 if root.</param>
     /// <param name="tree">The containing syntax tree.</param>
-    private protected RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    private protected SyntaxNode(GreenNode green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
     {
         _green = green;
         _parent = parent;
@@ -63,7 +63,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// Protected constructor for use by user-defined SyntaxNode subclasses.
     /// </summary>
     /// <param name="context">The creation context containing green node and position info.</param>
-    protected RedNode(CreationContext context)
+    protected SyntaxNode(CreationContext context)
         : this(context.Green, context.Parent, context.Position, context.SiblingIndex, context.Tree)
     {
     }
@@ -72,7 +72,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     internal GreenNode Green => _green;
     
     /// <summary>The parent red node, or null if this is the root.</summary>
-    public RedNode? Parent => _parent;
+    public SyntaxNode? Parent => _parent;
     
     /// <summary>The containing syntax tree, or null if created outside a tree context.</summary>
     public SyntaxTree? Tree => _tree;
@@ -104,7 +104,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// </summary>
     /// <param name="index">The slot index.</param>
     /// <returns>The child red node, or null if the index is out of range or the slot is empty.</returns>
-    public virtual RedNode? GetChild(int index)
+    public virtual SyntaxNode? GetChild(int index)
     {
         var greenChild = _green.GetSlot(index);
         if (greenChild == null)
@@ -122,7 +122,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <param name="index">The slot index.</param>
     /// <returns>The typed child node.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the child is null or wrong type.</exception>
-    protected T GetTypedChild<T>(int index) where T : RedNode
+    protected T GetTypedChild<T>(int index) where T : SyntaxNode
     {
         var child = GetChild(index);
         if (child is not T typed)
@@ -141,13 +141,13 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <typeparam name="T">The expected child type.</typeparam>
     /// <param name="index">The slot index.</param>
     /// <returns>The typed child node, or null if not found or wrong type.</returns>
-    protected T? TryGetTypedChild<T>(int index) where T : RedNode =>
+    protected T? TryGetTypedChild<T>(int index) where T : SyntaxNode =>
         GetChild(index) as T;
     
     /// <summary>
     /// Enumerates all children of this node.
     /// </summary>
-    public IEnumerable<RedNode> Children
+    public IEnumerable<SyntaxNode> Children
     {
         get
         {
@@ -163,7 +163,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Gets the root node.
     /// </summary>
-    public RedNode Root
+    public SyntaxNode Root
     {
         get
         {
@@ -177,7 +177,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Finds the deepest node containing the specified position.
     /// </summary>
-    public RedNode? FindNodeAt(int position)
+    public SyntaxNode? FindNodeAt(int position)
     {
         if (position < _position || position >= EndPosition)
             return null;
@@ -195,12 +195,12 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Finds all leaf nodes containing the specified position.
     /// </summary>
-    public RedNode? FindLeafAt(int position)
+    public SyntaxNode? FindLeafAt(int position)
     {
         var node = FindNodeAt(position);
         while (node != null && !node.IsLeaf)
         {
-            RedNode? deeperChild = null;
+            SyntaxNode? deeperChild = null;
             foreach (var child in node.Children)
             {
                 if (position >= child.Position && position < child.EndPosition)
@@ -226,7 +226,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Gets the next sibling node, or null if this is the last child.
     /// </summary>
-    public RedNode? NextSibling()
+    public SyntaxNode? NextSibling()
     {
         if (_parent == null)
             return null;
@@ -241,7 +241,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
     /// <summary>
     /// Gets the previous sibling node, or null if this is the first child.
     /// </summary>
-    public RedNode? PreviousSibling()
+    public SyntaxNode? PreviousSibling()
     {
         if (_parent == null)
             return null;
@@ -329,7 +329,7 @@ public abstract class RedNode : IFormattable, ITextSerializable
         
         foreach (var child in Children)
         {
-            if (child is RedNode redChild)
+            if (child is SyntaxNode redChild)
                 sb.Append(redChild.DumpStructure(indent + 1));
         }
         

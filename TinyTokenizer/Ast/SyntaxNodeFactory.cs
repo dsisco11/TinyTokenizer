@@ -22,7 +22,7 @@ internal static class SyntaxNodeFactory
     /// <param name="tree">The containing syntax tree (required for schema lookup).</param>
     /// <exception cref="ArgumentNullException">Thrown if tree is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown if tree has no schema or schema has no type for this node kind.</exception>
-    public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position, int siblingIndex, SyntaxTree tree)
+    public static SyntaxNode Create(GreenSyntaxNode green, SyntaxNode? parent, int position, int siblingIndex, SyntaxTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
         

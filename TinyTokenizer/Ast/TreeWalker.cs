@@ -44,10 +44,10 @@ public enum FilterResult
 /// </summary>
 public sealed class TreeWalker
 {
-    private readonly RedNode _root;
+    private readonly SyntaxNode _root;
     private readonly NodeFilter _whatToShow;
-    private readonly Func<RedNode, FilterResult>? _filter;
-    private RedNode _current;
+    private readonly Func<SyntaxNode, FilterResult>? _filter;
+    private SyntaxNode _current;
     
     /// <summary>
     /// Creates a new TreeWalker.
@@ -55,7 +55,7 @@ public sealed class TreeWalker
     /// <param name="root">The root node to traverse within.</param>
     /// <param name="whatToShow">Bitmask of node types to include.</param>
     /// <param name="filter">Optional custom filter function.</param>
-    public TreeWalker(RedNode root, NodeFilter whatToShow = NodeFilter.All, Func<RedNode, FilterResult>? filter = null)
+    public TreeWalker(SyntaxNode root, NodeFilter whatToShow = NodeFilter.All, Func<SyntaxNode, FilterResult>? filter = null)
     {
         _root = root;
         _whatToShow = whatToShow;
@@ -64,13 +64,13 @@ public sealed class TreeWalker
     }
     
     /// <summary>The root node of this TreeWalker.</summary>
-    public RedNode Root => _root;
+    public SyntaxNode Root => _root;
     
     /// <summary>The current node position.</summary>
-    public RedNode Current => _current;
+    public SyntaxNode Current => _current;
     
     /// <summary>Compares nodes by their underlying green node identity since red nodes are ephemeral.</summary>
-    private static bool SameNode(RedNode? a, RedNode? b)
+    private static bool SameNode(SyntaxNode? a, SyntaxNode? b)
     {
         if (ReferenceEquals(a, b)) return true;
         if (a is null || b is null) return false;
@@ -86,7 +86,7 @@ public sealed class TreeWalker
     /// Moves to the parent of the current node.
     /// </summary>
     /// <returns>The parent node, or null if at root or parent is outside root.</returns>
-    public RedNode? ParentNode()
+    public SyntaxNode? ParentNode()
     {
         var node = _current;
         while (!SameNode(node, _root) && node.Parent != null)
@@ -105,7 +105,7 @@ public sealed class TreeWalker
     /// Moves to the first child of the current node.
     /// </summary>
     /// <returns>The first accepted child, or null if none.</returns>
-    public RedNode? FirstChild()
+    public SyntaxNode? FirstChild()
     {
         return TraverseChildren(forward: true);
     }
@@ -114,7 +114,7 @@ public sealed class TreeWalker
     /// Moves to the last child of the current node.
     /// </summary>
     /// <returns>The last accepted child, or null if none.</returns>
-    public RedNode? LastChild()
+    public SyntaxNode? LastChild()
     {
         return TraverseChildren(forward: false);
     }
@@ -123,7 +123,7 @@ public sealed class TreeWalker
     /// Moves to the next sibling of the current node.
     /// </summary>
     /// <returns>The next accepted sibling, or null if none.</returns>
-    public RedNode? NextSibling()
+    public SyntaxNode? NextSibling()
     {
         return TraverseSiblings(forward: true);
     }
@@ -132,7 +132,7 @@ public sealed class TreeWalker
     /// Moves to the previous sibling of the current node.
     /// </summary>
     /// <returns>The previous accepted sibling, or null if none.</returns>
-    public RedNode? PreviousSibling()
+    public SyntaxNode? PreviousSibling()
     {
         return TraverseSiblings(forward: false);
     }
@@ -141,7 +141,7 @@ public sealed class TreeWalker
     /// Moves to the next node in document order (depth-first).
     /// </summary>
     /// <returns>The next accepted node, or null if at end.</returns>
-    public RedNode? NextNode()
+    public SyntaxNode? NextNode()
     {
         var node = _current;
         
@@ -203,7 +203,7 @@ public sealed class TreeWalker
     /// Moves to the previous node in document order (reverse depth-first).
     /// </summary>
     /// <returns>The previous accepted node, or null if at start.</returns>
-    public RedNode? PreviousNode()
+    public SyntaxNode? PreviousNode()
     {
         var node = _current;
         
@@ -252,7 +252,7 @@ public sealed class TreeWalker
     /// <summary>
     /// Enumerates all descendants of the root that pass the filter.
     /// </summary>
-    public IEnumerable<RedNode> Descendants()
+    public IEnumerable<SyntaxNode> Descendants()
     {
         var saved = _current;
         _current = _root;
@@ -268,7 +268,7 @@ public sealed class TreeWalker
     /// <summary>
     /// Enumerates the root and all its descendants that pass the filter.
     /// </summary>
-    public IEnumerable<RedNode> DescendantsAndSelf()
+    public IEnumerable<SyntaxNode> DescendantsAndSelf()
     {
         if (AcceptsNode(_root))
             yield return _root;
@@ -280,7 +280,7 @@ public sealed class TreeWalker
     /// <summary>
     /// Enumerates ancestors from current to root that pass the filter.
     /// </summary>
-    public IEnumerable<RedNode> Ancestors()
+    public IEnumerable<SyntaxNode> Ancestors()
     {
         var node = _current.Parent;
         while (node != null)
@@ -296,7 +296,7 @@ public sealed class TreeWalker
     /// <summary>
     /// Enumerates following siblings that pass the filter.
     /// </summary>
-    public IEnumerable<RedNode> FollowingSiblings()
+    public IEnumerable<SyntaxNode> FollowingSiblings()
     {
         var sibling = GetNextSiblingOf(_current);
         while (sibling != null)
@@ -310,7 +310,7 @@ public sealed class TreeWalker
     /// <summary>
     /// Enumerates preceding siblings that pass the filter.
     /// </summary>
-    public IEnumerable<RedNode> PrecedingSiblings()
+    public IEnumerable<SyntaxNode> PrecedingSiblings()
     {
         var sibling = GetPreviousSiblingOf(_current);
         while (sibling != null)
@@ -325,7 +325,7 @@ public sealed class TreeWalker
     
     #region Private Helpers
     
-    private RedNode? TraverseChildren(bool forward)
+    private SyntaxNode? TraverseChildren(bool forward)
     {
         var parent = _current;
         if (parent.SlotCount == 0)
@@ -361,7 +361,7 @@ public sealed class TreeWalker
         return null;
     }
     
-    private RedNode? TraverseSiblings(bool forward)
+    private SyntaxNode? TraverseSiblings(bool forward)
     {
         var node = _current;
         
@@ -395,7 +395,7 @@ public sealed class TreeWalker
         }
     }
     
-    private FilterResult TestNode(RedNode node)
+    private FilterResult TestNode(SyntaxNode node)
     {
         // First check whatToShow
         if (!MatchesWhatToShow(node))
@@ -408,12 +408,12 @@ public sealed class TreeWalker
         return FilterResult.Accept;
     }
     
-    private bool AcceptsNode(RedNode node)
+    private bool AcceptsNode(SyntaxNode node)
     {
         return TestNode(node) == FilterResult.Accept;
     }
     
-    private bool MatchesWhatToShow(RedNode node)
+    private bool MatchesWhatToShow(SyntaxNode node)
     {
         if (_whatToShow == NodeFilter.All)
             return true;
@@ -430,7 +430,7 @@ public sealed class TreeWalker
         return false;
     }
     
-    private static RedNode? GetNextSiblingOf(RedNode node)
+    private static SyntaxNode? GetNextSiblingOf(SyntaxNode node)
     {
         if (node.Parent == null)
             return null;
@@ -447,7 +447,7 @@ public sealed class TreeWalker
         return null;
     }
     
-    private static RedNode? GetPreviousSiblingOf(RedNode node)
+    private static SyntaxNode? GetPreviousSiblingOf(SyntaxNode node)
     {
         if (node.Parent == null)
             return null;
@@ -464,11 +464,11 @@ public sealed class TreeWalker
         return null;
     }
     
-    private static RedNode GetDeepestLast(RedNode node)
+    private static SyntaxNode GetDeepestLast(SyntaxNode node)
     {
         while (node.SlotCount > 0)
         {
-            RedNode? lastChild = null;
+            SyntaxNode? lastChild = null;
             for (int i = node.SlotCount - 1; i >= 0; i--)
             {
                 lastChild = node.GetChild(i);
@@ -494,9 +494,9 @@ public static class TreeWalkerExtensions
     /// Creates a TreeWalker for this node.
     /// </summary>
     public static TreeWalker CreateTreeWalker(
-        this RedNode root,
+        this SyntaxNode root,
         NodeFilter whatToShow = NodeFilter.All,
-        Func<RedNode, FilterResult>? filter = null)
+        Func<SyntaxNode, FilterResult>? filter = null)
     {
         return new TreeWalker(root, whatToShow, filter);
     }
@@ -507,7 +507,7 @@ public static class TreeWalkerExtensions
     public static TreeWalker CreateTreeWalker(
         this SyntaxTree tree,
         NodeFilter whatToShow = NodeFilter.All,
-        Func<RedNode, FilterResult>? filter = null)
+        Func<SyntaxNode, FilterResult>? filter = null)
     {
         return new TreeWalker(tree.Root, whatToShow, filter);
     }
