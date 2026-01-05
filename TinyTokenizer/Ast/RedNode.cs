@@ -41,17 +41,28 @@ public abstract class RedNode : IFormattable, ITextSerializable
     
     /// <summary>
     /// Creates a new red node wrapping a green node.
+    /// Internal constructor for use by built-in red nodes (RedLeaf, RedBlock, RedList).
     /// </summary>
     /// <param name="green">The underlying green node.</param>
     /// <param name="parent">The parent red node, or null if this is the root.</param>
     /// <param name="position">The absolute position in source text.</param>
     /// <param name="siblingIndex">The index of this node within its parent's children, or -1 if root.</param>
-    internal RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1)
+    private protected RedNode(GreenNode green, RedNode? parent, int position, int siblingIndex = -1)
     {
         _green = green;
         _parent = parent;
         _position = position;
         _siblingIndex = siblingIndex;
+    }
+    
+    /// <summary>
+    /// Creates a new red node from a creation context.
+    /// Protected constructor for use by user-defined SyntaxNode subclasses.
+    /// </summary>
+    /// <param name="context">The creation context containing green node and position info.</param>
+    protected RedNode(CreationContext context)
+        : this(context.Green, context.Parent, context.Position, context.SiblingIndex)
+    {
     }
     
     /// <summary>The underlying green node containing the actual data.</summary>
@@ -105,6 +116,36 @@ public abstract class RedNode : IFormattable, ITextSerializable
         Interlocked.CompareExchange(ref field, redChild, null);
         return field;
     }
+    
+    /// <summary>
+    /// Gets a child with type checking, throwing if the child is null or wrong type.
+    /// Used by derived SyntaxNode classes for typed child access.
+    /// </summary>
+    /// <typeparam name="T">The expected child type.</typeparam>
+    /// <param name="index">The slot index.</param>
+    /// <returns>The typed child node.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the child is null or wrong type.</exception>
+    protected T GetTypedChild<T>(int index) where T : RedNode
+    {
+        var child = GetChild(index);
+        if (child is not T typed)
+        {
+            throw new InvalidOperationException(
+                $"Expected child at slot {index} to be {typeof(T).Name}, " +
+                $"but got {child?.GetType().Name ?? "null"}.");
+        }
+        return typed;
+    }
+    
+    /// <summary>
+    /// Tries to get a child with type checking, returning null if child is null or wrong type.
+    /// Used by derived SyntaxNode classes for optional typed child access.
+    /// </summary>
+    /// <typeparam name="T">The expected child type.</typeparam>
+    /// <param name="index">The slot index.</param>
+    /// <returns>The typed child node, or null if not found or wrong type.</returns>
+    protected T? TryGetTypedChild<T>(int index) where T : RedNode =>
+        GetChild(index) as T;
     
     /// <summary>
     /// Enumerates all children of this node.
