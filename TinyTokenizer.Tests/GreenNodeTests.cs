@@ -666,7 +666,7 @@ public class GreenNodeTests
         
         var red = green.CreateRed(null, 0);
         
-        Assert.IsType<RedBlock>(red);
+        Assert.IsType<SyntaxBlock>(red);
     }
 
     [Fact]

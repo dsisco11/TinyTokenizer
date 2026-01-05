@@ -892,7 +892,7 @@ public class SyntaxTreeTests
         
         Assert.Single(last);
         // The last block contains 'c'
-        var block = (RedBlock)last[0];
+        var block = (SyntaxBlock)last[0];
         Assert.Contains("c", block.Children.OfType<SyntaxToken>().Select(l => l.Text));
     }
     
@@ -904,7 +904,7 @@ public class SyntaxTreeTests
         var second = Q.BraceBlock.Nth(1).Select(tree).ToList();
         
         Assert.Single(second);
-        var block = (RedBlock)second[0];
+        var block = (SyntaxBlock)second[0];
         Assert.Contains("b", block.Children.OfType<SyntaxToken>().Select(l => l.Text));
     }
     
@@ -916,7 +916,7 @@ public class SyntaxTreeTests
     public void RedNode_Children_EnumeratesCorrectly()
     {
         var tree = SyntaxTree.Parse("{a b c}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         var children = block.Children.ToList();
@@ -931,7 +931,7 @@ public class SyntaxTreeTests
         var ident = Q.AnyIdent.First().Select(tree).First();
         
         Assert.NotNull(ident.Parent);
-        Assert.IsType<RedBlock>(ident.Parent);
+        Assert.IsType<SyntaxBlock>(ident.Parent);
     }
     
     [Fact]
@@ -949,7 +949,7 @@ public class SyntaxTreeTests
     public void RedBlock_OpenerCloser_CorrectCharacters()
     {
         var tree = SyntaxTree.Parse("[item]");
-        var block = Q.BracketBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BracketBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal('[', block.Opener);
@@ -1133,7 +1133,7 @@ public class SyntaxTreeTests
         var parens = Q.ParenBlock.Select(tree).ToList();
         
         Assert.Single(parens);
-        var block = (RedBlock)parens[0];
+        var block = (SyntaxBlock)parens[0];
         Assert.Equal('(', block.Opener);
     }
     
@@ -1202,7 +1202,7 @@ public class SyntaxTreeTests
     public void RedBlock_ChildCount_ReturnsCorrectCount()
     {
         var tree = SyntaxTree.Parse("{a b c}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.True(block.ChildCount >= 3);
@@ -1212,7 +1212,7 @@ public class SyntaxTreeTests
     public void RedBlock_GetChild_ReturnsChild()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         var firstChild = block.GetChild(0);
@@ -1223,7 +1223,7 @@ public class SyntaxTreeTests
     public void RedBlock_GetChild_OutOfRange_ReturnsNull()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         var child = block.GetChild(999);
@@ -1295,7 +1295,7 @@ public class SyntaxTreeTests
     public void RedBlock_ChildrenOfKind_FiltersCorrectly()
     {
         var tree = SyntaxTree.Parse("{a 1 b 2}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         var idents = block.ChildrenOfKind(NodeKind.Ident).ToList();
@@ -1309,7 +1309,7 @@ public class SyntaxTreeTests
     public void RedBlock_LeafChildren_ReturnsOnlyLeaves()
     {
         var tree = SyntaxTree.Parse("{a {nested} b}");
-        var outerBlock = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var outerBlock = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(outerBlock);
         var leaves = outerBlock.LeafChildren.ToList();
@@ -1323,20 +1323,20 @@ public class SyntaxTreeTests
     public void RedBlock_BlockChildren_ReturnsOnlyBlocks()
     {
         var tree = SyntaxTree.Parse("{a {inner1} b {inner2}}");
-        var outerBlock = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var outerBlock = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(outerBlock);
         var blocks = outerBlock.BlockChildren.ToList();
         
         Assert.Equal(2, blocks.Count);
-        Assert.All(blocks, b => Assert.IsType<RedBlock>(b));
+        Assert.All(blocks, b => Assert.IsType<SyntaxBlock>(b));
     }
     
     [Fact]
     public void RedBlock_IndexOf_FindsChild()
     {
         var tree = SyntaxTree.Parse("{a b c}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         var firstChild = block.GetChild(0);
@@ -1350,7 +1350,7 @@ public class SyntaxTreeTests
     public void RedBlock_IndexOf_ReturnsMinusOneForNonChild()
     {
         var tree = SyntaxTree.Parse("{a} {b}");
-        var blocks = Q.BraceBlock.Select(tree).Cast<RedBlock>().ToList();
+        var blocks = Q.BraceBlock.Select(tree).Cast<SyntaxBlock>().ToList();
         
         Assert.Equal(2, blocks.Count);
         var block1 = blocks[0];
@@ -1365,7 +1365,7 @@ public class SyntaxTreeTests
     public void RedBlock_OpenerPosition_IsCorrect()
     {
         var tree = SyntaxTree.Parse("{inner}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(0, block.OpenerPosition);
@@ -1375,7 +1375,7 @@ public class SyntaxTreeTests
     public void RedBlock_CloserPosition_IsCorrect()
     {
         var tree = SyntaxTree.Parse("{inner}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(6, block.CloserPosition); // Position of }
@@ -1385,7 +1385,7 @@ public class SyntaxTreeTests
     public void RedBlock_InnerStartPosition_IsCorrect()
     {
         var tree = SyntaxTree.Parse("{inner}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(1, block.InnerStartPosition); // After {
@@ -1395,7 +1395,7 @@ public class SyntaxTreeTests
     public void RedBlock_InnerEndPosition_IsCorrect()
     {
         var tree = SyntaxTree.Parse("{inner}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(6, block.InnerEndPosition); // Before }
@@ -1405,7 +1405,7 @@ public class SyntaxTreeTests
     public void RedBlock_Green_ReturnsUnderlyingGreen()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.NotNull(block.Green);
@@ -1416,7 +1416,7 @@ public class SyntaxTreeTests
     public void RedBlock_LeadingTriviaWidth_IsZeroWithoutTrivia()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(0, block.LeadingTriviaWidth);
@@ -1426,7 +1426,7 @@ public class SyntaxTreeTests
     public void RedBlock_TrailingTriviaWidth_IsZeroWithoutTrivia()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(0, block.TrailingTriviaWidth);
@@ -1436,7 +1436,7 @@ public class SyntaxTreeTests
     public void RedBlock_LeadingTrivia_IsEmptyWithoutTrivia()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.False(block.HasLeadingTrivia);
@@ -1447,7 +1447,7 @@ public class SyntaxTreeTests
     public void RedBlock_TrailingTrivia_IsEmptyWithoutTrivia()
     {
         var tree = SyntaxTree.Parse("{x}");
-        var block = Q.BraceBlock.First().Select(tree).First() as RedBlock;
+        var block = Q.BraceBlock.First().Select(tree).First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.False(block.HasTrailingTrivia);

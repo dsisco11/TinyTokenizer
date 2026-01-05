@@ -110,7 +110,7 @@ public sealed class FunctionNameNode : SemanticNode
     /// <summary>
     /// Gets the arguments block following this function name, if present.
     /// </summary>
-    public RedBlock? Arguments => NameNode.NextSibling() as RedBlock;
+    public SyntaxBlock? Arguments => NameNode.NextSibling() as SyntaxBlock;
 }
 
 /// <summary>
@@ -129,7 +129,7 @@ public sealed class ArrayAccessNode : SemanticNode
     public string Target => TargetNode.Text;
     
     /// <summary>The index block (brackets).</summary>
-    public RedBlock IndexBlock => Part<RedBlock>(1);
+    public SyntaxBlock IndexBlock => Part<SyntaxBlock>(1);
     
     /// <summary>The index expression nodes.</summary>
     public IEnumerable<SyntaxNode> IndexNodes =>
@@ -180,7 +180,7 @@ public sealed class MethodCallNode : SemanticNode
     public string Method => MethodNode.Text;
     
     /// <summary>The arguments block (parentheses).</summary>
-    public RedBlock Arguments => Part<RedBlock>(3);
+    public SyntaxBlock Arguments => Part<SyntaxBlock>(3);
     
     /// <summary>The argument nodes.</summary>
     public IEnumerable<SyntaxNode> ArgumentNodes =>

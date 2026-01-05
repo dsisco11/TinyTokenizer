@@ -928,7 +928,7 @@ public class SyntaxEditorTests
         
         // Find the paren block for doSomething - it's the second one (after setup's args)
         var doSomethingArgs = tree.Root.Children
-            .OfType<RedBlock>()
+            .OfType<SyntaxBlock>()
             .Skip(1)  // Skip setup()'s args
             .First();
         

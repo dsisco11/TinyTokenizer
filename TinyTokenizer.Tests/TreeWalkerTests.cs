@@ -40,7 +40,7 @@ public class TreeWalkerTests
     public void ParentNode_FromLeaf_ReturnsParent()
     {
         var tree = SyntaxTree.Parse("{a}");
-        var ident = tree.Root.Children.OfType<RedBlock>().First().Children.First(c => c.Kind == NodeKind.Ident);
+        var ident = tree.Root.Children.OfType<SyntaxBlock>().First().Children.First(c => c.Kind == NodeKind.Ident);
         var walker = new TreeWalker(tree.Root) { };
         
         // Navigate to the ident first

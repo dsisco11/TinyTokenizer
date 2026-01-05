@@ -31,7 +31,7 @@ public sealed class FunctionCallSyntax : SyntaxNode
     public string Name => NameNode.Text;
     
     /// <summary>The arguments block (parentheses).</summary>
-    public RedBlock Arguments => GetTypedChild<RedBlock>(1);
+    public SyntaxBlock Arguments => GetTypedChild<SyntaxBlock>(1);
     
     /// <summary>
     /// Gets the argument nodes (children of the arguments block, excluding symbols).
@@ -67,7 +67,7 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     public string Target => TargetNode.Text;
     
     /// <summary>The index block (brackets).</summary>
-    public RedBlock IndexBlock => GetTypedChild<RedBlock>(1);
+    public SyntaxBlock IndexBlock => GetTypedChild<SyntaxBlock>(1);
     
     /// <summary>
     /// Gets the index nodes (children of the index block, excluding symbols).

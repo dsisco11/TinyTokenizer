@@ -317,10 +317,10 @@ public sealed record InsertionQuery
                 parentPath, childIndex, node.Position, Point, targetPath, targetLeading, targetTrailing),
             InsertionPoint.After => new InsertionPosition(
                 parentPath, childIndex + 1, node.EndPosition, Point, targetPath, targetLeading, targetTrailing),
-            InsertionPoint.InnerStart when node is RedBlock block => new InsertionPosition(
+            InsertionPoint.InnerStart when node is SyntaxBlock block => new InsertionPosition(
                 NodePath.FromNode(node), 0, block.Position + 1, Point, null, 
                 ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
-            InsertionPoint.InnerEnd when node is RedBlock block => new InsertionPosition(
+            InsertionPoint.InnerEnd when node is SyntaxBlock block => new InsertionPosition(
                 NodePath.FromNode(node), block.ChildCount, block.EndPosition - 1, Point, null,
                 ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty),
             InsertionPoint.NamedBlockInnerStart when node is IBlockContainerNode container => 
@@ -331,7 +331,7 @@ public sealed record InsertionQuery
         };
     }
     
-    private static InsertionPosition ResolveNamedBlockPosition(SyntaxNode syntaxNode, RedBlock block, bool isStart)
+    private static InsertionPosition ResolveNamedBlockPosition(SyntaxNode syntaxNode, SyntaxBlock block, bool isStart)
     {
         var blockPath = NodePath.FromNode(block);
         

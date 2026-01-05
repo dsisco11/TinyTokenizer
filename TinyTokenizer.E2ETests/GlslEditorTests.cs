@@ -55,10 +55,10 @@ public class GlslEditorTests
         public string Name => NameNode.Text;
         
         /// <summary>Parameter list block (parentheses).</summary>
-        public RedBlock Parameters => GetTypedChild<RedBlock>(2);
+        public SyntaxBlock Parameters => GetTypedChild<SyntaxBlock>(2);
         
         /// <summary>Function body block (braces).</summary>
-        public RedBlock Body => GetTypedChild<RedBlock>(3);
+        public SyntaxBlock Body => GetTypedChild<SyntaxBlock>(3);
         
         #region IBlockContainerNode
         
@@ -66,7 +66,7 @@ public class GlslEditorTests
         public IReadOnlyList<string> BlockNames => ["body", "params"];
         
         /// <inheritdoc/>
-        public RedBlock GetBlock(string? name = null) => name switch
+        public SyntaxBlock GetBlock(string? name = null) => name switch
         {
             null or "body" => Body,
             "params" => Parameters,

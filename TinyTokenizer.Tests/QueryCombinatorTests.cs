@@ -1027,7 +1027,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         Assert.NotNull(block);
         
         var innerIdent = block!.Children.First();
@@ -1041,7 +1041,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         Assert.NotNull(block);
         
         var innerIdent = block!.Children.First();
@@ -1055,7 +1055,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.Parent();
@@ -1068,7 +1068,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.Parent(); // No inner query
@@ -1084,7 +1084,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.Ancestor(Query.BraceBlock);
@@ -1096,8 +1096,8 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
-        var braceBlock = root.Children.First() as RedBlock;
-        var bracketBlock = braceBlock!.Children.First() as RedBlock;
+        var braceBlock = root.Children.First() as SyntaxBlock;
+        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
         var innerIdent = bracketBlock!.Children.First();
         
         // innerIdent's grandparent is brace block
@@ -1110,7 +1110,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.Ancestor(Query.ParenBlock); // No paren ancestor
@@ -1122,7 +1122,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.Ancestor(Query.BraceBlock);
@@ -1164,7 +1164,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         var innerIdent = block!.Children.First();
         
         var query = Query.BraceBlock.AsParent();
@@ -1177,8 +1177,8 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
-        var braceBlock = root.Children.First() as RedBlock;
-        var bracketBlock = braceBlock!.Children.First() as RedBlock;
+        var braceBlock = root.Children.First() as SyntaxBlock;
+        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
         var innerIdent = bracketBlock!.Children.First();
         
         var query = Query.BraceBlock.AsAncestor();
@@ -1250,7 +1250,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo bar }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         Assert.NotNull(block);
         
         var firstInsideBlock = block!.Children.First();
@@ -1264,7 +1264,7 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ foo bar }");
         var root = tree.Root;
-        var block = root.Children.First() as RedBlock;
+        var block = root.Children.First() as SyntaxBlock;
         Assert.NotNull(block);
         
         var lastInsideBlock = block!.Children.Last();
@@ -1637,8 +1637,8 @@ public class QueryCombinatorTests
     {
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
-        var braceBlock = root.Children.First() as RedBlock;
-        var bracketBlock = braceBlock!.Children.First() as RedBlock;
+        var braceBlock = root.Children.First() as SyntaxBlock;
+        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
         var innerIdent = bracketBlock!.Children.First();
         
         // Direct parent is bracket, ancestor is brace

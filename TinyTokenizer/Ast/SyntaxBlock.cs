@@ -8,7 +8,7 @@ namespace TinyTokenizer.Ast;
 /// Provides position-aware access to children with lazy creation and caching.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedBlock : SyntaxNode
+public sealed class SyntaxBlock : SyntaxNode
 {
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
@@ -17,7 +17,7 @@ public sealed class RedBlock : SyntaxNode
     /// <summary>
     /// Creates a new red block wrapping a green block.
     /// </summary>
-    internal RedBlock(GreenBlock green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    internal SyntaxBlock(GreenBlock green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
         : base(green, parent, position, siblingIndex, tree)
     {
     }
@@ -185,13 +185,13 @@ public sealed class RedBlock : SyntaxNode
     /// <summary>
     /// Gets all block children.
     /// </summary>
-    public IEnumerable<RedBlock> BlockChildren
+    public IEnumerable<SyntaxBlock> BlockChildren
     {
         get
         {
             foreach (var child in Children)
             {
-                if (child is RedBlock block)
+                if (child is SyntaxBlock block)
                     yield return block;
             }
         }

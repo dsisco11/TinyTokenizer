@@ -349,7 +349,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedBlock>()
+            .OfType<SyntaxBlock>()
             .Count();
     }
 
@@ -359,7 +359,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedBlock>()
+            .OfType<SyntaxBlock>()
             .Count(b => b.Kind == NodeKind.BraceBlock);
     }
 

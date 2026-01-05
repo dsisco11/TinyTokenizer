@@ -619,7 +619,7 @@ public sealed class SyntaxEditor
             return leaf.Text;
         }
         
-        if (node is RedBlock block)
+        if (node is SyntaxBlock block)
         {
             // For blocks, we want the full content minus leading/trailing trivia
             var fullText = node.ToText();
@@ -668,7 +668,7 @@ public sealed class SyntaxEditor
             return (greenLeaf.LeadingTrivia, greenLeaf.TrailingTrivia);
         }
         
-        if (node is RedBlock block)
+        if (node is SyntaxBlock block)
         {
             return (block.GreenLeadingTrivia, block.GreenTrailingTrivia);
         }

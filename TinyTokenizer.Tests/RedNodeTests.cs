@@ -607,7 +607,7 @@ public class RedNodeTests
     public void RedBlock_Opener_ReturnsCorrectCharacter()
     {
         var tree = SyntaxTree.Parse("{test}");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal('{', block.Opener);
@@ -617,7 +617,7 @@ public class RedNodeTests
     public void RedBlock_Closer_ReturnsCorrectCharacter()
     {
         var tree = SyntaxTree.Parse("[test]");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal(']', block.Closer);
@@ -627,7 +627,7 @@ public class RedNodeTests
     public void RedBlock_ParenBlock_HasCorrectDelimiters()
     {
         var tree = SyntaxTree.Parse("(test)");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.Equal('(', block.Opener);
@@ -638,7 +638,7 @@ public class RedNodeTests
     public void RedBlock_ChildCount_ReturnsCorrectCount()
     {
         var tree = SyntaxTree.Parse("{a b c}");
-        var block = tree.Root.Children.First() as RedBlock;
+        var block = tree.Root.Children.First() as SyntaxBlock;
         
         Assert.NotNull(block);
         Assert.True(block.ChildCount >= 3);

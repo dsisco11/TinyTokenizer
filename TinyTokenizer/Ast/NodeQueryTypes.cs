@@ -156,7 +156,7 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <inheritdoc/>
     public override bool Matches(SyntaxNode node)
     {
-        if (node is not RedBlock block)
+        if (node is not SyntaxBlock block)
             return false;
         
         if (_opener != null && block.Opener != _opener.Value)

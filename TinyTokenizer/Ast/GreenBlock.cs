@@ -131,7 +131,7 @@ internal sealed record GreenBlock : GreenContainer
     
     /// <inheritdoc/>
     public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
-        => new RedBlock(this, parent, position, siblingIndex, tree);
+        => new SyntaxBlock(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)
