@@ -6,9 +6,8 @@ namespace TinyTokenizer.Ast;
 /// <summary>
 /// Factory for creating typed syntax nodes from green syntax nodes.
 /// Uses compiled delegates for efficient instantiation.
-/// Supports looking up RedType from Schema or falling back to green node's RedType.
 /// </summary>
-internal static class SyntaxRedFactory
+internal static class SyntaxNodeFactory
 {
     private static readonly ConcurrentDictionary<Type, Func<CreationContext, SyntaxNode>> _factories = new();
     
@@ -18,9 +17,8 @@ internal static class SyntaxRedFactory
     /// </summary>
     public static SyntaxNode Create(GreenSyntaxNode green, RedNode? parent, int position, int siblingIndex = -1, Schema? schema = null)
     {
-        // Prefer Schema-based lookup, fall back to green.RedType
-        Type? redType = schema?.GetSyntaxRedType(green.Kind);
-        redType ??= green.RedType;
+        Type? redType = schema?.GetSyntaxRedType(green.Kind) ?? throw new InvalidOperationException(
+            $"No Schema provided to determine node type for green node of kind '{green.Kind}'.");
         
         var factory = GetOrCreateFactory(redType);
         var context = new CreationContext(green, parent, position, siblingIndex, schema);

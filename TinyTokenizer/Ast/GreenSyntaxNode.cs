@@ -82,7 +82,7 @@ internal sealed record GreenSyntaxNode : GreenContainer
     
     /// <inheritdoc/>
     public override RedNode CreateRed(RedNode? parent, int position, int siblingIndex = -1) =>
-        SyntaxRedFactory.Create(this, parent, position, siblingIndex);
+        SyntaxNodeFactory.Create(this, parent, position, siblingIndex);
     
     #region Structural Sharing Mutations
     
