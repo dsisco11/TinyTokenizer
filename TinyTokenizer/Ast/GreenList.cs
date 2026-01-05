@@ -73,7 +73,7 @@ internal sealed record GreenList : GreenContainer
     
     /// <inheritdoc/>
     public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
-        => new RedList(this, parent, position, siblingIndex, tree);
+        => new SyntaxList(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)
