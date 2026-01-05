@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace TinyTokenizer.Ast;
@@ -367,6 +368,39 @@ public abstract class SyntaxNode : IFormattable, ITextSerializable
     /// Use <see cref="ToText"/> to get the serialized text content.
     /// </summary>
     public override string ToString() => ToString("D", null);
+    
+    #endregion
+    
+    #region Equality
+    
+    /// <summary>
+    /// Determines whether this node is equal to another object.
+    /// Two red nodes are equal if they wrap the same green node and have the same position.
+    /// This handles the ephemeral nature of red nodes — different instances representing
+    /// the same tree location are considered equal.
+    /// </summary>
+    public override bool Equals(object? obj) =>
+        obj is SyntaxNode other && 
+        ReferenceEquals(_green, other._green) && 
+        _position == other._position;
+    
+    /// <summary>
+    /// Returns a hash code based on the underlying green node and position.
+    /// </summary>
+    public override int GetHashCode() =>
+        HashCode.Combine(RuntimeHelpers.GetHashCode(_green), _position);
+    
+    /// <summary>
+    /// Determines whether two red nodes are equal.
+    /// </summary>
+    public static bool operator ==(SyntaxNode? left, SyntaxNode? right) =>
+        left is null ? right is null : left.Equals(right);
+    
+    /// <summary>
+    /// Determines whether two red nodes are not equal.
+    /// </summary>
+    public static bool operator !=(SyntaxNode? left, SyntaxNode? right) =>
+        !(left == right);
     
     #endregion
 }

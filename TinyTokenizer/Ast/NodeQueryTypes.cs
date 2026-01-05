@@ -3,23 +3,18 @@ using System.Runtime.CompilerServices;
 namespace TinyTokenizer.Ast;
 
 /// <summary>
-/// Compares red nodes by their underlying green node identity.
-/// Used for deduplication since red nodes are ephemeral but wrap the same green nodes.
+/// Compares red nodes for equality using SyntaxNode's equality semantics.
+/// Two red nodes are equal if they wrap the same green node and have the same position.
 /// </summary>
-internal sealed class RedNodeGreenComparer : IEqualityComparer<SyntaxNode>
+ internal sealed class RedNodeGreenComparer : IEqualityComparer<SyntaxNode>
 {
     public static readonly RedNodeGreenComparer Instance = new();
     
     private RedNodeGreenComparer() { }
     
-    public bool Equals(SyntaxNode? x, SyntaxNode? y)
-    {
-        if (ReferenceEquals(x, y)) return true;
-        if (x is null || y is null) return false;
-        return ReferenceEquals(x.Green, y.Green);
-    }
+    public bool Equals(SyntaxNode? x, SyntaxNode? y) => x == y;
     
-    public int GetHashCode(SyntaxNode obj) => RuntimeHelpers.GetHashCode(obj.Green);
+    public int GetHashCode(SyntaxNode obj) => obj.GetHashCode();
 }
 
 #region Kind Query
