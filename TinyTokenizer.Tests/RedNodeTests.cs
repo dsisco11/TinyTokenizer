@@ -169,6 +169,138 @@ public class RedNodeTests
         Assert.Equal(child1.Width, child2.Width);
         Assert.Equal(child1.ToText(), child2.ToText());
     }
+    
+    #endregion
+    
+    #region Equality
+    
+    [Fact]
+    public void Equals_SameGreenNodeSamePosition_ReturnsTrue()
+    {
+        // Two ephemeral red nodes wrapping same green at same position should be equal
+        var tree = SyntaxTree.Parse("{child}");
+        var block = tree.Root.Children.First();
+        
+        var child1 = block.GetChild(0);
+        var child2 = block.GetChild(0);
+        
+        // Different instances
+        Assert.NotSame(child1, child2);
+        
+        // But equal
+        Assert.Equal(child1, child2);
+        Assert.True(child1!.Equals(child2));
+        Assert.True(child1 == child2);
+        Assert.False(child1 != child2);
+    }
+    
+    [Fact]
+    public void Equals_SameGreenNodeDifferentPosition_ReturnsFalse()
+    {
+        // This tests the scenario where two red nodes have identical structure
+        // but appear at different positions in the source
+        var tree = SyntaxTree.Parse("{a} + {a}");  // Two similar blocks
+        var blocks = tree.Root.Children.Where(c => c.Kind == NodeKind.BraceBlock).ToList();
+        
+        Assert.Equal(2, blocks.Count);
+        
+        // Different positions
+        Assert.NotEqual(blocks[0].Position, blocks[1].Position);
+        
+        // Therefore NOT equal (different locations in source)
+        // Even if they had the same green node (structurally shared), 
+        // different positions means different logical locations
+        Assert.NotEqual(blocks[0], blocks[1]);
+        Assert.False(blocks[0].Equals(blocks[1]));
+        Assert.False(blocks[0] == blocks[1]);
+        Assert.True(blocks[0] != blocks[1]);
+    }
+    
+    [Fact]
+    public void Equals_DifferentGreenNodes_ReturnsFalse()
+    {
+        var tree = SyntaxTree.Parse("foo bar");
+        var children = tree.Root.Children.Where(c => c.Kind == NodeKind.Ident).ToList();
+        
+        Assert.Equal(2, children.Count);
+        Assert.NotEqual(children[0], children[1]);
+        Assert.False(children[0] == children[1]);
+    }
+    
+    [Fact]
+    public void Equals_WithNull_ReturnsFalse()
+    {
+        var tree = SyntaxTree.Parse("test");
+        var node = tree.Root.Children.First();
+        
+        Assert.False(node.Equals(null));
+        Assert.False(node == null);
+        Assert.True(node != null);
+    }
+    
+    [Fact]
+    public void Equals_NullWithNull_ReturnsTrue()
+    {
+        SyntaxNode? left = null;
+        SyntaxNode? right = null;
+        
+        Assert.True(left == right);
+        Assert.False(left != right);
+    }
+    
+    [Fact]
+    public void GetHashCode_SameGreenNodeSamePosition_ReturnsSameHash()
+    {
+        var tree = SyntaxTree.Parse("{child}");
+        var block = tree.Root.Children.First();
+        
+        var child1 = block.GetChild(0);
+        var child2 = block.GetChild(0);
+        
+        Assert.Equal(child1!.GetHashCode(), child2!.GetHashCode());
+    }
+    
+    [Fact]
+    public void GetHashCode_DifferentPositions_ReturnsDifferentHash()
+    {
+        var tree = SyntaxTree.Parse("{a} + {a}");
+        var blocks = tree.Root.Children.Where(c => c.Kind == NodeKind.BraceBlock).ToList();
+        
+        // Different positions should (almost certainly) produce different hashes
+        Assert.NotEqual(blocks[0].GetHashCode(), blocks[1].GetHashCode());
+    }
+    
+    [Fact]
+    public void Equality_WorksInHashSet()
+    {
+        var tree = SyntaxTree.Parse("{child}");
+        var block = tree.Root.Children.First();
+        
+        var child1 = block.GetChild(0);
+        var child2 = block.GetChild(0);
+        
+        var set = new HashSet<SyntaxNode> { child1! };
+        
+        // child2 should be recognized as already in the set
+        Assert.Contains(child2, set);
+        Assert.False(set.Add(child2!));  // Add returns false if already present
+    }
+    
+    [Fact]
+    public void Equality_WorksInDictionary()
+    {
+        var tree = SyntaxTree.Parse("{child}");
+        var block = tree.Root.Children.First();
+        
+        var child1 = block.GetChild(0);
+        var child2 = block.GetChild(0);
+        
+        var dict = new Dictionary<SyntaxNode, string> { { child1!, "value" } };
+        
+        // child2 should be able to look up the value
+        Assert.True(dict.ContainsKey(child2!));
+        Assert.Equal("value", dict[child2!]);
+    }
 
     [Fact]
     public void GetChild_OutOfRange_ReturnsNull()
