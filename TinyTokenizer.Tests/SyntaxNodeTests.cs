@@ -433,5 +433,171 @@ public class SyntaxNodeTests
         Assert.Equal("foo", funcCall!.Name);
     }
     
+    [Fact]
+    public void SyntaxBinder_Rebind_DoesNotDoubleWrapSyntaxNodes()
+    {
+        // Regression test: After edits, rebinding should not double-wrap syntax nodes.
+        // The bug manifested as "Expected child at slot 0 to be X, but got SyntaxNode"
+        // because GreenSyntaxNode was getting wrapped inside another GreenSyntaxNode.
+        
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
+                .Match(Query.AnyIdent, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        // Parse and bind - creates FunctionCallSyntax
+        var tree = SyntaxTree.Parse("foo()", schema);
+        
+        // Verify initial binding worked
+        var funcCall = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(funcCall);
+        Assert.Equal("foo", funcCall!.Name);
+        
+        // Make an edit that triggers rebinding
+        tree.CreateEditor()
+            .Insert(Query.Syntax<FunctionCallSyntax>().After(), " bar()")
+            .Commit();
+        
+        // After rebinding, the original FunctionCallSyntax should still be valid
+        // (not double-wrapped in another syntax node)
+        var funcCalls = tree.Root.Children.OfType<FunctionCallSyntax>().ToList();
+        
+        Assert.Equal(2, funcCalls.Count);
+        Assert.Equal("foo", funcCalls[0].Name); // Should not throw "Expected child at slot 0..."
+        Assert.Equal("bar", funcCalls[1].Name);
+    }
+    
+    [Fact]
+    public void SyntaxBinder_MultipleRebinds_MaintainsCorrectStructure()
+    {
+        // Test multiple edit/rebind cycles don't corrupt tree structure
+        
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
+                .Match(Query.AnyIdent, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        var tree = SyntaxTree.Parse("foo()", schema);
+        
+        // First edit
+        tree.CreateEditor()
+            .Insert(Query.Syntax<FunctionCallSyntax>().After(), " bar()")
+            .Commit();
+        
+        // Verify after first edit
+        var funcCallsAfterFirst = tree.Root.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Equal(2, funcCallsAfterFirst.Count);
+        Assert.Equal("foo", funcCallsAfterFirst[0].Name);
+        Assert.Equal("bar", funcCallsAfterFirst[1].Name);
+        
+        // Second edit - replace content of first function call
+        tree.CreateEditor()
+            .Replace(Query.Syntax<FunctionCallSyntax>().First(), "baz()")
+            .Commit();
+        
+        // Verify after second edit
+        var funcCallsAfterSecond = tree.Root.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Equal(2, funcCallsAfterSecond.Count);
+        Assert.Equal("baz", funcCallsAfterSecond[0].Name);
+        Assert.Equal("bar", funcCallsAfterSecond[1].Name);
+        
+        // Third edit - insert at beginning
+        tree.CreateEditor()
+            .Insert(Query.Syntax<FunctionCallSyntax>().First().Before(), "qux() ")
+            .Commit();
+        
+        // Verify after third edit
+        var funcCallsAfterThird = tree.Root.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Equal(3, funcCallsAfterThird.Count);
+        Assert.Equal("qux", funcCallsAfterThird[0].Name);
+        Assert.Equal("baz", funcCallsAfterThird[1].Name);
+        Assert.Equal("bar", funcCallsAfterThird[2].Name);
+    }
+    
+    [Fact]
+    public void SyntaxBinder_RebindsNestedChildrenInsideSyntaxNode()
+    {
+        // Test that children nested within an already-bound syntax node
+        // are correctly rebound when edits occur inside them.
+        // e.g., outer(inner()) - if we edit inside the paren block, inner() should still be recognized
+        
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
+                .Match(Query.AnyIdent, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        // Parse nested function calls: outer(inner())
+        var tree = SyntaxTree.Parse("outer(inner())", schema);
+        
+        // Verify initial structure
+        var outerCall = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(outerCall);
+        Assert.Equal("outer", outerCall!.Name);
+        
+        var innerCall = outerCall.Arguments.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(innerCall);
+        Assert.Equal("inner", innerCall!.Name);
+        
+        // Edit: Insert another function call inside the arguments of outer()
+        // This tests that rebinding correctly processes children of existing syntax nodes
+        tree.CreateEditor()
+            .Insert(Query.Syntax<FunctionCallSyntax>().Where(f => f.Name == "inner").After(), ", added()")
+            .Commit();
+        
+        // Verify outer still exists and is correct
+        var outerAfterEdit = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(outerAfterEdit);
+        Assert.Equal("outer", outerAfterEdit!.Name);
+        
+        // Verify both inner function calls exist inside outer's arguments
+        var innerCalls = outerAfterEdit.Arguments.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Equal(2, innerCalls.Count);
+        Assert.Equal("inner", innerCalls[0].Name);
+        Assert.Equal("added", innerCalls[1].Name);
+    }
+    
+    [Fact]
+    public void SyntaxBinder_RebindsNewlyInsertedContentInsideSyntaxNode()
+    {
+        // Test that when new content matching a pattern is inserted inside
+        // an existing syntax node, the new content gets properly bound.
+        
+        var schema = Schema.Create()
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
+                .Match(Query.AnyIdent, Query.ParenBlock)
+                .Build())
+            .Build();
+        
+        // Parse: foo(x) - x is just an identifier, not a function call
+        var tree = SyntaxTree.Parse("foo(x)", schema);
+        
+        // Verify initial structure
+        var fooCall = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(fooCall);
+        Assert.Equal("foo", fooCall!.Name);
+        
+        // x is not a function call initially
+        var innerCallsInitial = fooCall.Arguments.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Empty(innerCallsInitial);
+        
+        // Edit: Replace x with bar() inside foo's arguments
+        tree.CreateEditor()
+            .Replace(Query.Ident("x"), "bar()")
+            .Commit();
+        
+        // Verify foo still exists
+        var fooAfterEdit = tree.Root.Children.OfType<FunctionCallSyntax>().FirstOrDefault();
+        Assert.NotNull(fooAfterEdit);
+        Assert.Equal("foo", fooAfterEdit!.Name);
+        
+        // Verify bar() is now recognized as a function call inside foo's arguments
+        var innerCallsAfterEdit = fooAfterEdit.Arguments.Children.OfType<FunctionCallSyntax>().ToList();
+        Assert.Single(innerCallsAfterEdit);
+        Assert.Equal("bar", innerCallsAfterEdit[0].Name);
+    }
+    
     #endregion
 }

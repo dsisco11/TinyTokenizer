@@ -891,4 +891,110 @@ void main() {
     }
     
     #endregion
+    
+    #region Multi-Commit Edit Scenarios
+    
+    /// <summary>
+    /// Tests multiple sequential edit/commit cycles with re-querying syntax nodes between mutations.
+    /// 
+    /// Scenario:
+    /// 1. Parse shader with #version directive
+    /// 2. Insert @import after #version, commit
+    /// 3. Find and Edit the import in-place (comment it out + inject fake code), commit
+    /// 4. Re-find #version and insert #define after it, commit
+    /// 
+    /// Verifies that syntax nodes can be reliably re-queried after multiple tree mutations.
+    /// </summary>
+    [Fact]
+    public void MultiCommit_EditImportThenInsertDefine_MaintainsCorrectTreeStructure()
+    {
+        var schema = CreateGlslSchema();
+        
+        // Minimal shader with #version directive
+        const string minimalShader = @"#version 330 core
+
+void main() {
+    gl_FragColor = vec4(1.0);
+}
+";
+        
+        var tree = SyntaxTree.Parse(minimalShader, schema);
+        _output.WriteLine("=== Initial tree ===");
+        _output.WriteLine(tree.ToText());
+        
+        // Diagnostic: Verify initial #version is found
+        var versionQuery = Query.Syntax<GlDirectiveNode>().Named("version");
+        var initialVersion = tree.Select(versionQuery).FirstOrDefault() as GlDirectiveNode;
+        Assert.NotNull(initialVersion);
+        _output.WriteLine($"Initial #version found: '{NormalizeLineEndings(initialVersion!.ToText())}'");
+        
+        // === STEP 1: Insert @import after #version ===
+        tree.CreateEditor()
+            .Insert(versionQuery.After(), "\n@import \"utils.glsl\"")
+            .Commit();
+        
+        _output.WriteLine("\n=== After inserting @import ===");
+        _output.WriteLine(tree.ToText());
+        
+        // Diagnostic: Verify @import was inserted and can be found
+        var importQuery = Query.Syntax<GlImportNode>().Named("import");
+        var importNode = tree.Select(importQuery).FirstOrDefault() as GlImportNode;
+        Assert.NotNull(importNode);
+        _output.WriteLine($"@import found: '{NormalizeLineEndings(importNode!.ToText())}'");
+        
+        // === STEP 2: Edit the import in-place (comment it out + inject fake code) ===
+        tree.CreateEditor()
+            .Edit(importQuery, content => $"// {content}\nfloat fake = 1.0;")
+            .Commit();
+        
+        _output.WriteLine("\n=== After editing @import (commented out + fake code) ===");
+        _output.WriteLine(tree.ToText());
+        
+        // Diagnostic: Verify the edit was applied
+        var treeTextAfterEdit = NormalizeLineEndings(tree.ToText());
+        Assert.Contains("// ", treeTextAfterEdit); // Should contain comment marker
+        Assert.Contains("float fake = 1.0;", treeTextAfterEdit); // Should contain injected code
+        
+        // === STEP 3: Re-find #version and insert #define after it ===
+        // This is where the bug manifests - the version directive should still be findable
+        var versionAfterMutations = tree.Select(versionQuery).FirstOrDefault() as GlDirectiveNode;
+        
+        // Diagnostic checkpoint: Assert version is still findable
+        Assert.NotNull(versionAfterMutations);
+        _output.WriteLine($"\n#version after mutations: '{NormalizeLineEndings(versionAfterMutations!.ToText())}'");
+        
+        tree.CreateEditor()
+            .Insert(versionQuery.After(), "\n#define DEBUG 1")
+            .Commit();
+        
+        _output.WriteLine("\n=== After inserting #define ===");
+        _output.WriteLine(tree.ToText());
+        
+        // === FINAL ASSERTIONS ===
+        var finalText = NormalizeLineEndings(tree.ToText());
+        
+        // Verify all modifications are present in correct order
+        Assert.Contains("#version 330 core", finalText);
+        Assert.Contains("#define DEBUG 1", finalText);
+        Assert.Contains("// ", finalText); // Commented import
+        Assert.Contains("float fake = 1.0;", finalText);
+        Assert.Contains("void main()", finalText);
+        
+        // Verify order: #version should come before #define which should come before the commented import
+        var versionIndex = finalText.IndexOf("#version 330 core");
+        var defineIndex = finalText.IndexOf("#define DEBUG 1");
+        var commentedImportIndex = finalText.IndexOf("// ");
+        var fakeCodeIndex = finalText.IndexOf("float fake = 1.0;");
+        
+        Assert.True(versionIndex < defineIndex, 
+            $"#version (index {versionIndex}) should come before #define (index {defineIndex})");
+        Assert.True(defineIndex < commentedImportIndex, 
+            $"#define (index {defineIndex}) should come before commented import (index {commentedImportIndex})");
+        Assert.True(commentedImportIndex < fakeCodeIndex, 
+            $"Commented import (index {commentedImportIndex}) should come before fake code (index {fakeCodeIndex})");
+        
+        _output.WriteLine("\n=== Test passed: All mutations applied in correct order ===");
+    }
+    
+    #endregion
 }
