@@ -583,7 +583,7 @@ public class RedNodeTests
     public void RedLeaf_Text_ReturnsContent()
     {
         var tree = SyntaxTree.Parse("hello");
-        var leaf = tree.Root.Children.First() as RedLeaf;
+        var leaf = tree.Root.Children.First() as SyntaxToken;
         
         Assert.NotNull(leaf);
         Assert.Equal("hello", leaf.Text);

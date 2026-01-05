@@ -32,15 +32,15 @@ public sealed class RedBlock : SyntaxNode
     public char Closer => Green.Closer;
     
     /// <summary>The opening delimiter node with its trivia.</summary>
-    public RedLeaf OpenerNode => (RedLeaf)Green.OpenerNode.CreateRed(this, Position, -1, Tree);
+    public SyntaxToken OpenerNode => (SyntaxToken)Green.OpenerNode.CreateRed(this, Position, -1, Tree);
     
     /// <summary>The closing delimiter node with its trivia.</summary>
-    public RedLeaf CloserNode
+    public SyntaxToken CloserNode
     {
         get
         {
             var closerPosition = EndPosition - Green.CloserNode.Width;
-            return (RedLeaf)Green.CloserNode.CreateRed(this, closerPosition, -1, Tree);
+            return (SyntaxToken)Green.CloserNode.CreateRed(this, closerPosition, -1, Tree);
         }
     }
     
@@ -170,13 +170,13 @@ public sealed class RedBlock : SyntaxNode
     /// <summary>
     /// Gets all leaf children.
     /// </summary>
-    public IEnumerable<RedLeaf> LeafChildren
+    public IEnumerable<SyntaxToken> LeafChildren
     {
         get
         {
             foreach (var child in Children)
             {
-                if (child is RedLeaf leaf)
+                if (child is SyntaxToken leaf)
                     yield return leaf;
             }
         }

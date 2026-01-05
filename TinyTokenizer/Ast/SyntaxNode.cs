@@ -300,7 +300,7 @@ public abstract class SyntaxNode : IFormattable, ITextSerializable
         string triviaInfo = "";
         string textContent = "";
         
-        if (this is RedLeaf leaf)
+        if (this is SyntaxToken leaf)
         {
             textContent = leaf.Text.Replace("\n", "\\n").Replace("\r", "\\r");
             var leadingNewlines = leaf.Green is GreenLeaf gl 

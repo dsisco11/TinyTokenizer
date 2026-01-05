@@ -72,7 +72,7 @@ internal sealed record GreenLeaf : GreenNode
     
     /// <inheritdoc/>
     public override SyntaxNode CreateRed(SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
-        => new RedLeaf(this, parent, position, siblingIndex, tree);
+        => new SyntaxToken(this, parent, position, siblingIndex, tree);
     
     /// <inheritdoc/>
     public override void WriteTo(IBufferWriter<char> writer)

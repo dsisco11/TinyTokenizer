@@ -334,7 +334,7 @@ public static class Query
     /// </code>
     /// </example>
     public static INodeQuery Keyword(string text) => 
-        new AnyKeywordQuery().Where(n => n is RedLeaf leaf && leaf.Text == text);
+        new AnyKeywordQuery().Where(n => n is SyntaxToken leaf && leaf.Text == text);
     
     /// <summary>
     /// Matches keywords in a specific category.

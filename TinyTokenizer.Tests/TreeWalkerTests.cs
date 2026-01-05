@@ -243,7 +243,7 @@ public class TreeWalkerTests
 
         // Should not include the block or its children
         Assert.DoesNotContain(visited, n => n.Kind == NodeKind.BraceBlock);
-        Assert.DoesNotContain(visited, n => n.Kind == NodeKind.Ident && ((RedLeaf)n).Text == "b");
+        Assert.DoesNotContain(visited, n => n.Kind == NodeKind.Ident && ((SyntaxToken)n).Text == "b");
     }
 
     #endregion
@@ -553,7 +553,7 @@ public class TreeWalkerTests
         // Block and its children are excluded
         Assert.DoesNotContain(all, n => n.Kind == NodeKind.BraceBlock);
         // x and y should be included
-        var idents = all.Where(n => n.Kind == NodeKind.Ident).Cast<RedLeaf>().Select(l => l.Text).ToList();
+        var idents = all.Where(n => n.Kind == NodeKind.Ident).Cast<SyntaxToken>().Select(l => l.Text).ToList();
         Assert.Contains("x", idents);
         Assert.Contains("y", idents);
         // a and b should NOT be included
@@ -568,14 +568,14 @@ public class TreeWalkerTests
         var walker = new TreeWalker(
             tree.Root,
             NodeFilter.Leaves,
-            node => node is RedLeaf leaf && leaf.Text.StartsWith("keep")
+            node => node is SyntaxToken leaf && leaf.Text.StartsWith("keep")
                 ? FilterResult.Accept
                 : FilterResult.Skip);
 
         var all = walker.DescendantsAndSelf().ToList();
 
         Assert.Equal(2, all.Count);
-        Assert.All(all, n => Assert.StartsWith("keep", ((RedLeaf)n).Text));
+        Assert.All(all, n => Assert.StartsWith("keep", ((SyntaxToken)n).Text));
     }
 
     #endregion
@@ -690,7 +690,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.NextNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 
@@ -713,7 +713,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.NextNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 
@@ -739,7 +739,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.PreviousNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 
@@ -790,7 +790,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.NextNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 
@@ -821,7 +821,7 @@ public class TreeWalkerTests
         }
 
         Assert.NotNull(firstIdent);
-        Assert.Equal("accept", ((RedLeaf)firstIdent).Text);
+        Assert.Equal("accept", ((SyntaxToken)firstIdent).Text);
     }
 
     [Fact]
@@ -839,7 +839,7 @@ public class TreeWalkerTests
 
         // Current should be at "last" since the block was rejected
         Assert.Equal(NodeKind.Ident, walker.Current.Kind);
-        Assert.Equal("last", ((RedLeaf)walker.Current).Text);
+        Assert.Equal("last", ((SyntaxToken)walker.Current).Text);
     }
 
     [Fact]
@@ -855,7 +855,7 @@ public class TreeWalkerTests
         var idents = new List<string>();
         while (walker.NextNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 idents.Add(leaf.Text);
         }
 
@@ -879,7 +879,7 @@ public class TreeWalkerTests
 
         Assert.NotNull(first);
         Assert.Equal(NodeKind.Ident, first.Kind);
-        Assert.Equal("found", ((RedLeaf)first).Text);
+        Assert.Equal("found", ((SyntaxToken)first).Text);
     }
 
     [Fact]
@@ -897,7 +897,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.NextNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 
@@ -923,7 +923,7 @@ public class TreeWalkerTests
         var visited = new List<string>();
         while (walker.PreviousNode() is { } node)
         {
-            if (node is RedLeaf leaf && node.Kind == NodeKind.Ident)
+            if (node is SyntaxToken leaf && node.Kind == NodeKind.Ident)
                 visited.Add(leaf.Text);
         }
 

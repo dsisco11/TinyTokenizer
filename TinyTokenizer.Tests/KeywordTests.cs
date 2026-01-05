@@ -216,7 +216,7 @@ public class KeywordTests
         var keywords = tree.Select(Query.AnyKeyword).ToList();
         
         Assert.Single(keywords);
-        Assert.Equal("int", ((RedLeaf)keywords[0]).Text);
+        Assert.Equal("int", ((SyntaxToken)keywords[0]).Text);
     }
     
     [Fact]
@@ -412,13 +412,13 @@ public class KeywordTests
         Assert.Equal(source, tree.ToText());
         
         // Verify keywords are recognized
-        var keywords = tree.Select(Query.AnyKeyword).Cast<RedLeaf>().ToList();
+        var keywords = tree.Select(Query.AnyKeyword).Cast<SyntaxToken>().ToList();
         Assert.Equal(2, keywords.Count);
         Assert.Equal("int", keywords[0].Text);
         Assert.Equal("float", keywords[1].Text);
         
         // Verify identifiers are still identifiers
-        var idents = tree.Select(Query.AnyIdent).Cast<RedLeaf>().ToList();
+        var idents = tree.Select(Query.AnyIdent).Cast<SyntaxToken>().ToList();
         Assert.Contains(idents, i => i.Text == "myInt");
         Assert.Contains(idents, i => i.Text == "myFloat");
     }
@@ -443,7 +443,7 @@ public class KeywordTests
         Assert.Equal(source, tree.ToText());
         
         // Verify structure is correct
-        var keywords = tree.Select(Query.AnyKeyword).Cast<RedLeaf>().ToList();
+        var keywords = tree.Select(Query.AnyKeyword).Cast<SyntaxToken>().ToList();
         Assert.Equal(4, keywords.Count); // void, if, while, return
     }
     

@@ -184,25 +184,25 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// Filters to leaf nodes with exact text match.
     /// </summary>
     public TSelf WithText(string text) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text == text);
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text == text);
     
     /// <summary>
     /// Filters to leaf nodes whose text contains the specified substring.
     /// </summary>
     public TSelf WithTextContaining(string substring) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.Contains(substring));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.Contains(substring));
     
     /// <summary>
     /// Filters to leaf nodes whose text starts with the specified prefix.
     /// </summary>
     public TSelf WithTextStartingWith(string prefix) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.StartsWith(prefix));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.StartsWith(prefix));
     
     /// <summary>
     /// Filters to leaf nodes whose text ends with the specified suffix.
     /// </summary>
     public TSelf WithTextEndingWith(string suffix) => 
-        CreateFiltered(n => n is RedLeaf leaf && leaf.Text.EndsWith(suffix));
+        CreateFiltered(n => n is SyntaxToken leaf && leaf.Text.EndsWith(suffix));
     
     #endregion
     

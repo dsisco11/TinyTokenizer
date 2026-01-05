@@ -25,7 +25,7 @@ public sealed class FunctionCallSyntax : SyntaxNode
     }
     
     /// <summary>The function name node.</summary>
-    public RedLeaf NameNode => GetTypedChild<RedLeaf>(0);
+    public SyntaxToken NameNode => GetTypedChild<SyntaxToken>(0);
     
     /// <summary>The function name as text.</summary>
     public string Name => NameNode.Text;
@@ -61,7 +61,7 @@ public sealed class ArrayAccessSyntax : SyntaxNode
     }
     
     /// <summary>The target being accessed.</summary>
-    public RedLeaf TargetNode => GetTypedChild<RedLeaf>(0);
+    public SyntaxToken TargetNode => GetTypedChild<SyntaxToken>(0);
     
     /// <summary>The target name as text.</summary>
     public string Target => TargetNode.Text;
@@ -97,16 +97,16 @@ public sealed class PropertyAccessSyntax : SyntaxNode
     }
     
     /// <summary>The object being accessed.</summary>
-    public RedLeaf ObjectNode => GetTypedChild<RedLeaf>(0);
+    public SyntaxToken ObjectNode => GetTypedChild<SyntaxToken>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The dot separator.</summary>
-    public RedLeaf DotNode => GetTypedChild<RedLeaf>(1);
+    public SyntaxToken DotNode => GetTypedChild<SyntaxToken>(1);
     
     /// <summary>The property being accessed.</summary>
-    public RedLeaf PropertyNode => GetTypedChild<RedLeaf>(2);
+    public SyntaxToken PropertyNode => GetTypedChild<SyntaxToken>(2);
     
     /// <summary>The property name as text.</summary>
     public string Property => PropertyNode.Text;

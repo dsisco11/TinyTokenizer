@@ -8,7 +8,7 @@ namespace TinyTokenizer.Ast;
 /// Provides position-aware access to token text and trivia.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-public sealed class RedLeaf : SyntaxNode
+public sealed class SyntaxToken : SyntaxNode
 {
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
@@ -17,7 +17,7 @@ public sealed class RedLeaf : SyntaxNode
     /// <summary>
     /// Creates a new red leaf wrapping a green leaf.
     /// </summary>
-    internal RedLeaf(GreenLeaf green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
+    internal SyntaxToken(GreenLeaf green, SyntaxNode? parent, int position, int siblingIndex = -1, SyntaxTree? tree = null)
         : base(green, parent, position, siblingIndex, tree)
     {
     }

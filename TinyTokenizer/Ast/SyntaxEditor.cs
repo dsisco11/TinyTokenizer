@@ -614,7 +614,7 @@ public sealed class SyntaxEditor
     /// </summary>
     private static string GetContentWithoutTrivia(SyntaxNode node)
     {
-        if (node is RedLeaf leaf)
+        if (node is SyntaxToken leaf)
         {
             return leaf.Text;
         }
@@ -662,7 +662,7 @@ public sealed class SyntaxEditor
     /// </summary>
     private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(SyntaxNode node)
     {
-        if (node is RedLeaf leaf)
+        if (node is SyntaxToken leaf)
         {
             var greenLeaf = (GreenLeaf)leaf.Green;
             return (greenLeaf.LeadingTrivia, greenLeaf.TrailingTrivia);

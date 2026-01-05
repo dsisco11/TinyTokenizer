@@ -102,7 +102,7 @@ public sealed class FunctionNameNode : SemanticNode
     public FunctionNameNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The function name node.</summary>
-    public RedLeaf NameNode => Part<RedLeaf>(0);
+    public SyntaxToken NameNode => Part<SyntaxToken>(0);
     
     /// <summary>The function name as text.</summary>
     public string Name => NameNode.Text;
@@ -123,7 +123,7 @@ public sealed class ArrayAccessNode : SemanticNode
     public ArrayAccessNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The array/object being accessed.</summary>
-    public RedLeaf TargetNode => Part<RedLeaf>(0);
+    public SyntaxToken TargetNode => Part<SyntaxToken>(0);
     
     /// <summary>The target name as text.</summary>
     public string Target => TargetNode.Text;
@@ -146,13 +146,13 @@ public sealed class PropertyAccessNode : SemanticNode
     public PropertyAccessNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The object being accessed.</summary>
-    public RedLeaf ObjectNode => Part<RedLeaf>(0);
+    public SyntaxToken ObjectNode => Part<SyntaxToken>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The property being accessed.</summary>
-    public RedLeaf PropertyNode => Part<RedLeaf>(2);
+    public SyntaxToken PropertyNode => Part<SyntaxToken>(2);
     
     /// <summary>The property name as text.</summary>
     public string Property => PropertyNode.Text;
@@ -168,13 +168,13 @@ public sealed class MethodCallNode : SemanticNode
     public MethodCallNode(NodeMatch match, NodeKind kind) : base(match, kind) { }
     
     /// <summary>The object being called on.</summary>
-    public RedLeaf ObjectNode => Part<RedLeaf>(0);
+    public SyntaxToken ObjectNode => Part<SyntaxToken>(0);
     
     /// <summary>The object name as text.</summary>
     public string Object => ObjectNode.Text;
     
     /// <summary>The method being called.</summary>
-    public RedLeaf MethodNode => Part<RedLeaf>(2);
+    public SyntaxToken MethodNode => Part<SyntaxToken>(2);
     
     /// <summary>The method name as text.</summary>
     public string Method => MethodNode.Text;

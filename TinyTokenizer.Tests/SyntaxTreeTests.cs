@@ -99,7 +99,7 @@ public class SyntaxTreeTests
         
         // Find a leaf and check parent chain
         var walker = new TreeWalker(root);
-        var leaf = walker.DescendantsAndSelf().OfType<RedLeaf>().FirstOrDefault(l => l.Text == "a");
+        var leaf = walker.DescendantsAndSelf().OfType<SyntaxToken>().FirstOrDefault(l => l.Text == "a");
         Assert.NotNull(leaf);
         Assert.NotNull(leaf.Parent);
         Assert.Same(root, leaf.Root);
@@ -445,7 +445,7 @@ public class SyntaxTreeTests
         var first = Q.AnyIdent.First().Select(tree).ToList();
         
         Assert.Single(first);
-        Assert.Equal("a", ((RedLeaf)first[0]).Text);
+        Assert.Equal("a", ((SyntaxToken)first[0]).Text);
     }
     
     [Fact]
@@ -456,7 +456,7 @@ public class SyntaxTreeTests
         var last = Q.AnyIdent.Last().Select(tree).ToList();
         
         Assert.Single(last);
-        Assert.Equal("c", ((RedLeaf)last[0]).Text);
+        Assert.Equal("c", ((SyntaxToken)last[0]).Text);
     }
     
     [Fact]
@@ -547,7 +547,7 @@ public class SyntaxTreeTests
         // Should get 'a' but not the block itself
         foreach (var leaf in leaves)
         {
-            Assert.IsType<RedLeaf>(leaf);
+            Assert.IsType<SyntaxToken>(leaf);
         }
     }
     
@@ -573,7 +573,7 @@ public class SyntaxTreeTests
         var foos = Q.Ident("foo").Select(tree).ToList();
         
         Assert.Equal(2, foos.Count);
-        Assert.All(foos, node => Assert.Equal("foo", ((RedLeaf)node).Text));
+        Assert.All(foos, node => Assert.Equal("foo", ((SyntaxToken)node).Text));
     }
     
     [Fact]
@@ -594,7 +594,7 @@ public class SyntaxTreeTests
         var foos = Q.Ident("foo").Select(tree).ToList();
         
         Assert.Single(foos);
-        Assert.Equal("foo", ((RedLeaf)foos[0]).Text);
+        Assert.Equal("foo", ((SyntaxToken)foos[0]).Text);
     }
     
     [Fact]
@@ -819,7 +819,7 @@ public class SyntaxTreeTests
         var intersection = (Q.AnyIdent & Q.AnyIdent.WithText("bar")).Select(tree).ToList();
         
         Assert.Single(intersection);
-        Assert.Equal("bar", ((RedLeaf)intersection[0]).Text);
+        Assert.Equal("bar", ((SyntaxToken)intersection[0]).Text);
     }
     
     #endregion
@@ -854,7 +854,7 @@ public class SyntaxTreeTests
         var matches = Q.AnyIdent.WithTextEndingWith("B").Select(tree).ToList();
         
         Assert.Single(matches);
-        Assert.Equal("testB", ((RedLeaf)matches[0]).Text);
+        Assert.Equal("testB", ((SyntaxToken)matches[0]).Text);
     }
     
     [Fact]
@@ -863,7 +863,7 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("a bb ccc");
         
         // Filter idents with width >= 2
-        var matches = Q.AnyIdent.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2).Select(tree).ToList();
+        var matches = Q.AnyIdent.Where(n => n is SyntaxToken leaf && leaf.Text.Length >= 2).Select(tree).ToList();
         
         Assert.Equal(2, matches.Count); // bb and ccc
     }
@@ -880,7 +880,7 @@ public class SyntaxTreeTests
         var third = Q.AnyIdent.Nth(2).Select(tree).ToList();
         
         Assert.Single(third);
-        Assert.Equal("c", ((RedLeaf)third[0]).Text);
+        Assert.Equal("c", ((SyntaxToken)third[0]).Text);
     }
     
     [Fact]
@@ -893,7 +893,7 @@ public class SyntaxTreeTests
         Assert.Single(last);
         // The last block contains 'c'
         var block = (RedBlock)last[0];
-        Assert.Contains("c", block.Children.OfType<RedLeaf>().Select(l => l.Text));
+        Assert.Contains("c", block.Children.OfType<SyntaxToken>().Select(l => l.Text));
     }
     
     [Fact]
@@ -905,7 +905,7 @@ public class SyntaxTreeTests
         
         Assert.Single(second);
         var block = (RedBlock)second[0];
-        Assert.Contains("b", block.Children.OfType<RedLeaf>().Select(l => l.Text));
+        Assert.Contains("b", block.Children.OfType<SyntaxToken>().Select(l => l.Text));
     }
     
     #endregion
@@ -1180,7 +1180,7 @@ public class SyntaxTreeTests
         // So 'b' starts at position 2 with no leading trivia
         var secondIdent = leaves.Where(l => l.Kind == NodeKind.Ident).Skip(1).First();
         Assert.Equal(2, secondIdent.Position);  // Position (same as TextPosition when no leading trivia)
-        Assert.Equal(2, ((RedLeaf)secondIdent).TextPosition);  // TextPosition is where text starts
+        Assert.Equal(2, ((SyntaxToken)secondIdent).TextPosition);  // TextPosition is where text starts
     }
     
     [Fact]
@@ -1316,7 +1316,7 @@ public class SyntaxTreeTests
         
         // Should have leaves but not nested block
         Assert.True(leaves.Count >= 2);
-        Assert.All(leaves, l => Assert.IsType<RedLeaf>(l));
+        Assert.All(leaves, l => Assert.IsType<SyntaxToken>(l));
     }
     
     [Fact]
@@ -1647,7 +1647,7 @@ public class SyntaxTreeTests
     public void PredicateNodeQuery_Matches_CombinesInnerAndPredicate()
     {
         var tree = SyntaxTree.Parse("a bb ccc");
-        var query = Q.AnyIdent.Where(n => n is RedLeaf leaf && leaf.Text.Length >= 2);
+        var query = Q.AnyIdent.Where(n => n is SyntaxToken leaf && leaf.Text.Length >= 2);
         
         var shortIdent = Q.AnyIdent.Select(tree).First();
         var longIdent = Q.AnyIdent.Select(tree).Skip(1).First();

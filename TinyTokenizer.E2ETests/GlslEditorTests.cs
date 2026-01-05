@@ -43,13 +43,13 @@ public class GlslEditorTests
             : base(context) { }
         
         /// <summary>Return type node (e.g., "void", "vec4").</summary>
-        public RedLeaf ReturnTypeNode => GetTypedChild<RedLeaf>(0);
+        public SyntaxToken ReturnTypeNode => GetTypedChild<SyntaxToken>(0);
         
         /// <summary>Return type as text.</summary>
         public string ReturnType => ReturnTypeNode.Text;
         
         /// <summary>Function name node.</summary>
-        public RedLeaf NameNode => GetTypedChild<RedLeaf>(1);
+        public SyntaxToken NameNode => GetTypedChild<SyntaxToken>(1);
         
         /// <summary>Function name as text.</summary>
         public string Name => NameNode.Text;
@@ -86,7 +86,7 @@ public class GlslEditorTests
             : base(context) { }
         
         /// <summary>The directive tag node (e.g., "#version").</summary>
-        public RedLeaf DirectiveNode => GetTypedChild<RedLeaf>(0);
+        public SyntaxToken DirectiveNode => GetTypedChild<SyntaxToken>(0);
         
         /// <summary>The directive name without # (e.g., "version").</summary>
         public string Name => DirectiveNode.Text.TrimStart('#');
@@ -112,7 +112,7 @@ public class GlslEditorTests
             : base(context) { }
         
         /// <summary>The Import tag node (e.g., "#version").</summary>
-        public RedLeaf ImportNode => GetTypedChild<RedLeaf>(0);
+        public SyntaxToken ImportNode => GetTypedChild<SyntaxToken>(0);
         
         /// <summary>The Import name without # (e.g., "version").</summary>
         public string Name => ImportNode.Text.TrimStart('@');
@@ -120,7 +120,7 @@ public class GlslEditorTests
         /// <summary>
         /// Gets the filename node (the second child).
         /// </summary>
-        public RedLeaf? FilenameNode => GetChild(1) is RedLeaf leaf && leaf.Kind == NodeKind.String ? leaf : null;
+        public SyntaxToken? FilenameNode => GetChild(1) is SyntaxToken leaf && leaf.Kind == NodeKind.String ? leaf : null;
 
         public string? Filename => FilenameNode?.ToString();
     }

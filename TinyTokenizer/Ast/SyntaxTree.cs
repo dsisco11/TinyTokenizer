@@ -501,14 +501,14 @@ public class SyntaxTree : IFormattable, ITextSerializable
     /// <summary>
     /// Gets all leaves in document order.
     /// </summary>
-    public IEnumerable<RedLeaf> Leaves
+    public IEnumerable<SyntaxToken> Leaves
     {
         get
         {
             var walker = new TreeWalker(Root, NodeFilter.Leaves);
             foreach (var node in walker.DescendantsAndSelf())
             {
-                if (node is RedLeaf leaf)
+                if (node is SyntaxToken leaf)
                     yield return leaf;
             }
         }

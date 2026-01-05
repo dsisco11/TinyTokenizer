@@ -132,9 +132,9 @@ public class SyntaxNodeTests
         var children = propAccess.Children.ToList();
         
         Assert.Equal(3, children.Count);
-        Assert.IsType<RedLeaf>(children[0]);
-        Assert.IsType<RedLeaf>(children[1]);
-        Assert.IsType<RedLeaf>(children[2]);
+        Assert.IsType<SyntaxToken>(children[0]);
+        Assert.IsType<SyntaxToken>(children[1]);
+        Assert.IsType<SyntaxToken>(children[2]);
     }
     
     [Fact]
@@ -207,7 +207,7 @@ public class SyntaxNodeTests
         var allNodes = walker.DescendantsAndSelf().ToList();
         
         Assert.Contains(allNodes, n => n is FunctionCallSyntax);
-        Assert.Contains(allNodes, n => n is RedLeaf leaf && leaf.Text == "foo");
+        Assert.Contains(allNodes, n => n is SyntaxToken leaf && leaf.Text == "foo");
     }
     
     [Fact]

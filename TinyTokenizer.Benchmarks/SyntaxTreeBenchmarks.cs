@@ -339,7 +339,7 @@ public class SyntaxTreeBenchmarks
     {
         var walker = new TreeWalker(MediumTree.Root);
         return walker.Descendants()
-            .OfType<RedLeaf>()
+            .OfType<SyntaxToken>()
             .Count();
     }
 

@@ -31,7 +31,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("hello");
         
         tree.CreateEditor()
-            .Replace(Q.AnyIdent.First(), n => ((RedLeaf)n).Text.ToUpper())
+            .Replace(Q.AnyIdent.First(), n => ((SyntaxToken)n).Text.ToUpper())
             .Commit();
         
         Assert.Equal("HELLO", tree.ToText());
@@ -84,7 +84,7 @@ public class SyntaxEditorTests
         tree.CreateEditor()
             .Replace(Q.AnyIdent.First(), n =>
             {
-                capturedText = ((RedLeaf)n).Text;
+                capturedText = ((SyntaxToken)n).Text;
                 return "replaced";
             })
             .Commit();
@@ -605,7 +605,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("short verylongword tiny");
         
         tree.CreateEditor()
-            .Replace(Q.AnyIdent.Where(n => n is RedLeaf l && l.Text.Length > 5), "X")
+            .Replace(Q.AnyIdent.Where(n => n is SyntaxToken l && l.Text.Length > 5), "X")
             .Commit();
         
         var text = tree.ToText();
@@ -1063,7 +1063,7 @@ public class SyntaxEditorTests
         var worldNode = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ElementAt(1);
         
         tree.CreateEditor()
-            .Replace(worldNode, n => ((RedLeaf)n).Text.ToUpper())
+            .Replace(worldNode, n => ((SyntaxToken)n).Text.ToUpper())
             .Commit();
         
         Assert.Equal("hello WORLD", tree.ToText());
@@ -1089,7 +1089,7 @@ public class SyntaxEditorTests
         var nodes = tree.Root.Children.Where(n => n.Kind == NodeKind.Ident).ToList();
         
         tree.CreateEditor()
-            .Replace(nodes, n => $"[{((RedLeaf)n).Text}]")
+            .Replace(nodes, n => $"[{((SyntaxToken)n).Text}]")
             .Commit();
         
         // When replacing a token, its leading trivia is transferred to the replacement.
@@ -1352,7 +1352,7 @@ public class SyntaxEditorTests
         };
         
         tree.CreateEditor()
-            .Replace(queries, n => $"[{((RedLeaf)n).Text}]")
+            .Replace(queries, n => $"[{((SyntaxToken)n).Text}]")
             .Commit();
         
         // Trivia behavior: "foo" has no leading trivia, "bar" has leading space, "baz" has leading space.
@@ -1549,7 +1549,7 @@ public class SyntaxEditorTests
         tree2.CreateEditor()
             .Replace(Q.AnyIdent.First(), node =>
             {
-                var leaf = (RedLeaf)node;
+                var leaf = (SyntaxToken)node;
                 // Text property gives content without trivia
                 Assert.Equal("hello", leaf.Text);
                 // But we have access to trivia via the node

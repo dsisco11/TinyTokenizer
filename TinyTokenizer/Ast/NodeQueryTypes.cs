@@ -90,7 +90,7 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// Overridden to enable green-level text matching for efficient pattern binding.
     /// </summary>
     public new KindNodeQuery WithText(string text) =>
-        new(Kind, CombinePredicates(_predicate, n => n is RedLeaf leaf && leaf.Text == text), _mode, _modeArg, text);
+        new(Kind, CombinePredicates(_predicate, n => n is SyntaxToken leaf && leaf.Text == text), _mode, _modeArg, text);
     
     protected override KindNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
         new(Kind, CombinePredicates(_predicate, predicate), _mode, _modeArg, _textConstraint);
@@ -296,7 +296,7 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     
     /// <inheritdoc/>
     public override bool Matches(SyntaxNode node) => 
-        node is RedLeaf && (_predicate == null || _predicate(node));
+        node is SyntaxToken && (_predicate == null || _predicate(node));
     
     internal override bool MatchesGreen(GreenNode node) => node is GreenLeaf;
     
