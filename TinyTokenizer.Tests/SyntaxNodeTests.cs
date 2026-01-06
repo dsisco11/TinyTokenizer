@@ -456,7 +456,7 @@ public class SyntaxNodeTests
         
         // Make an edit that triggers rebinding
         tree.CreateEditor()
-            .Insert(Query.Syntax<FunctionCallSyntax>().After(), " bar()")
+            .InsertAfter(Query.Syntax<FunctionCallSyntax>(), " bar()")
             .Commit();
         
         // After rebinding, the original FunctionCallSyntax should still be valid
@@ -483,7 +483,7 @@ public class SyntaxNodeTests
         
         // First edit
         tree.CreateEditor()
-            .Insert(Query.Syntax<FunctionCallSyntax>().After(), " bar()")
+            .InsertAfter(Query.Syntax<FunctionCallSyntax>(), " bar()")
             .Commit();
         
         // Verify after first edit
@@ -505,7 +505,7 @@ public class SyntaxNodeTests
         
         // Third edit - insert at beginning
         tree.CreateEditor()
-            .Insert(Query.Syntax<FunctionCallSyntax>().First().Before(), "qux() ")
+            .InsertBefore(Query.Syntax<FunctionCallSyntax>().First(), "qux() ")
             .Commit();
         
         // Verify after third edit
@@ -544,7 +544,7 @@ public class SyntaxNodeTests
         // Edit: Insert another function call inside the arguments of outer()
         // This tests that rebinding correctly processes children of existing syntax nodes
         tree.CreateEditor()
-            .Insert(Query.Syntax<FunctionCallSyntax>().Where(f => f.Name == "inner").After(), ", added()")
+            .InsertAfter(Query.Syntax<FunctionCallSyntax>().Where(f => f.Name == "inner"), ", added()")
             .Commit();
         
         // Verify outer still exists and is correct

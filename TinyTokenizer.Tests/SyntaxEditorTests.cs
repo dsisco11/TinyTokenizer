@@ -188,7 +188,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("world");
         
         tree.CreateEditor()
-            .Insert(Q.AnyIdent.First().Before(), "hello ")
+            .InsertBefore(Q.AnyIdent.First(), "hello ")
             .Commit();
         
         Assert.Equal("hello world", tree.ToText());
@@ -200,7 +200,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("hello");
         
         tree.CreateEditor()
-            .Insert(Q.AnyIdent.First().After(), " world")
+            .InsertAfter(Q.AnyIdent.First(), " world")
             .Commit();
         
         Assert.Equal("hello world", tree.ToText());
@@ -212,7 +212,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{b}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "a ")
+            .InsertAfter(Q.BraceBlock.First().Start(), "a ")
             .Commit();
         
         Assert.Equal("{a b}", tree.ToText());
@@ -224,7 +224,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{a}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerEnd(), " b")
+            .InsertBefore(Q.BraceBlock.First().End(), " b")
             .Commit();
         
         Assert.Equal("{a b}", tree.ToText());
@@ -234,11 +234,10 @@ public class SyntaxEditorTests
     public void Insert_WithGreenNodes_InsertsProvidedNodes()
     {
         var tree = SyntaxTree.Parse("x");
-        var lexer = new GreenLexer();
-        var nodes = lexer.ParseToGreenNodes(" inserted");
         
+        // The new API uses string parsing instead of pre-built GreenNodes
         tree.CreateEditor()
-            .Insert(Q.AnyIdent.First().After(), nodes)
+            .InsertAfter(Q.AnyIdent.First(), " inserted")
             .Commit();
         
         Assert.Equal("x inserted", tree.ToText());
@@ -250,7 +249,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("a b c");
         
         tree.CreateEditor()
-            .Insert(Q.AnyIdent.Before(), "_")
+            .InsertBefore(Q.AnyIdent, "_")
             .Commit();
         
         // With leading trivia transfer: inserted content takes target's leading trivia
@@ -268,7 +267,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "content")
+            .InsertAfter(Q.BraceBlock.First().Start(), "content")
             .Commit();
         
         Assert.Equal("{content}", tree.ToText());
@@ -467,7 +466,7 @@ public class SyntaxEditorTests
         
         tree.CreateEditor()
             .Remove(Q.AnyIdent.WithText("a"))
-            .Insert(Q.BraceBlock.First().InnerEnd(), " extra")
+            .InsertBefore(Q.BraceBlock.First().End(), " extra")
             .Replace(Q.AnyIdent.WithText("c"), "z")
             .Commit();
         
@@ -489,7 +488,7 @@ public class SyntaxEditorTests
         
         var result1 = editor.Replace(Q.AnyIdent.First(), "a");
         var result2 = result1.Remove(Q.AnyIdent.Last());
-        var result3 = result2.Insert(Q.AnyIdent.First().Before(), "b");
+        var result3 = result2.InsertBefore(Q.AnyIdent.First(), "b");
         
         Assert.Same(editor, result1);
         Assert.Same(editor, result2);
@@ -502,8 +501,8 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{x}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "start ")
-            .Insert(Q.BraceBlock.First().InnerEnd(), " end")
+            .InsertAfter(Q.BraceBlock.First().Start(), "start ")
+            .InsertBefore(Q.BraceBlock.First().End(), " end")
             .Replace(Q.AnyIdent.WithText("x"), "middle")
             .Commit();
         
@@ -560,8 +559,8 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("x");
         
         tree.CreateEditor()
-            .Insert(Q.AnyIdent.First().Before(), "A")
-            .Insert(Q.AnyIdent.First().After(), "B")
+            .InsertBefore(Q.AnyIdent.First(), "A")
+            .InsertAfter(Q.AnyIdent.First(), "B")
             .Commit();
         
         Assert.Equal("AxB", tree.ToText());
@@ -637,7 +636,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("[b]");
         
         tree.CreateEditor()
-            .Insert(Q.BracketBlock.First().InnerStart(), "a ")
+            .InsertAfter(Q.BracketBlock.First().Start(), "a ")
             .Commit();
         
         Assert.Equal("[a b]", tree.ToText());
@@ -649,7 +648,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("(a)");
         
         tree.CreateEditor()
-            .Insert(Q.ParenBlock.First().InnerEnd(), " b")
+            .InsertBefore(Q.ParenBlock.First().End(), " b")
             .Commit();
         
         Assert.Equal("(a b)", tree.ToText());
@@ -667,7 +666,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("function {body}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().Before(), "/* comment */")
+            .InsertBefore(Q.BraceBlock.First(), "/* comment */")
             .Commit();
         
         // /* comment */ takes the space from {, so result is: "function /* comment */{body}"
@@ -682,7 +681,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("function {existing}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
+            .InsertAfter(Q.BraceBlock.First().Start(), "first; ")
             .Commit();
         
         Assert.Equal("function {first; existing}", tree.ToText());
@@ -695,7 +694,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("function {existing}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerEnd(), " return")
+            .InsertBefore(Q.BraceBlock.First().End(), " return")
             .Commit();
         
         Assert.Equal("function {existing return}", tree.ToText());
@@ -708,7 +707,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("function {body}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().After(), " nextFunction")
+            .InsertAfter(Q.BraceBlock.First(), " nextFunction")
             .Commit();
         
         Assert.Equal("function {body} nextFunction", tree.ToText());
@@ -721,10 +720,10 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("fn {body}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().Before(), "/* before */ ")
-            .Insert(Q.BraceBlock.First().InnerStart(), "start; ")
-            .Insert(Q.BraceBlock.First().InnerEnd(), " end;")
-            .Insert(Q.BraceBlock.First().After(), " /* after */")
+            .InsertBefore(Q.BraceBlock.First(), "/* before */ ")
+            .InsertAfter(Q.BraceBlock.First().Start(), "start; ")
+            .InsertBefore(Q.BraceBlock.First().End(), " end;")
+            .InsertAfter(Q.BraceBlock.First(), " /* after */")
             .Commit();
         
         var text = tree.ToText();
@@ -742,7 +741,7 @@ public class SyntaxEditorTests
         
         // Insert at the outer function's start
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "first; ")
+            .InsertAfter(Q.BraceBlock.First().Start(), "first; ")
             .Commit();
         
         var text = tree.ToText();
@@ -761,7 +760,7 @@ public class SyntaxEditorTests
         
         // Use Nth(1) to get the second (inner) block
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.Nth(1).InnerStart(), "nested; ")
+            .InsertAfter(Q.BraceBlock.Nth(1).Start(), "nested; ")
             .Commit();
         
         var text = tree.ToText();
@@ -776,7 +775,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{first} {second}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.Before(), "/* fn */")
+            .InsertBefore(Q.BraceBlock, "/* fn */")
             .Commit();
         
         var text = tree.ToText();
@@ -792,7 +791,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("function {}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "statement;")
+            .InsertAfter(Q.BraceBlock.First().Start(), "statement;")
             .Commit();
         
         Assert.Equal("function {statement;}", tree.ToText());
@@ -806,7 +805,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("fn { body }");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "new; ")
+            .InsertAfter(Q.BraceBlock.First().Start(), "new; ")
             .Commit();
         
         var text = tree.ToText();
@@ -821,7 +820,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{only}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().Before(), "prefix ")
+            .InsertBefore(Q.BraceBlock.First(), "prefix ")
             .Commit();
         
         Assert.Equal("prefix {only}", tree.ToText());
@@ -833,7 +832,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("{only}");
         
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().After(), " suffix")
+            .InsertAfter(Q.BraceBlock.First(), " suffix")
             .Commit();
         
         Assert.Equal("{only} suffix", tree.ToText());
@@ -1758,7 +1757,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("before\n@tag \"value\"", schema);
         
         tree.CreateEditor()
-            .Insert(Q.Syntax<TestTaggedNode>().Before(), "// comment\n")
+            .InsertBefore(Q.Syntax<TestTaggedNode>(), "// comment\n")
             .Commit();
         
         var result = tree.ToText();

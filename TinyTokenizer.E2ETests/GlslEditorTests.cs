@@ -255,7 +255,7 @@ void main() {
         
         
         tree.CreateEditor()
-            .Insert(mainFuncQuery.Before(), "// Entry point for the fragment shader\r\n")
+            .InsertBefore(mainFuncQuery, "// Entry point for the fragment shader\r\n")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -277,7 +277,7 @@ void main() {
         
         // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
+            .InsertAfter(Query.Syntax<GlFunctionNode>().Named("main").InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -299,7 +299,7 @@ void main() {
         
         // Use INamedNode + IBlockContainerNode APIs to locate injection point
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlFunctionNode>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
+            .InsertBefore(Query.Syntax<GlFunctionNode>().Named("main").InnerEnd("body"), "\n    fragColor = color;")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -324,7 +324,7 @@ void main() {
         Assert.NotNull(mainFunc);
         
         tree.CreateEditor()
-            .Insert(mainQuery.After(), "\n// End of main function\n")
+            .InsertAfter(mainQuery, "\n// End of main function\n")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -346,7 +346,7 @@ void main() {
         
         // Use INamedNode API to find the #version directive and insert after it
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlDirectiveNode>().Named("version").After(), "\n@import \"my-include.glsl\"")
+            .InsertAfter(Query.Syntax<GlDirectiveNode>().Named("version"), "\n@import \"my-include.glsl\"")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -368,7 +368,7 @@ void main() {
         
         // Use INamedNode API to find foo function by name
         tree.CreateEditor()
-            .Insert(Query.Syntax<GlFunctionNode>().Named("foo").Before(), "/* foo comment */\n")
+            .InsertBefore(Query.Syntax<GlFunctionNode>().Named("foo"), "/* foo comment */\n")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -395,17 +395,17 @@ void main() {
         
         tree.CreateEditor()
             // 1. Comment above main
-            .Insert(mainQuery.Before(), "// Entry point for the fragment shader\n")
+            .InsertBefore(mainQuery, "// Entry point for the fragment shader\n")
             // 2. Sample from texture at top of main body
-            .Insert(mainQuery.InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    vec4 sample = texture(tex, uv);")
             // 3. Write to out buffer at end of main body
-            .Insert(mainQuery.InnerEnd("body"), "\n    fragColor = sample;")
+            .InsertBefore(mainQuery.InnerEnd("body"), "\n    fragColor = sample;")
             // 4. Comment after main
-            .Insert(mainQuery.After(), "\n// End of main function\n")
+            .InsertAfter(mainQuery, "\n// End of main function\n")
             // 5. Import below #version directive
-            .Insert(versionQuery.After(), "\n@import \"my-include.glsl\"")
+            .InsertAfter(versionQuery, "\n@import \"my-include.glsl\"")
             // 6. Comment above foo
-            .Insert(fooQuery.Before(), "/* foo comment */\n")
+            .InsertBefore(fooQuery, "/* foo comment */\n")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -441,7 +441,7 @@ void main() {
         Assert.NotNull(mainFunc);
         
         tree.CreateEditor()
-            .Insert(mainQuery.Before(), "// This comment will be undone\n")
+            .InsertBefore(mainQuery, "// This comment will be undone\n")
             .Commit();
         
         var modifiedText = tree.Root.ToText();
@@ -498,7 +498,7 @@ void main() {
         var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         
         tree.CreateEditor()
-            .Insert(mainQuery.InnerStart("body"), "\n    // Body start")
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    // Body start")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -516,7 +516,7 @@ void main() {
         var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         
         tree.CreateEditor()
-            .Insert(mainQuery.InnerEnd(), "\n    // Body end")
+            .InsertBefore(mainQuery.InnerEnd(), "\n    // Body end")
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
@@ -588,7 +588,7 @@ void main() {
         // Insert a new import after the #version directive
         var versionQuery = Query.Syntax<GlDirectiveNode>().Named("version");
         tree.CreateEditor()
-            .Insert(versionQuery.After(), "\n@import \"utils.glsl\"")
+            .InsertAfter(versionQuery, "\n@import \"utils.glsl\"")
             .Commit();
         
         // The inserted text is present in serialized content
@@ -838,7 +838,7 @@ void main() {
         // Make edits to calculateLight
         var calcLightQuery = Query.Syntax<GlFunctionNode>().Named("calculateLight");
         tree.CreateEditor()
-            .Insert(calcLightQuery.InnerStart("body"), "\n    // INJECTED")
+            .InsertAfter(calcLightQuery.InnerStart("body"), "\n    // INJECTED")
             .Commit();
         
         var result = NormalizeLineEndings(tree.ToText());
@@ -871,9 +871,9 @@ void main() {
         // Make edits
         var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
         tree.CreateEditor()
-            .Insert(mainQuery.Before(), "// Comment\n")
-            .Insert(mainQuery.InnerStart("body"), "\n    // Start")
-            .Insert(mainQuery.InnerEnd("body"), "\n    // End")
+            .InsertBefore(mainQuery, "// Comment\n")
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    // Start")
+            .InsertBefore(mainQuery.InnerEnd("body"), "\n    // End")
             .Commit();
         
         // Verify edits were applied
@@ -930,7 +930,7 @@ void main() {
         
         // === STEP 1: Insert @import after #version ===
         tree.CreateEditor()
-            .Insert(versionQuery.After(), "\n@import \"utils.glsl\"")
+            .InsertAfter(versionQuery, "\n@import \"utils.glsl\"")
             .Commit();
         
         _output.WriteLine("\n=== After inserting @import ===");
@@ -964,7 +964,7 @@ void main() {
         _output.WriteLine($"\n#version after mutations: '{NormalizeLineEndings(versionAfterMutations!.ToText())}'");
         
         tree.CreateEditor()
-            .Insert(versionQuery.After(), "\n#define DEBUG 1")
+            .InsertAfter(versionQuery, "\n#define DEBUG 1")
             .Commit();
         
         _output.WriteLine("\n=== After inserting #define ===");
