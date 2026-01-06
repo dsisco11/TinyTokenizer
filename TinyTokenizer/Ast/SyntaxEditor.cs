@@ -12,7 +12,7 @@ namespace TinyTokenizer.Ast;
 /// var tree = SyntaxTree.Parse("function foo() { return 1; }");
 /// 
 /// tree.CreateEditor()
-///     .Insert(Query.BraceBlock.First().InnerStart(), "console.log('enter');")
+///     .InsertAfter(Query.BraceBlock.First().Start(), "console.log('enter');")
 ///     .Replace(Query.AnyNumeric.First(), "42")
 ///     .Remove(Query.AnyIdent.WithText("unused"))
 ///     .Commit();
@@ -47,57 +47,69 @@ public sealed class SyntaxEditor
     #region Insert (Query-based)
     
     /// <summary>
-    /// Queues an insertion of text at positions resolved by the query.
+    /// Queues an insertion of text before all nodes matching the query.
+    /// For <see cref="BoundaryQuery"/>, handles empty containers by using container metadata.
     /// </summary>
-    /// <param name="query">An insertion query specifying where to insert.</param>
+    /// <param name="query">A query specifying which nodes to insert before.</param>
     /// <param name="text">The text to insert (will be parsed into nodes).</param>
-    public SyntaxEditor Insert(InsertionQuery query, string text)
+    /// <example>
+    /// <code>
+    /// // Insert before the closing brace (at end of block content)
+    /// editor.InsertBefore(Query.BraceBlock.First().End(), "// last line")
+    /// </code>
+    /// </example>
+    public SyntaxEditor InsertBefore(INodeQuery query, string text)
     {
-        var positions = query.ResolvePositions(_tree).ToList();
-        
-        foreach (var pos in positions)
+        // Handle BoundaryQuery specially for empty container support
+        if (query is BoundaryQuery boundaryQuery)
         {
-            _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
+            foreach (var container in boundaryQuery.ResolveContainers(_tree))
+            {
+                var pos = CreateBoundaryInsertionPosition(container, boundaryQuery.Side, before: true);
+                if (pos.HasValue)
+                    _edits.Add(new InsertEdit(pos.Value, text) { SequenceNumber = _sequenceNumber++ });
+            }
+            return this;
         }
         
+        // Standard query - insert before each matched node
+        foreach (var node in query.Select(_tree))
+        {
+            InsertBefore(node, text);
+        }
         return this;
     }
     
     /// <summary>
-    /// Queues an insertion of text at positions resolved by multiple queries.
+    /// Queues an insertion of text after all nodes matching the query.
+    /// For <see cref="BoundaryQuery"/>, handles empty containers by using container metadata.
     /// </summary>
-    public SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, string text)
+    /// <param name="query">A query specifying which nodes to insert after.</param>
+    /// <param name="text">The text to insert (will be parsed into nodes).</param>
+    /// <example>
+    /// <code>
+    /// // Insert after the opening brace (at start of block content)
+    /// editor.InsertAfter(Query.BraceBlock.First().Start(), "// first line")
+    /// </code>
+    /// </example>
+    public SyntaxEditor InsertAfter(INodeQuery query, string text)
     {
-        foreach (var query in queries)
+        // Handle BoundaryQuery specially for empty container support
+        if (query is BoundaryQuery boundaryQuery)
         {
-            Insert(query, text);
+            foreach (var container in boundaryQuery.ResolveContainers(_tree))
+            {
+                var pos = CreateBoundaryInsertionPosition(container, boundaryQuery.Side, before: false);
+                if (pos.HasValue)
+                    _edits.Add(new InsertEdit(pos.Value, text) { SequenceNumber = _sequenceNumber++ });
+            }
+            return this;
         }
-        return this;
-    }
-    
-    /// <summary>
-    /// Queues an insertion of pre-built nodes at positions resolved by the query.
-    /// </summary>
-    internal SyntaxEditor Insert(InsertionQuery query, ImmutableArray<GreenNode> nodes)
-    {
-        var positions = query.ResolvePositions(_tree).ToList();
         
-        foreach (var pos in positions)
+        // Standard query - insert after each matched node
+        foreach (var node in query.Select(_tree))
         {
-            _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
-        }
-        
-        return this;
-    }
-    
-    /// <summary>
-    /// Queues an insertion of pre-built nodes at positions resolved by multiple queries.
-    /// </summary>
-    internal SyntaxEditor Insert(IEnumerable<InsertionQuery> queries, ImmutableArray<GreenNode> nodes)
-    {
-        foreach (var query in queries)
-        {
-            Insert(query, nodes);
+            InsertAfter(node, text);
         }
         return this;
     }
@@ -114,7 +126,7 @@ public sealed class SyntaxEditor
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
     public SyntaxEditor InsertBefore(SyntaxNode target, string text)
     {
-        var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+        var pos = CreateInsertionPosition(target, before: true);
         _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
@@ -139,7 +151,7 @@ public sealed class SyntaxEditor
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
     public SyntaxEditor InsertAfter(SyntaxNode target, string text)
     {
-        var pos = CreateInsertionPosition(target, InsertionPoint.After);
+        var pos = CreateInsertionPosition(target, before: false);
         _edits.Add(new InsertEdit(pos, text) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
@@ -186,7 +198,7 @@ public sealed class SyntaxEditor
     internal SyntaxEditor InsertBefore(SyntaxNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
-        var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+        var pos = CreateInsertionPosition(target, before: true);
         _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
@@ -200,7 +212,7 @@ public sealed class SyntaxEditor
         var nodes = ToGreenNodes(nodesToInsert);
         foreach (var target in targets)
         {
-            var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+            var pos = CreateInsertionPosition(target, before: true);
             _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         return this;
@@ -215,7 +227,7 @@ public sealed class SyntaxEditor
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
         {
-            var pos = CreateInsertionPosition(target, InsertionPoint.Before);
+            var pos = CreateInsertionPosition(target, before: true);
             _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         return this;
@@ -251,7 +263,7 @@ public sealed class SyntaxEditor
     internal SyntaxEditor InsertAfter(SyntaxNode target, IEnumerable<GreenNode> nodesToInsert)
     {
         var nodes = nodesToInsert.ToImmutableArray();
-        var pos = CreateInsertionPosition(target, InsertionPoint.After);
+        var pos = CreateInsertionPosition(target, before: false);
         _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
@@ -265,7 +277,7 @@ public sealed class SyntaxEditor
         var nodes = ToGreenNodes(nodesToInsert);
         foreach (var target in targets)
         {
-            var pos = CreateInsertionPosition(target, InsertionPoint.After);
+            var pos = CreateInsertionPosition(target, before: false);
             _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         return this;
@@ -280,7 +292,7 @@ public sealed class SyntaxEditor
         var nodes = nodesToInsert.ToImmutableArray();
         foreach (var target in targets)
         {
-            var pos = CreateInsertionPosition(target, InsertionPoint.After);
+            var pos = CreateInsertionPosition(target, before: false);
             _edits.Add(new InsertNodesEdit(pos, nodes) { SequenceNumber = _sequenceNumber++ });
         }
         return this;
@@ -706,7 +718,7 @@ public sealed class SyntaxEditor
     /// Creates an InsertionPosition for inserting before or after a target node.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown if the target node has no parent.</exception>
-    private static InsertionPosition CreateInsertionPosition(SyntaxNode target, InsertionPoint point)
+    private static InsertionPosition CreateInsertionPosition(SyntaxNode target, bool before)
     {
         var parent = target.Parent;
         if (parent == null)
@@ -720,14 +732,97 @@ public sealed class SyntaxEditor
         var targetPath = NodePath.FromNode(target);
         var (targetLeading, targetTrailing) = GetTrivia(target);
         
-        return point switch
+        return before
+            ? new InsertionPosition(parentPath, childIndex, target.Position, targetPath, targetLeading, targetTrailing)
+            : new InsertionPosition(parentPath, childIndex + 1, target.EndPosition, targetPath, targetLeading, targetTrailing);
+    }
+    
+    /// <summary>
+    /// Creates an InsertionPosition for a boundary query (Start/End of a container).
+    /// Handles empty containers by computing position from container metadata.
+    /// </summary>
+    private static InsertionPosition? CreateBoundaryInsertionPosition(SyntaxNode container, BoundarySide side, bool before)
+    {
+        if (container is SyntaxBlock block)
         {
-            InsertionPoint.Before => new InsertionPosition(
-                parentPath, childIndex, target.Position, point, targetPath, targetLeading, targetTrailing),
-            InsertionPoint.After => new InsertionPosition(
-                parentPath, childIndex + 1, target.EndPosition, point, targetPath, targetLeading, targetTrailing),
-            _ => throw new ArgumentException($"Unsupported insertion point: {point}", nameof(point))
-        };
+            // For blocks, the boundary nodes are the opener/closer
+            // Start + InsertAfter = insert at beginning of content (after opener)
+            // End + InsertBefore = insert at end of content (before closer)
+            var blockPath = NodePath.FromNode(block);
+            
+            if (side == BoundarySide.Start)
+            {
+                // Insert relative to opener
+                if (before)
+                {
+                    // InsertBefore(Start) = insert before the opener (before the block content)
+                    var parent = block.Parent;
+                    if (parent == null) return null;
+                    var parentPath = NodePath.FromNode(parent);
+                    return new InsertionPosition(parentPath, block.SiblingIndex, block.Position, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+                }
+                else
+                {
+                    // InsertAfter(Start) = insert at beginning of block content (child index 0)
+                    return new InsertionPosition(blockPath, 0, block.InnerStartPosition, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+                }
+            }
+            else // BoundarySide.End
+            {
+                if (before)
+                {
+                    // InsertBefore(End) = insert at end of block content (after last child)
+                    return new InsertionPosition(blockPath, block.ChildCount, block.InnerEndPosition, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+                }
+                else
+                {
+                    // InsertAfter(End) = insert after the closer (after the block)
+                    var parent = block.Parent;
+                    if (parent == null) return null;
+                    var parentPath = NodePath.FromNode(parent);
+                    return new InsertionPosition(parentPath, block.SiblingIndex + 1, block.EndPosition, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+                }
+            }
+        }
+        
+        // For non-block containers (lists, syntax nodes), use first/last child
+        var children = container.Children.ToList();
+        var containerPath = NodePath.FromNode(container);
+        
+        if (side == BoundarySide.Start)
+        {
+            if (children.Count == 0)
+            {
+                // Empty container - insert at position 0 (child index 0)
+                return before
+                    ? null // Can't insert before nothing
+                    : new InsertionPosition(containerPath, 0, container.Position, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
+            }
+            
+            // Has children - delegate to first child
+            var first = children[0];
+            return CreateInsertionPosition(first, before);
+        }
+        else // BoundarySide.End
+        {
+            if (children.Count == 0)
+            {
+                // Empty container - insert at position 0 (child index 0)
+                return before
+                    ? new InsertionPosition(containerPath, 0, container.Position, null,
+                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty)
+                    : null; // Can't insert after nothing
+            }
+            
+            // Has children - delegate to last child
+            var last = children[^1];
+            return CreateInsertionPosition(last, before);
+        }
     }
     
     /// <summary>
@@ -1059,5 +1154,16 @@ internal sealed class ReplaceNodesEdit : PendingEdit
         return result.ToImmutable();
     }
 }
+
+/// <summary>
+/// Contains all information needed to perform an insertion.
+/// </summary>
+internal readonly record struct InsertionPosition(
+    NodePath ParentPath,
+    int ChildIndex,
+    int Position,
+    NodePath? TargetPath,
+    ImmutableArray<GreenTrivia> TargetLeadingTrivia,
+    ImmutableArray<GreenTrivia> TargetTrailingTrivia);
 
 #endregion

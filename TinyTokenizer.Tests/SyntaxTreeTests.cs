@@ -1721,12 +1721,12 @@ public class SyntaxTreeTests
     {
         var tree = SyntaxTree.Parse("{a} {b}");
         
-        // First() on BlockNodeQuery should return BlockNodeQuery with InnerStart/InnerEnd
+        // First() on BlockNodeQuery should return BlockNodeQuery with Start/End
         var firstBlockQuery = Q.BraceBlock.First();
-        var insertQuery = firstBlockQuery.InnerStart();
+        var boundaryQuery = firstBlockQuery.Start();
         
-        var positions = insertQuery.ResolvePositions(tree).ToList();
-        Assert.Single(positions);
+        var results = boundaryQuery.Select(tree).ToList();
+        Assert.Single(results);
     }
     
     [Fact]
@@ -1735,10 +1735,10 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("{a} {b}");
         
         var lastBlockQuery = Q.BraceBlock.Last();
-        var insertQuery = lastBlockQuery.InnerEnd();
+        var boundaryQuery = lastBlockQuery.End();
         
-        var positions = insertQuery.ResolvePositions(tree).ToList();
-        Assert.Single(positions);
+        var results = boundaryQuery.Select(tree).ToList();
+        Assert.Single(results);
     }
     
     [Fact]
@@ -1747,10 +1747,10 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("{a} {b} {c}");
         
         var nthBlockQuery = Q.BraceBlock.Nth(1);
-        var insertQuery = nthBlockQuery.InnerStart();
+        var boundaryQuery = nthBlockQuery.Start();
         
-        var positions = insertQuery.ResolvePositions(tree).ToList();
-        Assert.Single(positions);
+        var results = boundaryQuery.Select(tree).ToList();
+        Assert.Single(results);
     }
     
     #endregion

@@ -430,7 +430,7 @@ public class SyntaxTreeBenchmarks
     {
         var tree = SyntaxTree.Parse(SmallInput, DefaultSchema);
         tree.CreateEditor()
-            .Insert(Q.BraceBlock.First().InnerStart(), "/* inserted */")
+            .InsertAfter(Q.BraceBlock.First().Start(), "/* inserted */")
             .Commit();
         return tree;
     }

@@ -176,14 +176,140 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
         a == null ? b : n => a(n) && b(n);
     
     /// <summary>
-    /// Returns a position query for inserting at the start of block content.
+    /// Returns a query that selects the opening delimiter (start) of matched blocks.
+    /// Use with <c>InsertAfter</c> to insert at the beginning of block content.
     /// </summary>
-    public InsertionQuery InnerStart() => new InsertionQuery(this, InsertionPoint.InnerStart);
+    /// <example>
+    /// <code>
+    /// // Insert at the start of a block's content
+    /// editor.InsertAfter(Query.BraceBlock.First().Start(), "// first line")
+    /// </code>
+    /// </example>
+    public BoundaryQuery Start() => new BoundaryQuery(this, BoundarySide.Start);
     
     /// <summary>
-    /// Returns a position query for inserting at the end of block content.
+    /// Returns a query that selects the closing delimiter (end) of matched blocks.
+    /// Use with <c>InsertBefore</c> to insert at the end of block content.
     /// </summary>
-    public InsertionQuery InnerEnd() => new InsertionQuery(this, InsertionPoint.InnerEnd);
+    /// <example>
+    /// <code>
+    /// // Insert at the end of a block's content
+    /// editor.InsertBefore(Query.BraceBlock.First().End(), "// last line")
+    /// </code>
+    /// </example>
+    public BoundaryQuery End() => new BoundaryQuery(this, BoundarySide.End);
+}
+
+#endregion
+
+#region Boundary Query
+
+/// <summary>
+/// Specifies which boundary of a container to select.
+/// </summary>
+public enum BoundarySide
+{
+    /// <summary>The start/opening boundary of the container.</summary>
+    Start,
+    /// <summary>The end/closing boundary of the container.</summary>
+    End
+}
+
+/// <summary>
+/// A query that selects the boundary (start or end) of container nodes.
+/// For blocks, this returns the opener or closer token.
+/// For lists/containers without delimiters, this returns first/last child (or empty for empty containers).
+/// </summary>
+/// <remarks>
+/// This query carries metadata about which container and boundary is being targeted.
+/// <see cref="SyntaxEditor"/> uses this metadata to compute insertion positions,
+/// even for empty containers where <see cref="Select"/> returns no results.
+/// </remarks>
+public sealed record BoundaryQuery : INodeQuery
+{
+    /// <summary>Gets the underlying container query.</summary>
+    public INodeQuery ContainerQuery { get; }
+    
+    /// <summary>Gets which boundary (start or end) this query targets.</summary>
+    public BoundarySide Side { get; }
+    
+    /// <summary>Creates a boundary query for the specified container query and side.</summary>
+    public BoundaryQuery(INodeQuery containerQuery, BoundarySide side)
+    {
+        ContainerQuery = containerQuery;
+        Side = side;
+    }
+    
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
+    {
+        foreach (var container in ContainerQuery.Select(root))
+        {
+            var boundary = GetBoundaryNode(container);
+            if (boundary != null)
+                yield return boundary;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(SyntaxNode node)
+    {
+        // A boundary query matches a node if it's the boundary of a container matched by the inner query
+        // This is tricky because we need to check if the node is a boundary of its parent
+        if (node.Parent == null)
+            return false;
+        
+        // Check if parent is a container that matches
+        if (!ContainerQuery.Matches(node.Parent))
+            return false;
+        
+        var boundary = GetBoundaryNode(node.Parent);
+        return boundary != null && ReferenceEquals(boundary.Green, node.Green) && boundary.Position == node.Position;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
+    {
+        if (Matches(startNode))
+        {
+            consumedCount = 1;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+    
+    /// <summary>
+    /// Gets the boundary node for a container.
+    /// For blocks: returns OpenerNode or CloserNode.
+    /// For other containers: returns first or last child.
+    /// </summary>
+    private SyntaxNode? GetBoundaryNode(SyntaxNode container)
+    {
+        if (container is SyntaxBlock block)
+        {
+            return Side == BoundarySide.Start ? block.OpenerNode : block.CloserNode;
+        }
+        
+        // For non-block containers (lists, syntax nodes), return first/last child
+        var children = container.Children.ToList();
+        if (children.Count == 0)
+            return null; // Empty container - no boundary node to return
+        
+        return Side == BoundarySide.Start ? children[0] : children[^1];
+    }
+    
+    /// <summary>
+    /// Resolves the containers matched by this boundary query.
+    /// Used by <see cref="SyntaxEditor"/> to compute insertion positions.
+    /// </summary>
+    internal IEnumerable<SyntaxNode> ResolveContainers(SyntaxTree tree)
+    {
+        return ContainerQuery.Select(tree);
+    }
 }
 
 #endregion
