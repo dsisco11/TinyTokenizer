@@ -1813,4 +1813,56 @@ public class SyntaxEditorTests
     }
     
     #endregion
+    
+    #region Query.Between Replace Bug
+    
+    /// <summary>
+    /// Reproduction test for Query.Between replacement bug.
+    /// Using Query.Between to select content between function block delimiters
+    /// should allow replacing the inner contents of a function body.
+    /// </summary>
+    [Fact]
+    public void Replace_BetweenBraces_ReplacesInnerContents()
+    {
+        // Arrange: a simple function with a body
+        var tree = SyntaxTree.Parse("function foo() { old body content }");
+        
+        // Act: use Query.Between to match content between { and }
+        // and replace it with new content
+        var query = Q.Between(Q.Symbol("{"), Q.Symbol("}"));
+        
+        tree.CreateEditor()
+            .Replace(query, "{ new body }")
+            .Commit();
+        
+        // Assert: the function body should be replaced
+        var result = tree.ToText();
+        Assert.Equal("function foo() { new body }", result);
+    }
+    
+    /// <summary>
+    /// Tests that Query.Between can be used to replace inner block content
+    /// while preserving surrounding structure.
+    /// </summary>
+    [Fact]
+    public void Replace_BetweenBraces_InFunctionBlock_PreservesStructure()
+    {
+        // Arrange: code with a function containing a block
+        var tree = SyntaxTree.Parse("int main() { return 0; }");
+        
+        // Act: select the brace block content using Between and replace
+        var query = Q.Between(Q.Symbol("{"), Q.Symbol("}"));
+        
+        tree.CreateEditor()
+            .Replace(query, "{ return 42; }")
+            .Commit();
+        
+        // Assert: the block content should be replaced while keeping function signature
+        var result = tree.ToText();
+        Assert.Contains("int main()", result);
+        Assert.Contains("return 42", result);
+        Assert.DoesNotContain("return 0", result);
+    }
+    
+    #endregion
 }
