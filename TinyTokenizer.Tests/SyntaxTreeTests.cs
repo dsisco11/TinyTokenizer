@@ -128,12 +128,13 @@ public class SyntaxTreeTests
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
         var newChild = new GreenLeaf(NodeKind.Ident, "X");
-        var newBlock = block.WithSlot(1, newChild);
+        // Replace slot 2 (second inner child)
+        var newBlock = block.WithSlot(2, newChild);
         
-        // Siblings should be shared
-        Assert.Same(child1, newBlock.GetSlot(0));
-        Assert.Same(child3, newBlock.GetSlot(2));
-        Assert.NotSame(child2, newBlock.GetSlot(1));
+        // Siblings should be shared (slot 0 is opener, slots 1,3 are first/third children)
+        Assert.Same(child1, newBlock.GetSlot(1));
+        Assert.Same(child3, newBlock.GetSlot(3));
+        Assert.NotSame(child2, newBlock.GetSlot(2));
     }
     
     [Fact]
@@ -144,12 +145,14 @@ public class SyntaxTreeTests
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
         var newChild = new GreenLeaf(NodeKind.Ident, "X");
-        var newBlock = block.WithInsert(1, ImmutableArray.Create<GreenNode>(newChild));
+        // Insert at slot 2 (between a and b)
+        var newBlock = block.WithInsert(2, ImmutableArray.Create<GreenNode>(newChild));
         
-        Assert.Equal(3, newBlock.SlotCount);
-        Assert.Same(child1, newBlock.GetSlot(0));
-        Assert.Same(newChild, newBlock.GetSlot(1));
-        Assert.Same(child2, newBlock.GetSlot(2));
+        // 5 slots: opener + 3 inner + closer
+        Assert.Equal(5, newBlock.SlotCount);
+        Assert.Same(child1, newBlock.GetSlot(1));
+        Assert.Same(newChild, newBlock.GetSlot(2));
+        Assert.Same(child2, newBlock.GetSlot(3));
     }
     
     #endregion
@@ -1466,7 +1469,8 @@ public class SyntaxTreeTests
         var newNodes = lexer.ParseToGreenNodes("b");
         
         var builder = new GreenTreeBuilder(tree.GreenRoot);
-        var newRoot = builder.InsertAt(new[] { 0 }, 1, newNodes);
+        // Insert at slot 2 (after first inner child 'a', before closer)
+        var newRoot = builder.InsertAt(new[] { 0 }, 2, newNodes);
         
         Assert.NotNull(newRoot);
     }
@@ -1477,7 +1481,8 @@ public class SyntaxTreeTests
         var tree = SyntaxTree.Parse("{a b}");
         
         var builder = new GreenTreeBuilder(tree.GreenRoot);
-        var newRoot = builder.RemoveAt(new[] { 0 }, 0, 1);
+        // Remove slot 1 (first inner child 'a')
+        var newRoot = builder.RemoveAt(new[] { 0 }, 1, 1);
         
         Assert.NotNull(newRoot);
     }
@@ -1490,7 +1495,8 @@ public class SyntaxTreeTests
         var newNodes = lexer.ParseToGreenNodes("new");
         
         var builder = new GreenTreeBuilder(tree.GreenRoot);
-        var newRoot = builder.ReplaceAt(new[] { 0 }, 0, 1, newNodes);
+        // Replace slot 1 (first inner child 'old')
+        var newRoot = builder.ReplaceAt(new[] { 0 }, 1, 1, newNodes);
         
         Assert.NotNull(newRoot);
     }
@@ -1505,7 +1511,8 @@ public class SyntaxTreeTests
         if (newNode != null)
         {
             var builder = new GreenTreeBuilder(tree.GreenRoot);
-            var newRoot = builder.ReplaceChild(new[] { 0 }, 0, newNode);
+            // Replace slot 1 (first inner child 'a')
+            var newRoot = builder.ReplaceChild(new[] { 0 }, 1, newNode);
             
             Assert.NotNull(newRoot);
         }
@@ -1518,9 +1525,10 @@ public class SyntaxTreeTests
         var lexer = new GreenLexer();
         var newNodes = lexer.ParseToGreenNodes("x");
         
-        // Path: root -> first child (outer block) -> first child (inner block)
+        // Path: root -> first child (outer block at 0) -> inner block (at slot 1, since slot 0 is opener)
+        // Insert at slot 1 (start of inner block content)
         var builder = new GreenTreeBuilder(tree.GreenRoot);
-        var newRoot = builder.InsertAt(new[] { 0, 0 }, 0, newNodes);
+        var newRoot = builder.InsertAt(new[] { 0, 1 }, 1, newNodes);
         
         Assert.NotNull(newRoot);
     }

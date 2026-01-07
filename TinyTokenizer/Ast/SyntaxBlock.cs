@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace TinyTokenizer.Ast;
 
@@ -32,20 +33,15 @@ public sealed class SyntaxBlock : SyntaxNode
     public char Closer => Green.Closer;
     
     /// <summary>The opening delimiter node with its trivia.</summary>
-    public SyntaxToken OpenerNode => (SyntaxToken)Green.OpenerNode.CreateRed(this, Position, -1, Tree);
+    /// <remarks>Opener is slot 0 in the Roslyn-style slot model.</remarks>
+    public SyntaxToken OpenerNode => (SyntaxToken)GetChild(0)!;
     
     /// <summary>The closing delimiter node with its trivia.</summary>
-    public SyntaxToken CloserNode
-    {
-        get
-        {
-            var closerPosition = EndPosition - Green.CloserNode.Width;
-            return (SyntaxToken)Green.CloserNode.CreateRed(this, closerPosition, -1, Tree);
-        }
-    }
+    /// <remarks>Closer is the last slot (N+1) in the Roslyn-style slot model.</remarks>
+    public SyntaxToken CloserNode => (SyntaxToken)GetChild(SlotCount - 1)!;
     
-    /// <summary>Number of children in this block.</summary>
-    public int ChildCount => Green.SlotCount;
+    /// <summary>Number of inner children in this block (excluding opener/closer).</summary>
+    public int ChildCount => Green.InnerChildren.Length;
     
     /// <summary>Leading trivia before the opening delimiter (from opener node).</summary>
     internal ImmutableArray<GreenTrivia> GreenLeadingTrivia => Green.OpenerNode.LeadingTrivia;
@@ -140,13 +136,30 @@ public sealed class SyntaxBlock : SyntaxNode
     public int InnerEndPosition => EndPosition - Green.CloserNode.Width;
     
     /// <summary>
-    /// Gets all children as an enumerable (lazy creation).
+    /// Gets the text of inner children only (excluding opener and closer delimiters).
+    /// </summary>
+    public string InnerText
+    {
+        get
+        {
+            using var buffer = new ArrayPoolBufferWriter<char>();
+            foreach (var child in InnerChildren)
+            {
+                child.WriteTo(buffer);
+            }
+            return buffer.WrittenSpan.ToString();
+        }
+    }
+    
+    /// <summary>
+    /// Gets all children including opener and closer (Roslyn-style traversal).
+    /// Slot 0 = opener, slots 1..N = inner children, slot N+1 = closer.
     /// </summary>
     public new IEnumerable<SyntaxNode> Children
     {
         get
         {
-            for (int i = 0; i < ChildCount; i++)
+            for (int i = 0; i < SlotCount; i++)
             {
                 var child = GetChild(i);
                 if (child != null)
@@ -156,11 +169,29 @@ public sealed class SyntaxBlock : SyntaxNode
     }
     
     /// <summary>
-    /// Gets children of a specific kind.
+    /// Gets inner children only (excluding opener and closer delimiters).
+    /// Use this for content-focused traversal.
+    /// </summary>
+    public IEnumerable<SyntaxNode> InnerChildren
+    {
+        get
+        {
+            // Inner children are slots 1 through SlotCount-2 (excluding opener at 0 and closer at N+1)
+            for (int i = 1; i < SlotCount - 1; i++)
+            {
+                var child = GetChild(i);
+                if (child != null)
+                    yield return child;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Gets inner children of a specific kind.
     /// </summary>
     public IEnumerable<SyntaxNode> ChildrenOfKind(NodeKind kind)
     {
-        foreach (var child in Children)
+        foreach (var child in InnerChildren)
         {
             if (child.Kind == kind)
                 yield return child;
@@ -168,13 +199,13 @@ public sealed class SyntaxBlock : SyntaxNode
     }
     
     /// <summary>
-    /// Gets all leaf children.
+    /// Gets all inner leaf children (excluding opener/closer).
     /// </summary>
     public IEnumerable<SyntaxToken> LeafChildren
     {
         get
         {
-            foreach (var child in Children)
+            foreach (var child in InnerChildren)
             {
                 if (child is SyntaxToken leaf)
                     yield return leaf;
@@ -183,13 +214,13 @@ public sealed class SyntaxBlock : SyntaxNode
     }
     
     /// <summary>
-    /// Gets all block children.
+    /// Gets all inner block children.
     /// </summary>
     public IEnumerable<SyntaxBlock> BlockChildren
     {
         get
         {
-            foreach (var child in Children)
+            foreach (var child in InnerChildren)
             {
                 if (child is SyntaxBlock block)
                     yield return block;
@@ -198,13 +229,14 @@ public sealed class SyntaxBlock : SyntaxNode
     }
     
     /// <summary>
-    /// Finds the index of a child node.
+    /// Finds the index of a child node within inner children.
+    /// Returns slot index (1-based for inner children, 0 for opener, SlotCount-1 for closer).
     /// Uses SyntaxNode equality which compares by green node identity and position.
     /// </summary>
     public int IndexOf(SyntaxNode child)
     {
         // First check if the child has a valid sibling index from its parent
-        if (child.SiblingIndex >= 0 && child.SiblingIndex < ChildCount)
+        if (child.SiblingIndex >= 0 && child.SiblingIndex < SlotCount)
         {
             // Verify it's actually from this block
             var candidate = GetChild(child.SiblingIndex);
@@ -214,8 +246,8 @@ public sealed class SyntaxBlock : SyntaxNode
             }
         }
         
-        // Fall back to linear search
-        for (int i = 0; i < ChildCount; i++)
+        // Fall back to linear search across all slots
+        for (int i = 0; i < SlotCount; i++)
         {
             var candidate = GetChild(i);
             if (candidate == child)

@@ -171,6 +171,94 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
     /// </summary>
     public bool IsLeaf => !IsContainer;
     
+    #region Trivia Access
+    
+    /// <summary>
+    /// Gets the leading trivia of this node by finding the first leaf descendant.
+    /// For leaves, returns the leaf's leading trivia directly.
+    /// </summary>
+    public ImmutableArray<GreenTrivia> GetLeadingTrivia()
+    {
+        var firstLeaf = GetFirstLeaf();
+        return firstLeaf?.LeadingTrivia ?? ImmutableArray<GreenTrivia>.Empty;
+    }
+    
+    /// <summary>
+    /// Gets the trailing trivia of this node by finding the last leaf descendant.
+    /// For leaves, returns the leaf's trailing trivia directly.
+    /// </summary>
+    public ImmutableArray<GreenTrivia> GetTrailingTrivia()
+    {
+        var lastLeaf = GetLastLeaf();
+        return lastLeaf?.TrailingTrivia ?? ImmutableArray<GreenTrivia>.Empty;
+    }
+    
+    /// <summary>
+    /// Gets the width of leading trivia (precomputed for leaves).
+    /// </summary>
+    public int GetLeadingTriviaWidth()
+    {
+        var firstLeaf = GetFirstLeaf();
+        return firstLeaf?.LeadingTriviaWidth ?? 0;
+    }
+    
+    /// <summary>
+    /// Gets the width of trailing trivia (precomputed for leaves).
+    /// </summary>
+    public int GetTrailingTriviaWidth()
+    {
+        var lastLeaf = GetLastLeaf();
+        return lastLeaf?.TrailingTriviaWidth ?? 0;
+    }
+    
+    /// <summary>
+    /// Gets the first leaf descendant of this node.
+    /// For leaves, returns self. For containers, descends to find leftmost leaf.
+    /// </summary>
+    internal GreenLeaf? GetFirstLeaf()
+    {
+        if (this is GreenLeaf leaf)
+            return leaf;
+        
+        for (int i = 0; i < SlotCount; i++)
+        {
+            var child = GetSlot(i);
+            if (child != null)
+            {
+                var firstLeaf = child.GetFirstLeaf();
+                if (firstLeaf != null)
+                    return firstLeaf;
+            }
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// Gets the last leaf descendant of this node.
+    /// For leaves, returns self. For containers, descends to find rightmost leaf.
+    /// </summary>
+    internal GreenLeaf? GetLastLeaf()
+    {
+        if (this is GreenLeaf leaf)
+            return leaf;
+        
+        for (int i = SlotCount - 1; i >= 0; i--)
+        {
+            var child = GetSlot(i);
+            if (child != null)
+            {
+                var lastLeaf = child.GetLastLeaf();
+                if (lastLeaf != null)
+                    return lastLeaf;
+            }
+        }
+        
+        return null;
+    }
+    
+    #endregion
+    
     #region IFormattable
     
     /// <summary>

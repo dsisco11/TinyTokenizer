@@ -106,22 +106,74 @@ internal sealed record GreenBlock : GreenContainer
         return new GreenBlock(openerNode, closerNode, children);
     }
     
-    /// <summary>Gets the children of this block.</summary>
-    public override ImmutableArray<GreenNode> Children => _children;
+    /// <summary>Gets the inner children of this block (excluding delimiters).</summary>
+    public ImmutableArray<GreenNode> InnerChildren => _children;
+    
+    /// <summary>
+    /// Gets all children including delimiters (opener at slot 0, closer at slot N+1).
+    /// This is the Roslyn-style slot model where delimiters are traversable children.
+    /// </summary>
+    public override ImmutableArray<GreenNode> Children
+    {
+        get
+        {
+            var builder = ImmutableArray.CreateBuilder<GreenNode>(_children.Length + 2);
+            builder.Add(OpenerNode);
+            builder.AddRange(_children);
+            builder.Add(CloserNode);
+            return builder.MoveToImmutable();
+        }
+    }
+    
+    /// <summary>
+    /// Number of slots: opener + inner children + closer.
+    /// </summary>
+    public override int SlotCount => _children.Length + 2;
     
     /// <inheritdoc/>
+    /// <remarks>
+    /// Slot 0 = opener, slots 1..N = inner children, slot N+1 = closer.
+    /// </remarks>
     public override GreenNode? GetSlot(int index)
-        => index >= 0 && index < _children.Length ? _children[index] : null;
+    {
+        if (index < 0 || index > _children.Length + 1)
+            return null;
+        if (index == 0)
+            return OpenerNode;
+        if (index == _children.Length + 1)
+            return CloserNode;
+        return _children[index - 1]; // Adjust for opener at slot 0
+    }
     
     /// <inheritdoc/>
+    /// <remarks>
+    /// Returns offset from block start:
+    /// - Slot 0 (opener): 0
+    /// - Slot 1..N (inner children): opener width + sum of preceding inner children
+    /// - Slot N+1 (closer): opener width + all inner children widths
+    /// </remarks>
     public override int GetSlotOffset(int index)
     {
+        if (index == 0)
+            return 0; // Opener starts at block start
+        
+        if (index == _children.Length + 1)
+        {
+            // Closer is after opener and all children
+            int closerOffset = OpenerNode.Width;
+            foreach (var child in _children)
+                closerOffset += child.Width;
+            return closerOffset;
+        }
+        
+        // Inner child: use precomputed offsets if available
+        int innerIndex = index - 1; // Convert to inner children index
         if (_childOffsets != null)
-            return _childOffsets[index]; // O(1)
+            return _childOffsets[innerIndex]; // O(1)
         
         // O(index) for small blocks
         int offset = OpenerNode.Width; // After opener (including its trivia)
-        for (int i = 0; i < index; i++)
+        for (int i = 0; i < innerIndex; i++)
             offset += _children[i].Width;
         return offset;
     }
@@ -147,50 +199,157 @@ internal sealed record GreenBlock : GreenContainer
     #region Structural Sharing Mutations
     
     /// <inheritdoc/>
+    /// <summary>
+    /// Creates a new block with one slot replaced.
+    /// Slot 0 = opener, slots 1..N = inner children, slot N+1 = closer.
+    /// </summary>
     public override GreenBlock WithSlot(int index, GreenNode newChild)
     {
-        if (index < 0 || index >= _children.Length)
+        if (index < 0 || index > _children.Length + 1)
             throw new ArgumentOutOfRangeException(nameof(index));
         
-        var newChildren = _children.SetItem(index, newChild);
+        // Slot 0 = opener
+        if (index == 0)
+        {
+            if (newChild is not GreenLeaf newOpener)
+                throw new ArgumentException("Opener slot must be a GreenLeaf", nameof(newChild));
+            return new GreenBlock(newOpener, CloserNode, _children);
+        }
+        
+        // Slot N+1 = closer
+        if (index == _children.Length + 1)
+        {
+            if (newChild is not GreenLeaf newCloser)
+                throw new ArgumentException("Closer slot must be a GreenLeaf", nameof(newChild));
+            return new GreenBlock(OpenerNode, newCloser, _children);
+        }
+        
+        // Inner child slot (1..N)
+        var innerIndex = index - 1;
+        var newChildren = _children.SetItem(innerIndex, newChild);
         return new GreenBlock(OpenerNode, CloserNode, newChildren);
     }
     
-    /// <inheritdoc/>
+    /// <summary>
+    /// Creates a new block with all children replaced (including delimiters).
+    /// First element must be opener, last must be closer.
+    /// </summary>
     public override GreenBlock WithChildren(ImmutableArray<GreenNode> newChildren)
-        => new(OpenerNode, CloserNode, newChildren);
+    {
+        if (newChildren.Length < 2)
+            throw new ArgumentException("Children must include at least opener and closer", nameof(newChildren));
+        
+        if (newChildren[0] is not GreenLeaf opener)
+            throw new ArgumentException("First child must be opener (GreenLeaf)", nameof(newChildren));
+        if (newChildren[^1] is not GreenLeaf closer)
+            throw new ArgumentException("Last child must be closer (GreenLeaf)", nameof(newChildren));
+        
+        // Extract inner children (everything between opener and closer)
+        var innerChildren = newChildren.RemoveAt(newChildren.Length - 1).RemoveAt(0);
+        return new GreenBlock(opener, closer, innerChildren);
+    }
     
-    /// <inheritdoc/>
+    /// <summary>
+    /// Creates a new block with inner children replaced (preserves delimiters).
+    /// </summary>
+    public GreenBlock WithInnerChildren(ImmutableArray<GreenNode> newInnerChildren)
+        => new(OpenerNode, CloserNode, newInnerChildren);
+    
+    /// <summary>
+    /// Inserts nodes at the specified slot index.
+    /// Slot 0 = opener position, slots 1..N = inner content, slot N+1 = after last inner/before closer.
+    /// Cannot insert before slot 0 or after slot N+2 (would be outside block bounds).
+    /// </summary>
+    /// <remarks>
+    /// Inserting at slot 1 places content after the opener.
+    /// Inserting at slot N+1 (where N+1 = _children.Length + 1) places content before the closer.
+    /// </remarks>
     public override GreenBlock WithInsert(int index, ImmutableArray<GreenNode> nodes)
     {
-        if (index < 0 || index > _children.Length)
-            throw new ArgumentOutOfRangeException(nameof(index));
+        // Valid insertion range: 1 through _children.Length + 1 (after opener through before closer)
+        // Slot 0 is the opener, slot _children.Length + 1 is the closer
+        if (index < 1 || index > _children.Length + 1)
+            throw new ArgumentOutOfRangeException(nameof(index), 
+                $"Insert index must be between 1 and {_children.Length + 1} (inner content range)");
         
+        var innerIndex = index - 1; // Convert to inner children index
         var builder = _children.ToBuilder();
-        builder.InsertRange(index, nodes);
+        builder.InsertRange(innerIndex, nodes);
         return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     
-    /// <inheritdoc/>
+    /// <summary>
+    /// Removes nodes starting at the specified slot index.
+    /// Can only remove inner children (slots 1..N). Cannot remove opener (slot 0) or closer (slot N+1).
+    /// </summary>
     public override GreenBlock WithRemove(int index, int count)
     {
-        if (index < 0 || count < 0 || index + count > _children.Length)
-            throw new ArgumentOutOfRangeException(nameof(index));
+        // Valid removal range: slots 1..N (inner children only)
+        // Slot 0 is opener, slot _children.Length + 1 is closer - neither can be removed
+        if (index < 1 || count < 0)
+            throw new ArgumentOutOfRangeException(nameof(index), 
+                "Cannot remove opener (slot 0). Use WithSlot to replace delimiters.");
+        
+        var innerIndex = index - 1;
+        if (innerIndex + count > _children.Length)
+            throw new ArgumentOutOfRangeException(nameof(count), 
+                "Cannot remove closer. Removal range extends past inner children.");
         
         var builder = _children.ToBuilder();
-        builder.RemoveRange(index, count);
+        builder.RemoveRange(innerIndex, count);
         return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     
-    /// <inheritdoc/>
+    /// <summary>
+    /// Replaces nodes starting at the specified slot index.
+    /// Can replace inner children (slots 1..N) or entire block content including delimiters.
+    /// </summary>
+    /// <remarks>
+    /// If replacing only inner content (index >= 1, not touching closer), preserves delimiters.
+    /// If replacing from slot 0 through the closer, the replacement becomes the new children
+    /// (first replacement node becomes opener if it's a leaf, etc.).
+    /// </remarks>
     public override GreenBlock WithReplace(int index, int count, ImmutableArray<GreenNode> replacement)
     {
-        if (index < 0 || count < 0 || index + count > _children.Length)
-            throw new ArgumentOutOfRangeException(nameof(index));
+        var totalSlots = _children.Length + 2; // opener + children + closer
         
+        if (index < 0 || count < 0 || index + count > totalSlots)
+            throw new ArgumentOutOfRangeException(nameof(index),
+                $"Replace range [{index}..{index + count}) is out of bounds for slot count {totalSlots}");
+        
+        // Special case: replacing entire block content (slot 0 through last slot)
+        // This replaces opener, all inner children, and closer
+        if (index == 0 && count == totalSlots)
+        {
+            // The replacement becomes the new full children array
+            return WithChildren(replacement);
+        }
+        
+        // Special case: replacing from opener through some inner content
+        // This is invalid - can't partially replace including opener without replacing all
+        if (index == 0)
+        {
+            throw new ArgumentException(
+                "Cannot replace range starting at opener (slot 0) without replacing entire block. " +
+                "Use WithSlot to replace just the opener, or WithChildren to replace all.",
+                nameof(index));
+        }
+        
+        // Special case: replacing through the closer
+        // This is invalid - can't partially replace including closer without replacing all  
+        if (index + count == totalSlots && index != 0)
+        {
+            throw new ArgumentException(
+                "Cannot replace range including closer without replacing entire block. " +
+                "Use WithSlot to replace just the closer, or WithChildren to replace all.",
+                nameof(count));
+        }
+        
+        // Normal case: replacing inner content only (slots 1 through N)
+        var innerIndex = index - 1;
         var builder = _children.ToBuilder();
-        builder.RemoveRange(index, count);
-        builder.InsertRange(index, replacement);
+        builder.RemoveRange(innerIndex, count);
+        builder.InsertRange(innerIndex, replacement);
         return new GreenBlock(OpenerNode, CloserNode, builder.ToImmutable());
     }
     

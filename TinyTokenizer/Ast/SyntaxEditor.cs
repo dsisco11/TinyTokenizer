@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace TinyTokenizer.Ast;
 
@@ -44,11 +45,53 @@ public sealed class SyntaxEditor
     /// </summary>
     public bool HasPendingEdits => _edits.Count > 0;
     
+    #region Region Resolution
+    
+    /// <summary>
+    /// Gets regions from a query, using IRegionQuery if available,
+    /// otherwise falling back to match-based resolution.
+    /// </summary>
+    private IEnumerable<QueryRegion> GetRegions(INodeQuery query)
+    {
+        if (query is IRegionQuery regionQuery)
+        {
+            return regionQuery.SelectRegions(_tree);
+        }
+        
+        // Fallback for queries that don't implement IRegionQuery
+        return GetRegionsFromMatches(query);
+    }
+    
+    private IEnumerable<QueryRegion> GetRegionsFromMatches(INodeQuery query)
+    {
+        // Use Select + TryMatch to get matches without SelectMatches
+        foreach (var node in query.Select(_tree))
+        {
+            if (query.TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
+    
+    #endregion
+    
     #region Insert (Query-based)
     
     /// <summary>
     /// Queues an insertion of text before all nodes matching the query.
-    /// For <see cref="BoundaryQuery"/>, handles empty containers by using container metadata.
+    /// For range queries (e.g., Query.Between), inserts before the start of the matched range.
+    /// For empty regions (e.g., empty blocks via Inner()), inserts at the region position.
     /// </summary>
     /// <param name="query">A query specifying which nodes to insert before.</param>
     /// <param name="text">The text to insert (will be parsed into nodes).</param>
@@ -60,29 +103,20 @@ public sealed class SyntaxEditor
     /// </example>
     public SyntaxEditor InsertBefore(INodeQuery query, string text)
     {
-        // Handle BoundaryQuery specially for empty container support
-        if (query is BoundaryQuery boundaryQuery)
+        foreach (var region in GetRegions(query))
         {
-            foreach (var container in boundaryQuery.ResolveContainers(_tree))
-            {
-                var pos = CreateBoundaryInsertionPosition(container, boundaryQuery.Side, before: true);
-                if (pos.HasValue)
-                    _edits.Add(new InsertEdit(pos.Value, text) { SequenceNumber = _sequenceNumber++ });
-            }
-            return this;
-        }
-        
-        // Standard query - insert before each matched node
-        foreach (var node in query.Select(_tree))
-        {
-            InsertBefore(node, text);
+            _edits.Add(new InsertAtSlotEdit(region.ParentPath, region.StartSlot, region.Position, text) 
+            { 
+                SequenceNumber = _sequenceNumber++ 
+            });
         }
         return this;
     }
     
     /// <summary>
     /// Queues an insertion of text after all nodes matching the query.
-    /// For <see cref="BoundaryQuery"/>, handles empty containers by using container metadata.
+    /// For range queries (e.g., Query.Between), inserts after the end of the matched range.
+    /// For empty regions (e.g., empty blocks via Inner()), inserts at the region position.
     /// </summary>
     /// <param name="query">A query specifying which nodes to insert after.</param>
     /// <param name="text">The text to insert (will be parsed into nodes).</param>
@@ -94,22 +128,12 @@ public sealed class SyntaxEditor
     /// </example>
     public SyntaxEditor InsertAfter(INodeQuery query, string text)
     {
-        // Handle BoundaryQuery specially for empty container support
-        if (query is BoundaryQuery boundaryQuery)
+        foreach (var region in GetRegions(query))
         {
-            foreach (var container in boundaryQuery.ResolveContainers(_tree))
-            {
-                var pos = CreateBoundaryInsertionPosition(container, boundaryQuery.Side, before: false);
-                if (pos.HasValue)
-                    _edits.Add(new InsertEdit(pos.Value, text) { SequenceNumber = _sequenceNumber++ });
-            }
-            return this;
-        }
-        
-        // Standard query - insert after each matched node
-        foreach (var node in query.Select(_tree))
-        {
-            InsertAfter(node, text);
+            _edits.Add(new InsertAtSlotEdit(region.ParentPath, region.EndSlot, region.EndPosition, text) 
+            { 
+                SequenceNumber = _sequenceNumber++ 
+            });
         }
         return this;
     }
@@ -304,15 +328,20 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues removal of all nodes matching the query.
+    /// For range queries (e.g., Query.Between), removes all nodes in the matched range.
     /// </summary>
     public SyntaxEditor Remove(INodeQuery query)
     {
-        var nodes = query.Select(_tree).ToList();
-        
-        foreach (var node in nodes)
+        foreach (var region in GetRegions(query))
         {
-            var path = NodePath.FromNode(node);
-            _edits.Add(new RemoveEdit(path, node.Position) { SequenceNumber = _sequenceNumber++ });
+            if (!region.IsEmpty)
+            {
+                var path = region.FirstNode != null 
+                    ? NodePath.FromNode(region.FirstNode) 
+                    : region.ParentPath.Child(region.StartSlot);
+                _edits.Add(new RemoveEdit(path, region.Position, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
+            }
+            // Empty regions: nothing to remove, silently skip
         }
         
         return this;
@@ -362,16 +391,17 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Queues replacement of all nodes matching the query with new text.
+    /// For range queries (e.g., Query.Between), replaces all nodes in the matched range.
     /// </summary>
     public SyntaxEditor Replace(INodeQuery query, string text)
     {
-        var nodes = query.Select(_tree).ToList();
-        
-        foreach (var node in nodes)
+        foreach (var region in GetRegions(query))
         {
-            var path = NodePath.FromNode(node);
-            var (leading, trailing) = GetTrivia(node);
-            _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+            var (leading, trailing) = GetTriviaForRegion(region);
+            _edits.Add(new ReplaceRegionEdit(region, text, leading, trailing) 
+            { 
+                SequenceNumber = _sequenceNumber++ 
+            });
         }
         
         return this;
@@ -396,14 +426,17 @@ public sealed class SyntaxEditor
     /// </summary>
     public SyntaxEditor Replace(INodeQuery query, Func<SyntaxNode, string> replacer)
     {
-        var nodes = query.Select(_tree).ToList();
-        
-        foreach (var node in nodes)
+        foreach (var region in GetRegions(query))
         {
+            var node = region.FirstNode;
+            if (node == null) continue;
+            
             var text = replacer(node);
-            var path = NodePath.FromNode(node);
-            var (leading, trailing) = GetTrivia(node);
-            _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+            var (leading, trailing) = GetTriviaForRegion(region);
+            _edits.Add(new ReplaceRegionEdit(region, text, leading, trailing) 
+            { 
+                SequenceNumber = _sequenceNumber++ 
+            });
         }
         
         return this;
@@ -428,13 +461,13 @@ public sealed class SyntaxEditor
     /// </summary>
     internal SyntaxEditor Replace(INodeQuery query, ImmutableArray<GreenNode> nodes)
     {
-        var matchedNodes = query.Select(_tree).ToList();
-        
-        foreach (var node in matchedNodes)
+        foreach (var region in GetRegions(query))
         {
-            var path = NodePath.FromNode(node);
-            var (leading, trailing) = GetTrivia(node);
-            _edits.Add(new ReplaceNodesEdit(path, nodes, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+            var (leading, trailing) = GetTriviaForRegion(region);
+            _edits.Add(new ReplaceNodesRegionEdit(region, nodes, leading, trailing) 
+            { 
+                SequenceNumber = _sequenceNumber++ 
+            });
         }
         
         return this;
@@ -550,20 +583,24 @@ public sealed class SyntaxEditor
     /// <summary>
     /// Queues a transformation edit of all nodes matching the query.
     /// The transformer receives the node's content WITHOUT trivia, and trivia is automatically preserved.
+    /// For range queries, receives the concatenated content of all matched nodes.
     /// </summary>
     /// <param name="query">Query to select nodes to edit.</param>
     /// <param name="transformer">Function that transforms the node's content (without trivia).</param>
     public SyntaxEditor Edit(INodeQuery query, Func<string, string> transformer)
     {
-        var nodes = query.Select(_tree).ToList();
-        
-        foreach (var node in nodes)
+        foreach (var region in GetRegions(query))
         {
-            var path = NodePath.FromNode(node);
-            var (leading, trailing) = GetTrivia(node);
-            var contentWithoutTrivia = GetContentWithoutTrivia(node);
+            if (region.IsEmpty) continue;
+            
+            var firstNode = region.FirstNode;
+            if (firstNode == null) continue;
+            
+            var path = NodePath.FromNode(firstNode);
+            var (leading, trailing) = GetTriviaForRegion(region);
+            var contentWithoutTrivia = GetContentWithoutTriviaForRegion(region);
             var newText = transformer(contentWithoutTrivia);
-            _edits.Add(new ReplaceEdit(path, newText, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new ReplaceEdit(path, newText, region.Position, leading, trailing, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -623,6 +660,7 @@ public sealed class SyntaxEditor
     /// Gets the content of a node without its leading and trailing trivia.
     /// For leaves, returns the token text. For blocks, returns the full content minus outer trivia.
     /// For syntax nodes (containers), returns full content minus the trivia from first/last children.
+    /// Uses precomputed trivia widths from green nodes for efficiency.
     /// </summary>
     private static string GetContentWithoutTrivia(SyntaxNode node)
     {
@@ -645,73 +683,124 @@ public sealed class SyntaxEditor
             if (contentLength <= 0)
                 return string.Empty;
             
-            return fullText.Substring(leadingWidth, contentLength);
+            return fullText.AsSpan(leadingWidth, contentLength).ToString();
         }
         
-        // For syntax nodes and other containers, check first/last children for trivia
-        var (leadingTrivia, trailingTrivia) = GetTrivia(node);
-        if (leadingTrivia.IsEmpty && trailingTrivia.IsEmpty)
+        // For syntax nodes and other containers, use precomputed trivia widths
+        var green = node.Green;
+        var leadingTriviaWidth = green.GetLeadingTriviaWidth();
+        var trailingTriviaWidth = green.GetTrailingTriviaWidth();
+        
+        if (leadingTriviaWidth == 0 && trailingTriviaWidth == 0)
         {
             return node.ToText();
         }
         
         var text = node.ToText();
-        var leadingTriviaWidth = leadingTrivia.Sum(t => t.Width);
-        var trailingTriviaWidth = trailingTrivia.Sum(t => t.Width);
-        
         var contentLen = text.Length - leadingTriviaWidth - trailingTriviaWidth;
         if (contentLen <= 0)
             return string.Empty;
         
-        return text.Substring(leadingTriviaWidth, contentLen);
+        return text.AsSpan(leadingTriviaWidth, contentLen).ToString();
+    }
+    
+    /// <summary>
+    /// Gets the concatenated content of a range of siblings without leading/trailing trivia.
+    /// Leading trivia from first node and trailing trivia from last node are excluded.
+    /// Uses precomputed trivia widths from green nodes for efficiency.
+    /// </summary>
+    private static string GetContentWithoutTriviaForRange(SyntaxNode startNode, int count)
+    {
+        if (count <= 0)
+            return string.Empty;
+        
+        if (count == 1)
+            return GetContentWithoutTrivia(startNode);
+        
+        // For multiple nodes, concatenate their content using pooled buffer
+        using var buffer = new ArrayPoolBufferWriter<char>();
+        var current = startNode;
+        
+        for (int i = 0; i < count && current != null; i++)
+        {
+            var content = current.ToText();
+            
+            if (i == 0)
+            {
+                // First node: exclude leading trivia only (use precomputed width)
+                var leadingWidth = current.Green.GetLeadingTriviaWidth();
+                var span = content.AsSpan(leadingWidth);
+                var dest = buffer.GetSpan(span.Length);
+                span.CopyTo(dest);
+                buffer.Advance(span.Length);
+            }
+            else if (i == count - 1)
+            {
+                // Last node: exclude trailing trivia only (use precomputed width)
+                var trailingWidth = current.Green.GetTrailingTriviaWidth();
+                var span = content.AsSpan(0, content.Length - trailingWidth);
+                var dest = buffer.GetSpan(span.Length);
+                span.CopyTo(dest);
+                buffer.Advance(span.Length);
+            }
+            else
+            {
+                // Middle nodes: include everything
+                var span = content.AsSpan();
+                var dest = buffer.GetSpan(span.Length);
+                span.CopyTo(dest);
+                buffer.Advance(span.Length);
+            }
+            
+            current = current.NextSibling();
+        }
+        
+        return buffer.WrittenSpan.ToString();
     }
     
     /// <summary>
     /// Extracts leading and trailing trivia from a node.
-    /// For leaves, returns the leaf's trivia.
-    /// For blocks, returns the block's trivia.
-    /// For syntax nodes (containers), returns trivia from the first child (leading) and last child (trailing).
+    /// Uses green node's GetFirstLeaf/GetLastLeaf for O(depth) access instead of recursive red node traversal.
     /// </summary>
     private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTrivia(SyntaxNode node)
     {
-        if (node is SyntaxToken leaf)
-        {
-            var greenLeaf = (GreenLeaf)leaf.Green;
-            return (greenLeaf.LeadingTrivia, greenLeaf.TrailingTrivia);
-        }
+        // Delegate to green node which efficiently finds first/last leaf
+        var green = node.Green;
+        return (green.GetLeadingTrivia(), green.GetTrailingTrivia());
+    }
+    
+    /// <summary>
+    /// Gets trivia for a query region.
+    /// For empty regions, returns empty trivia.
+    /// For non-empty regions, returns leading from first and trailing from last.
+    /// </summary>
+    private static (ImmutableArray<GreenTrivia> Leading, ImmutableArray<GreenTrivia> Trailing) GetTriviaForRegion(QueryRegion region)
+    {
+        if (region.IsEmpty)
+            return (ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
         
-        if (node is SyntaxBlock block)
-        {
-            return (block.GreenLeadingTrivia, block.GreenTrailingTrivia);
-        }
+        var first = region.FirstNode;
+        var last = region.LastNode;
         
-        // For syntax nodes and other containers, get trivia from first/last children
-        var leading = ImmutableArray<GreenTrivia>.Empty;
-        var trailing = ImmutableArray<GreenTrivia>.Empty;
-        
-        // Get leading trivia from first child
-        var firstChild = node.Children.FirstOrDefault();
-        if (firstChild != null)
-        {
-            var (childLeading, _) = GetTrivia(firstChild);
-            leading = childLeading;
-        }
-        
-        // Get trailing trivia from last child
-        var lastChild = node.Children.LastOrDefault();
-        if (lastChild != null && !ReferenceEquals(lastChild, firstChild))
-        {
-            var (_, childTrailing) = GetTrivia(lastChild);
-            trailing = childTrailing;
-        }
-        else if (firstChild != null)
-        {
-            // Only one child - get trailing from that same child
-            var (_, childTrailing) = GetTrivia(firstChild);
-            trailing = childTrailing;
-        }
+        var leading = first != null ? GetTrivia(first).Leading : ImmutableArray<GreenTrivia>.Empty;
+        var trailing = last != null ? GetTrivia(last).Trailing : ImmutableArray<GreenTrivia>.Empty;
         
         return (leading, trailing);
+    }
+    
+    /// <summary>
+    /// Gets the content of a region without leading/trailing trivia.
+    /// </summary>
+    private static string GetContentWithoutTriviaForRegion(QueryRegion region)
+    {
+        if (region.IsEmpty)
+            return string.Empty;
+        
+        var first = region.FirstNode;
+        if (first == null)
+            return string.Empty;
+        
+        return GetContentWithoutTriviaForRange(first, region.SlotCount);
     }
     
     /// <summary>
@@ -735,94 +824,6 @@ public sealed class SyntaxEditor
         return before
             ? new InsertionPosition(parentPath, childIndex, target.Position, targetPath, targetLeading, targetTrailing)
             : new InsertionPosition(parentPath, childIndex + 1, target.EndPosition, targetPath, targetLeading, targetTrailing);
-    }
-    
-    /// <summary>
-    /// Creates an InsertionPosition for a boundary query (Start/End of a container).
-    /// Handles empty containers by computing position from container metadata.
-    /// </summary>
-    private static InsertionPosition? CreateBoundaryInsertionPosition(SyntaxNode container, BoundarySide side, bool before)
-    {
-        if (container is SyntaxBlock block)
-        {
-            // For blocks, the boundary nodes are the opener/closer
-            // Start + InsertAfter = insert at beginning of content (after opener)
-            // End + InsertBefore = insert at end of content (before closer)
-            var blockPath = NodePath.FromNode(block);
-            
-            if (side == BoundarySide.Start)
-            {
-                // Insert relative to opener
-                if (before)
-                {
-                    // InsertBefore(Start) = insert before the opener (before the block content)
-                    var parent = block.Parent;
-                    if (parent == null) return null;
-                    var parentPath = NodePath.FromNode(parent);
-                    return new InsertionPosition(parentPath, block.SiblingIndex, block.Position, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
-                }
-                else
-                {
-                    // InsertAfter(Start) = insert at beginning of block content (child index 0)
-                    return new InsertionPosition(blockPath, 0, block.InnerStartPosition, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
-                }
-            }
-            else // BoundarySide.End
-            {
-                if (before)
-                {
-                    // InsertBefore(End) = insert at end of block content (after last child)
-                    return new InsertionPosition(blockPath, block.ChildCount, block.InnerEndPosition, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
-                }
-                else
-                {
-                    // InsertAfter(End) = insert after the closer (after the block)
-                    var parent = block.Parent;
-                    if (parent == null) return null;
-                    var parentPath = NodePath.FromNode(parent);
-                    return new InsertionPosition(parentPath, block.SiblingIndex + 1, block.EndPosition, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
-                }
-            }
-        }
-        
-        // For non-block containers (lists, syntax nodes), use first/last child
-        var children = container.Children.ToList();
-        var containerPath = NodePath.FromNode(container);
-        
-        if (side == BoundarySide.Start)
-        {
-            if (children.Count == 0)
-            {
-                // Empty container - insert at position 0 (child index 0)
-                return before
-                    ? null // Can't insert before nothing
-                    : new InsertionPosition(containerPath, 0, container.Position, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty);
-            }
-            
-            // Has children - delegate to first child
-            var first = children[0];
-            return CreateInsertionPosition(first, before);
-        }
-        else // BoundarySide.End
-        {
-            if (children.Count == 0)
-            {
-                // Empty container - insert at position 0 (child index 0)
-                return before
-                    ? new InsertionPosition(containerPath, 0, container.Position, null,
-                        ImmutableArray<GreenTrivia>.Empty, ImmutableArray<GreenTrivia>.Empty)
-                    : null; // Can't insert after nothing
-            }
-            
-            // Has children - delegate to last child
-            var last = children[^1];
-            return CreateInsertionPosition(last, before);
-        }
     }
     
     /// <summary>
@@ -987,11 +988,13 @@ internal sealed class RemoveEdit : PendingEdit
 {
     private readonly NodePath _path;
     private readonly int _position;
+    private readonly int _count;
     
-    public RemoveEdit(NodePath path, int position)
+    public RemoveEdit(NodePath path, int position, int count = 1)
     {
         _path = path;
         _position = position;
+        _count = count;
     }
     
     public override int Position => _position;
@@ -1002,7 +1005,7 @@ internal sealed class RemoveEdit : PendingEdit
     {
         var parentPath = _path.Parent();
         var childIndex = _path.Depth > 0 ? _path[_path.Depth - 1] : 0;
-        return builder.RemoveAt(parentPath.ToArray(), childIndex, 1);
+        return builder.RemoveAt(parentPath.ToArray(), childIndex, _count);
     }
 }
 
@@ -1011,16 +1014,19 @@ internal sealed class ReplaceEdit : PendingEdit
     private readonly NodePath _path;
     private readonly string _text;
     private readonly int _position;
+    private readonly int _count;
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
     public ReplaceEdit(NodePath path, string text, int position, 
         ImmutableArray<GreenTrivia> leadingTrivia = default,
-        ImmutableArray<GreenTrivia> trailingTrivia = default)
+        ImmutableArray<GreenTrivia> trailingTrivia = default,
+        int count = 1)
     {
         _path = path;
         _text = text;
         _position = position;
+        _count = count;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
@@ -1043,7 +1049,7 @@ internal sealed class ReplaceEdit : PendingEdit
             nodes = TransferTrivia(nodes, _leadingTrivia, _trailingTrivia);
         }
         
-        return builder.ReplaceAt(parentPath.ToArray(), childIndex, 1, nodes);
+        return builder.ReplaceAt(parentPath.ToArray(), childIndex, _count, nodes);
     }
     
     /// <summary>
@@ -1086,16 +1092,19 @@ internal sealed class ReplaceNodesEdit : PendingEdit
     private readonly NodePath _path;
     private readonly ImmutableArray<GreenNode> _nodes;
     private readonly int _position;
+    private readonly int _count;
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
     public ReplaceNodesEdit(NodePath path, ImmutableArray<GreenNode> nodes, int position,
         ImmutableArray<GreenTrivia> leadingTrivia = default,
-        ImmutableArray<GreenTrivia> trailingTrivia = default)
+        ImmutableArray<GreenTrivia> trailingTrivia = default,
+        int count = 1)
     {
         _path = path;
         _nodes = nodes;
         _position = position;
+        _count = count;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
@@ -1117,7 +1126,7 @@ internal sealed class ReplaceNodesEdit : PendingEdit
             nodes = TransferTrivia(nodes, _leadingTrivia, _trailingTrivia);
         }
         
-        return builder.ReplaceAt(parentPath.ToArray(), childIndex, 1, nodes);
+        return builder.ReplaceAt(parentPath.ToArray(), childIndex, _count, nodes);
     }
     
     /// <summary>
@@ -1143,6 +1152,171 @@ internal sealed class ReplaceNodesEdit : PendingEdit
         }
         
         // Add trailing trivia to last node
+        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        {
+            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
+                ? trailing 
+                : lastLeaf.TrailingTrivia.AddRange(trailing);
+            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+        }
+        
+        return result.ToImmutable();
+    }
+}
+
+internal sealed class InsertAtSlotEdit : PendingEdit
+{
+    private readonly NodePath _parentPath;
+    private readonly int _slot;
+    private readonly int _position;
+    private readonly string _text;
+    
+    public InsertAtSlotEdit(NodePath parentPath, int slot, int position, string text)
+    {
+        _parentPath = parentPath;
+        _slot = slot;
+        _position = position;
+        _text = text;
+    }
+    
+    public override int Position => _position;
+    
+    public override NodePath AffectedPath => _parentPath;
+    
+    public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
+    {
+        var lexer = new GreenLexer(options);
+        var newNodes = lexer.ParseToGreenNodes(_text);
+        
+        return builder.InsertAt(_parentPath.ToArray(), _slot, newNodes);
+    }
+}
+
+internal sealed class ReplaceRegionEdit : PendingEdit
+{
+    private readonly QueryRegion _region;
+    private readonly string _text;
+    private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
+    private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
+    
+    public ReplaceRegionEdit(QueryRegion region, string text,
+        ImmutableArray<GreenTrivia> leadingTrivia,
+        ImmutableArray<GreenTrivia> trailingTrivia)
+    {
+        _region = region;
+        _text = text;
+        _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
+        _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
+    }
+    
+    public override int Position => _region.Position;
+    
+    public override NodePath AffectedPath => _region.ParentPath;
+    
+    public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
+    {
+        var lexer = new GreenLexer(options);
+        var newNodes = lexer.ParseToGreenNodes(_text);
+        
+        if (newNodes.Length > 0)
+        {
+            newNodes = TransferTrivia(newNodes, _leadingTrivia, _trailingTrivia);
+        }
+        
+        return builder.ReplaceAt(
+            _region.ParentPath.ToArray(),
+            _region.StartSlot,
+            _region.SlotCount,
+            newNodes
+        );
+    }
+    
+    private static ImmutableArray<GreenNode> TransferTrivia(
+        ImmutableArray<GreenNode> nodes,
+        ImmutableArray<GreenTrivia> leading,
+        ImmutableArray<GreenTrivia> trailing)
+    {
+        if (leading.IsEmpty && trailing.IsEmpty)
+            return nodes;
+        
+        var result = nodes.ToBuilder();
+        
+        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        {
+            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
+                ? leading 
+                : leading.AddRange(firstLeaf.LeadingTrivia);
+            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+        }
+        
+        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        {
+            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
+                ? trailing 
+                : lastLeaf.TrailingTrivia.AddRange(trailing);
+            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+        }
+        
+        return result.ToImmutable();
+    }
+}
+
+internal sealed class ReplaceNodesRegionEdit : PendingEdit
+{
+    private readonly QueryRegion _region;
+    private readonly ImmutableArray<GreenNode> _nodes;
+    private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
+    private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
+    
+    public ReplaceNodesRegionEdit(QueryRegion region, ImmutableArray<GreenNode> nodes,
+        ImmutableArray<GreenTrivia> leadingTrivia,
+        ImmutableArray<GreenTrivia> trailingTrivia)
+    {
+        _region = region;
+        _nodes = nodes;
+        _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
+        _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
+    }
+    
+    public override int Position => _region.Position;
+    
+    public override NodePath AffectedPath => _region.ParentPath;
+    
+    public override GreenNode Apply(GreenNode root, GreenTreeBuilder builder, TokenizerOptions options)
+    {
+        var nodes = _nodes;
+        
+        if (nodes.Length > 0 && (!_leadingTrivia.IsEmpty || !_trailingTrivia.IsEmpty))
+        {
+            nodes = TransferTrivia(nodes, _leadingTrivia, _trailingTrivia);
+        }
+        
+        return builder.ReplaceAt(
+            _region.ParentPath.ToArray(),
+            _region.StartSlot,
+            _region.SlotCount,
+            nodes
+        );
+    }
+    
+    private static ImmutableArray<GreenNode> TransferTrivia(
+        ImmutableArray<GreenNode> nodes,
+        ImmutableArray<GreenTrivia> leading,
+        ImmutableArray<GreenTrivia> trailing)
+    {
+        if (leading.IsEmpty && trailing.IsEmpty)
+            return nodes;
+        
+        var result = nodes.ToBuilder();
+        
+        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        {
+            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
+                ? leading 
+                : leading.AddRange(firstLeaf.LeadingTrivia);
+            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+        }
+        
         if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
         {
             var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
