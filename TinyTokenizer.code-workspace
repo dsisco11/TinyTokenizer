@@ -7,5 +7,7 @@
 			"path": "../TinyTokenizer.wiki"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"powershell.cwd": "TinyTokenizer"
+	}
 }

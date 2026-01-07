@@ -163,6 +163,9 @@ public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
     protected override SyntaxNodeQuery CreateSkip(int count) => new(_kind, _predicate, SelectionMode.Skip, count);
     protected override SyntaxNodeQuery CreateTake(int count) => new(_kind, _predicate, SelectionMode.Take, count);
     
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
+    
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
@@ -272,4 +275,7 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     protected override SyntaxNodeQuery<T> CreateNth(int n) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Nth, n);
     protected override SyntaxNodeQuery<T> CreateSkip(int count) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Skip, count);
     protected override SyntaxNodeQuery<T> CreateTake(int count) => new SyntaxNodeQuery<T>(_predicate, SelectionMode.Take, count);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
 }

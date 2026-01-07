@@ -651,9 +651,16 @@ public class TreeWalkerTests
 
         var first = walker.NextNode();
         
-        // Should skip the block and return the ident inside
+        // Should skip the block and recurse into it
+        // With Roslyn-style slots, first child of block is opener '{'
         Assert.NotNull(first);
-        Assert.Equal(NodeKind.Ident, first.Kind);
+        Assert.Equal(NodeKind.Symbol, first.Kind);
+        Assert.Equal("{", first.ToText());
+        
+        // Continue to get the actual content
+        var second = walker.NextNode();
+        Assert.NotNull(second);
+        Assert.Equal(NodeKind.Ident, second.Kind);
     }
 
     [Fact]
@@ -757,9 +764,11 @@ public class TreeWalkerTests
 
         var first = walker.FirstChild();
 
-        // Should skip outer block, skip inner block, and return "deep"
+        // Should skip outer block, skip inner block
+        // With Roslyn-style slots, first child encountered is the outer opener '{'
         Assert.NotNull(first);
-        Assert.Equal(NodeKind.Ident, first.Kind);
+        Assert.Equal(NodeKind.Symbol, first.Kind);
+        Assert.Equal("{", first.ToText());
     }
 
     [Fact]

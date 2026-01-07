@@ -1085,7 +1085,8 @@ public class QueryCombinatorTests
         var tree = Parse("{ foo }");
         var root = tree.Root;
         var block = root.Children.First() as SyntaxBlock;
-        var innerIdent = block!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var innerIdent = block!.InnerChildren.First();
         
         var query = Query.Ancestor(Query.BraceBlock);
         Assert.True(query.Matches(innerIdent));
@@ -1097,8 +1098,9 @@ public class QueryCombinatorTests
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
         var braceBlock = root.Children.First() as SyntaxBlock;
-        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
-        var innerIdent = bracketBlock!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var bracketBlock = braceBlock!.InnerChildren.First() as SyntaxBlock;
+        var innerIdent = bracketBlock!.InnerChildren.First();
         
         // innerIdent's grandparent is brace block
         var query = Query.Ancestor(Query.BraceBlock);
@@ -1111,7 +1113,8 @@ public class QueryCombinatorTests
         var tree = Parse("{ foo }");
         var root = tree.Root;
         var block = root.Children.First() as SyntaxBlock;
-        var innerIdent = block!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var innerIdent = block!.InnerChildren.First();
         
         var query = Query.Ancestor(Query.ParenBlock); // No paren ancestor
         Assert.False(query.Matches(innerIdent));
@@ -1165,7 +1168,8 @@ public class QueryCombinatorTests
         var tree = Parse("{ foo }");
         var root = tree.Root;
         var block = root.Children.First() as SyntaxBlock;
-        var innerIdent = block!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var innerIdent = block!.InnerChildren.First();
         
         var query = Query.BraceBlock.AsParent();
         Assert.True(query.Matches(innerIdent));
@@ -1178,8 +1182,9 @@ public class QueryCombinatorTests
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
         var braceBlock = root.Children.First() as SyntaxBlock;
-        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
-        var innerIdent = bracketBlock!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var bracketBlock = braceBlock!.InnerChildren.First() as SyntaxBlock;
+        var innerIdent = bracketBlock!.InnerChildren.First();
         
         var query = Query.BraceBlock.AsAncestor();
         Assert.True(query.Matches(innerIdent));
@@ -1638,8 +1643,9 @@ public class QueryCombinatorTests
         var tree = Parse("{ [ foo ] }");
         var root = tree.Root;
         var braceBlock = root.Children.First() as SyntaxBlock;
-        var bracketBlock = braceBlock!.Children.First() as SyntaxBlock;
-        var innerIdent = bracketBlock!.Children.First();
+        // Use InnerChildren to skip opener/closer
+        var bracketBlock = braceBlock!.InnerChildren.First() as SyntaxBlock;
+        var innerIdent = bracketBlock!.InnerChildren.First();
         
         // Direct parent is bracket, ancestor is brace
         Assert.True(Query.Parent(Query.BracketBlock).Matches(innerIdent));

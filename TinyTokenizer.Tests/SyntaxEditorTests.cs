@@ -656,6 +656,230 @@ public class SyntaxEditorTests
 
     #endregion
 
+    #region Inner() Query Tests
+    
+    [Fact]
+    public void Inner_Select_ReturnsInnerChildren()
+    {
+        var tree = SyntaxTree.Parse("{a b c}");
+        
+        var inner = tree.Select(Q.BraceBlock.First().Inner()).ToList();
+        
+        // "a", "b", "c" (whitespace is trivia attached to tokens)
+        Assert.Equal(3, inner.Count);
+    }
+    
+    [Fact]
+    public void Inner_Replace_ReplacesContentPreservingDelimiters()
+    {
+        var tree = SyntaxTree.Parse("{old content}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.First().Inner(), "new")
+            .Commit();
+        
+        Assert.Equal("{new}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_Replace_EmptyBlock_InsertsContent()
+    {
+        var tree = SyntaxTree.Parse("{}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.First().Inner(), "inserted")
+            .Commit();
+        
+        Assert.Equal("{inserted}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_Replace_WithWhitespace()
+    {
+        var tree = SyntaxTree.Parse("{ old }");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.First().Inner(), " new ")
+            .Commit();
+        
+        // Original trivia (" ") + new content (" new ") + original trailing trivia (" ")
+        // But trivia from "old" is transferred: leading space + content + trailing space
+        Assert.Equal("{  new  }", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_Replace_MultipleBlocks()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.Inner(), "X")
+            .Commit();
+        
+        Assert.Equal("{X} {X}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_Remove_ClearsBlockContent()
+    {
+        var tree = SyntaxTree.Parse("{content}");
+        
+        tree.CreateEditor()
+            .Remove(Q.BraceBlock.First().Inner())
+            .Commit();
+        
+        Assert.Equal("{}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_Remove_EmptyBlock_NoChange()
+    {
+        var tree = SyntaxTree.Parse("{}");
+        
+        tree.CreateEditor()
+            .Remove(Q.BraceBlock.First().Inner())
+            .Commit();
+        
+        Assert.Equal("{}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_InsertBefore_InsertsAtStart()
+    {
+        var tree = SyntaxTree.Parse("{existing}");
+        
+        tree.CreateEditor()
+            .InsertBefore(Q.BraceBlock.First().Inner(), "prefix ")
+            .Commit();
+        
+        Assert.Equal("{prefix existing}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_InsertAfter_InsertsAtEnd()
+    {
+        var tree = SyntaxTree.Parse("{existing}");
+        
+        tree.CreateEditor()
+            .InsertAfter(Q.BraceBlock.First().Inner(), " suffix")
+            .Commit();
+        
+        Assert.Equal("{existing suffix}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_InsertBefore_EmptyBlock_InsertsContent()
+    {
+        var tree = SyntaxTree.Parse("{}");
+        
+        tree.CreateEditor()
+            .InsertBefore(Q.BraceBlock.First().Inner(), "new")
+            .Commit();
+        
+        Assert.Equal("{new}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_InsertAfter_EmptyBlock_InsertsContent()
+    {
+        var tree = SyntaxTree.Parse("{}");
+        
+        tree.CreateEditor()
+            .InsertAfter(Q.BraceBlock.First().Inner(), "new")
+            .Commit();
+        
+        Assert.Equal("{new}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_BracketBlock_Works()
+    {
+        var tree = SyntaxTree.Parse("[old]");
+        
+        tree.CreateEditor()
+            .Replace(Q.BracketBlock.First().Inner(), "new")
+            .Commit();
+        
+        Assert.Equal("[new]", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_ParenBlock_Works()
+    {
+        var tree = SyntaxTree.Parse("(old)");
+        
+        tree.CreateEditor()
+            .Replace(Q.ParenBlock.First().Inner(), "new")
+            .Commit();
+        
+        Assert.Equal("(new)", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_NestedBlocks_WorksOnOuter()
+    {
+        var tree = SyntaxTree.Parse("{outer {inner}}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.First().Inner(), "replaced")
+            .Commit();
+        
+        Assert.Equal("{replaced}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_NestedBlocks_WorksOnInner()
+    {
+        var tree = SyntaxTree.Parse("{outer {inner}}");
+        
+        // Get the inner brace block (second one)
+        var innerBlock = tree.Select(Q.BraceBlock).Skip(1).First();
+        
+        tree.CreateEditor()
+            .Replace(innerBlock, "{replaced}")
+            .Commit();
+        
+        Assert.Equal("{outer {replaced}}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_WithFirst_SelectsFirstBlockInner()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.First().Inner(), "X")
+            .Commit();
+        
+        Assert.Equal("{X} {b}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_WithLast_SelectsLastBlockInner()
+    {
+        var tree = SyntaxTree.Parse("{a} {b}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.Last().Inner(), "X")
+            .Commit();
+        
+        Assert.Equal("{a} {X}", tree.ToText());
+    }
+    
+    [Fact]
+    public void Inner_WithPredicate_SelectsMatchingBlockInner()
+    {
+        var tree = SyntaxTree.Parse("{short} {longer content}");
+        
+        tree.CreateEditor()
+            .Replace(Q.BraceBlock.Where(b => b.Width > 10).First().Inner(), "X")
+            .Commit();
+        
+        Assert.Equal("{short} {X}", tree.ToText());
+    }
+    
+    #endregion
+
     #region Function-Like Block Insertion Scenarios
 
     [Fact]
@@ -1814,54 +2038,140 @@ public class SyntaxEditorTests
     
     #endregion
     
-    #region Query.Between Replace Bug
+    #region Query.Between with SyntaxEditor
     
     /// <summary>
-    /// Reproduction test for Query.Between replacement bug.
-    /// Using Query.Between to select content between function block delimiters
-    /// should allow replacing the inner contents of a function body.
+    /// Tests that Query.Between correctly replaces a range of nodes.
     /// </summary>
     [Fact]
-    public void Replace_BetweenBraces_ReplacesInnerContents()
+    public void Replace_QueryBetween_ReplacesEntireRange()
     {
-        // Arrange: a simple function with a body
-        var tree = SyntaxTree.Parse("function foo() { old body content }");
+        // Arrange: a, b, c - we want to replace from 'a' to 'c' inclusive
+        var tree = SyntaxTree.Parse("x a b c y");
         
-        // Act: use Query.Between to match content between { and }
-        // and replace it with new content
-        var query = Q.Between(Q.Symbol("{"), Q.Symbol("}"));
-        
+        // Act: replace everything from 'a' to 'c' (inclusive)
         tree.CreateEditor()
-            .Replace(query, "{ new body }")
+            .Replace(Q.Between(Q.Ident("a"), Q.Ident("c")), "REPLACED")
             .Commit();
         
-        // Assert: the function body should be replaced
-        var result = tree.ToText();
-        Assert.Equal("function foo() { new body }", result);
+        // Assert: the range [a, b, c] should be replaced with REPLACED
+        Assert.Equal("x REPLACED y", tree.ToText());
     }
     
     /// <summary>
-    /// Tests that Query.Between can be used to replace inner block content
-    /// while preserving surrounding structure.
+    /// Tests that Remove with Query.Between removes the entire matched range.
     /// </summary>
     [Fact]
-    public void Replace_BetweenBraces_InFunctionBlock_PreservesStructure()
+    public void Remove_QueryBetween_RemovesEntireRange()
     {
-        // Arrange: code with a function containing a block
-        var tree = SyntaxTree.Parse("int main() { return 0; }");
-        
-        // Act: select the brace block content using Between and replace
-        var query = Q.Between(Q.Symbol("{"), Q.Symbol("}"));
+        var tree = SyntaxTree.Parse("start a b c end");
         
         tree.CreateEditor()
-            .Replace(query, "{ return 42; }")
+            .Remove(Q.Between(Q.Ident("a"), Q.Ident("c")))
             .Commit();
         
-        // Assert: the block content should be replaced while keeping function signature
-        var result = tree.ToText();
-        Assert.Contains("int main()", result);
-        Assert.Contains("return 42", result);
-        Assert.DoesNotContain("return 0", result);
+        // Trivia handling: leading trivia of 'a' (space) is removed with 'a',
+        // but 'end' keeps its leading trivia (space)
+        Assert.Equal("start end", tree.ToText());
+    }
+    
+    /// <summary>
+    /// Tests that InsertBefore with Query.Between inserts before the start of the range.
+    /// </summary>
+    [Fact]
+    public void InsertBefore_QueryBetween_InsertsBeforeRange()
+    {
+        var tree = SyntaxTree.Parse("x a b c y");
+        
+        tree.CreateEditor()
+            .InsertBefore(Q.Between(Q.Ident("a"), Q.Ident("c")), "BEFORE ")
+            .Commit();
+        
+        Assert.Equal("x BEFORE a b c y", tree.ToText());
+    }
+    
+    /// <summary>
+    /// Tests that InsertAfter with Query.Between inserts after the end of the range.
+    /// Note: With trailing trivia model, the preceding token keeps its trailing whitespace,
+    /// so inserted content should use trailing space (not leading) for proper separation.
+    /// </summary>
+    [Fact]
+    public void InsertAfter_QueryBetween_InsertsAfterRange()
+    {
+        // Test with whitespace-separated tokens where spaces are trailing trivia
+        var tree = SyntaxTree.Parse("x a b c y");
+        
+        // Insert "AFTER " after the range a..c
+        // - c has trailing trivia (space) -> "c "
+        // - Insert "AFTER " (with trailing space for separation from y)
+        // - y has no trivia -> "y"
+        tree.CreateEditor()
+            .InsertAfter(Q.Between(Q.Ident("a"), Q.Ident("c")), "AFTER ")
+            .Commit();
+        
+        Assert.Equal("x a b c AFTER y", tree.ToText());
+    }
+    
+    /// <summary>
+    /// Tests that InsertAfter preserves the target token's trailing trivia and
+    /// uses trailing space on inserted content for proper separation.
+    /// </summary>
+    /// <remarks>
+    /// In TinyAst's trivia model, same-line whitespace is trailing trivia on the preceding token.
+    /// When inserting after a token, the token keeps its trailing trivia, so inserted content
+    /// should use trailing whitespace (not leading) for proper spacing with following tokens.
+    /// </remarks>
+    [Fact]
+    public void InsertAfter_RedNode_InMiddle_PreservesFollowingTrivia()
+    {
+        var tree = SyntaxTree.Parse("x a b c y");
+        
+        // Verify trivia model: each token (except last) has trailing whitespace
+        var beforeTrivia = string.Join(", ", tree.Leaves.Select(l => 
+            $"{l.Text}(T:{l.TrailingTriviaWidth})"));
+        Assert.Equal("x(T:1), a(T:1), b(T:1), c(T:1), y(T:0)", beforeTrivia);
+        
+        var cNode = tree.Root.Children.First(n => n is SyntaxToken leaf && leaf.Text == "c");
+        
+        // Insert "AFTER " with trailing space for proper separation from y
+        tree.CreateEditor()
+            .InsertAfter(cNode, "AFTER ")
+            .Commit();
+        
+        Assert.Equal("x a b c AFTER y", tree.ToText());
+    }
+    
+    /// <summary>
+    /// Tests that Edit with Query.Between transforms the concatenated content of the range.
+    /// </summary>
+    [Fact]
+    public void Edit_QueryBetween_TransformsRangeContent()
+    {
+        var tree = SyntaxTree.Parse("x abc def ghi y");
+        
+        tree.CreateEditor()
+            .Edit(Q.Between(Q.Ident("abc"), Q.Ident("ghi")), content => content.ToUpper())
+            .Commit();
+        
+        // The content between abc and ghi (inclusive) should be uppercased
+        Assert.Equal("x ABC DEF GHI y", tree.ToText());
+    }
+    
+    /// <summary>
+    /// Tests Query.Sequence with SyntaxEditor Replace.
+    /// </summary>
+    [Fact]
+    public void Replace_QuerySequence_ReplacesAllMatchedNodes()
+    {
+        var tree = SyntaxTree.Parse("a = 1 ; b = 2");
+        
+        // Replace sequence "a =" with "x ="
+        // Note: '=' is parsed as an operator by default, not a symbol
+        tree.CreateEditor()
+            .Replace(Q.Sequence(Q.Ident("a"), Q.Operator("=")), "x =")
+            .Commit();
+        
+        Assert.Equal("x = 1 ; b = 2", tree.ToText());
     }
     
     #endregion

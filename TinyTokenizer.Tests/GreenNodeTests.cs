@@ -46,12 +46,16 @@ public class GreenNodeTests
         var child3 = new GreenLeaf(NodeKind.Ident, "c");   // width 1
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
-        // Offset 0: after opener '{' (1 char)
-        Assert.Equal(1, block.GetSlotOffset(0));
-        // Offset 1: after child1 (1 + 3 = 4)
-        Assert.Equal(4, block.GetSlotOffset(1));
-        // Offset 2: after child2 (1 + 3 + 2 = 6)
-        Assert.Equal(6, block.GetSlotOffset(2));
+        // Slot 0: opener '{' at offset 0
+        Assert.Equal(0, block.GetSlotOffset(0));
+        // Slot 1: first inner child after opener (1)
+        Assert.Equal(1, block.GetSlotOffset(1));
+        // Slot 2: after child1 (1 + 3 = 4)
+        Assert.Equal(4, block.GetSlotOffset(2));
+        // Slot 3: after child2 (1 + 3 + 2 = 6)
+        Assert.Equal(6, block.GetSlotOffset(3));
+        // Slot 4: closer after all children (1 + 3 + 2 + 1 = 7)
+        Assert.Equal(7, block.GetSlotOffset(4));
     }
 
     #endregion
@@ -327,7 +331,10 @@ public class GreenNodeTests
             new GreenLeaf(NodeKind.Ident, "c"));
         var block = GreenBlock.Create('{', children);
         
-        Assert.Equal(3, block.SlotCount);
+        // SlotCount = opener + 3 inner children + closer = 5
+        Assert.Equal(5, block.SlotCount);
+        // InnerChildren should still be 3
+        Assert.Equal(3, block.InnerChildren.Length);
     }
 
     [Fact]
@@ -336,7 +343,10 @@ public class GreenNodeTests
         var child = new GreenLeaf(NodeKind.Ident, "test");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
-        Assert.Same(child, block.GetSlot(0));
+        // Slot 0 is opener, slot 1 is first inner child, slot 2 is closer
+        Assert.Equal(NodeKind.Symbol, block.GetSlot(0)!.Kind); // opener
+        Assert.Same(child, block.GetSlot(1)); // inner child
+        Assert.Equal(NodeKind.Symbol, block.GetSlot(2)!.Kind); // closer
     }
 
     [Fact]
@@ -344,7 +354,10 @@ public class GreenNodeTests
     {
         var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         
-        Assert.Null(block.GetSlot(0));
+        // Empty block has 2 slots: opener (0) and closer (1)
+        Assert.NotNull(block.GetSlot(0)); // opener
+        Assert.NotNull(block.GetSlot(1)); // closer
+        Assert.Null(block.GetSlot(2));    // out of range
         Assert.Null(block.GetSlot(-1));
         Assert.Null(block.GetSlot(100));
     }
@@ -371,10 +384,14 @@ public class GreenNodeTests
         var child2 = new GreenLeaf(NodeKind.Ident, "bbb"); // width 3
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
-        // slot 0: after opener = 1
-        Assert.Equal(1, block.GetSlotOffset(0));
-        // slot 1: after opener + child1 = 1 + 2 = 3
-        Assert.Equal(3, block.GetSlotOffset(1));
+        // slot 0: opener at offset 0
+        Assert.Equal(0, block.GetSlotOffset(0));
+        // slot 1: first child after opener = 1
+        Assert.Equal(1, block.GetSlotOffset(1));
+        // slot 2: after opener + child1 = 1 + 2 = 3
+        Assert.Equal(3, block.GetSlotOffset(2));
+        // slot 3: closer after all = 1 + 2 + 3 = 6
+        Assert.Equal(6, block.GetSlotOffset(3));
     }
 
     [Fact]
@@ -384,8 +401,10 @@ public class GreenNodeTests
         var child = new GreenLeaf(NodeKind.Ident, "x");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child), leading);
         
-        // slot 0: leading trivia(2) + opener(1) = 3
-        Assert.Equal(3, block.GetSlotOffset(0));
+        // slot 0: opener at offset 0 (trivia is part of opener's width)
+        Assert.Equal(0, block.GetSlotOffset(0));
+        // slot 1: first child after opener = leading trivia(2) + opener(1) = 3
+        Assert.Equal(3, block.GetSlotOffset(1));
     }
 
     [Fact]
@@ -399,13 +418,19 @@ public class GreenNodeTests
         }
         var block = GreenBlock.Create('{', children.ToImmutableArray());
         
-        // Verify offsets are computed correctly
+        // Slot 0 is opener at offset 0
+        Assert.Equal(0, block.GetSlotOffset(0));
+        
+        // Verify inner child offsets are computed correctly (slots 1..15)
         int expectedOffset = 1; // After opener
         for (int i = 0; i < 15; i++)
         {
-            Assert.Equal(expectedOffset, block.GetSlotOffset(i));
+            Assert.Equal(expectedOffset, block.GetSlotOffset(i + 1)); // +1 because slot 0 is opener
             expectedOffset += children[i].Width;
         }
+        
+        // Slot 16 is closer
+        Assert.Equal(expectedOffset, block.GetSlotOffset(16));
     }
 
     #endregion
@@ -419,11 +444,12 @@ public class GreenNodeTests
         var replacement = new GreenLeaf(NodeKind.Ident, "new");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(original));
         
-        var modified = block.WithSlot(0, replacement);
+        // Replace slot 1 (first inner child)
+        var modified = block.WithSlot(1, replacement);
         
         Assert.NotSame(block, modified);
-        Assert.Same(replacement, modified.GetSlot(0));
-        Assert.Same(original, block.GetSlot(0)); // Original unchanged
+        Assert.Same(replacement, modified.GetSlot(1));
+        Assert.Same(original, block.GetSlot(1)); // Original unchanged
     }
 
     [Fact]
@@ -435,12 +461,13 @@ public class GreenNodeTests
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
-        var modified = block.WithSlot(1, replacement);
+        // Replace slot 2 (second inner child)
+        var modified = block.WithSlot(2, replacement);
         
-        // child1 and child3 should be shared
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(replacement, modified.GetSlot(1));
-        Assert.Same(child3, modified.GetSlot(2));
+        // child1 and child3 should be shared (at slots 1 and 3)
+        Assert.Same(child1, modified.GetSlot(1));
+        Assert.Same(replacement, modified.GetSlot(2));
+        Assert.Same(child3, modified.GetSlot(3));
     }
 
     [Fact]
@@ -449,7 +476,10 @@ public class GreenNodeTests
         var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
-        Assert.Throws<ArgumentOutOfRangeException>(() => block.WithSlot(0, child));
+        // Empty block has 2 slots: opener (0) and closer (1)
+        // Slot 0 can only be replaced with a valid opener leaf
+        // Slot 2+ is out of range
+        Assert.Throws<ArgumentOutOfRangeException>(() => block.WithSlot(2, child));
         Assert.Throws<ArgumentOutOfRangeException>(() => block.WithSlot(-1, child));
     }
 
@@ -461,12 +491,14 @@ public class GreenNodeTests
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
-        var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(inserted));
+        // Insert at slot 2 (between a and b)
+        var modified = block.WithInsert(2, ImmutableArray.Create<GreenNode>(inserted));
         
-        Assert.Equal(3, modified.SlotCount);
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(inserted, modified.GetSlot(1));
-        Assert.Same(child2, modified.GetSlot(2));
+        // 5 slots: opener + 3 inner + closer
+        Assert.Equal(5, modified.SlotCount);
+        Assert.Same(child1, modified.GetSlot(1));
+        Assert.Same(inserted, modified.GetSlot(2));
+        Assert.Same(child2, modified.GetSlot(3));
     }
 
     [Fact]
@@ -476,10 +508,11 @@ public class GreenNodeTests
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
-        var modified = block.WithInsert(0, ImmutableArray.Create<GreenNode>(inserted));
+        // Insert at slot 1 (after opener, before first inner child)
+        var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(inserted));
         
-        Assert.Same(inserted, modified.GetSlot(0));
-        Assert.Same(child, modified.GetSlot(1));
+        Assert.Same(inserted, modified.GetSlot(1)); // inserted at slot 1
+        Assert.Same(child, modified.GetSlot(2));    // original moved to slot 2
     }
 
     [Fact]
@@ -489,10 +522,11 @@ public class GreenNodeTests
         var inserted = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
-        var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(inserted));
+        // Insert at slot 2 (after last inner child, before closer)
+        var modified = block.WithInsert(2, ImmutableArray.Create<GreenNode>(inserted));
         
-        Assert.Same(child, modified.GetSlot(0));
-        Assert.Same(inserted, modified.GetSlot(1));
+        Assert.Same(child, modified.GetSlot(1));    // original at slot 1
+        Assert.Same(inserted, modified.GetSlot(2)); // inserted at slot 2
     }
 
     [Fact]
@@ -503,12 +537,14 @@ public class GreenNodeTests
         var insert2 = new GreenLeaf(NodeKind.Ident, "Y");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(original));
         
-        var modified = block.WithInsert(0, ImmutableArray.Create<GreenNode>(insert1, insert2));
+        // Insert at slot 1 (start of inner content)
+        var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(insert1, insert2));
         
-        Assert.Equal(3, modified.SlotCount);
-        Assert.Same(insert1, modified.GetSlot(0));
-        Assert.Same(insert2, modified.GetSlot(1));
-        Assert.Same(original, modified.GetSlot(2));
+        // 5 slots: opener + 3 inner + closer
+        Assert.Equal(5, modified.SlotCount);
+        Assert.Same(insert1, modified.GetSlot(1));
+        Assert.Same(insert2, modified.GetSlot(2));
+        Assert.Same(original, modified.GetSlot(3));
     }
 
     [Fact]
@@ -517,10 +553,17 @@ public class GreenNodeTests
         var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
+        // Cannot insert at slot 0 (opener) or past slot 1 (closer)
+        Assert.Throws<ArgumentOutOfRangeException>(() => 
+            block.WithInsert(0, ImmutableArray.Create<GreenNode>(child)));
         Assert.Throws<ArgumentOutOfRangeException>(() => 
             block.WithInsert(-1, ImmutableArray.Create<GreenNode>(child)));
         Assert.Throws<ArgumentOutOfRangeException>(() => 
             block.WithInsert(10, ImmutableArray.Create<GreenNode>(child)));
+        
+        // Valid: insert at slot 1 (the only valid position for empty block)
+        var modified = block.WithInsert(1, ImmutableArray.Create<GreenNode>(child));
+        Assert.Equal(3, modified.SlotCount); // opener + 1 inner + closer
     }
 
     [Fact]
@@ -531,11 +574,13 @@ public class GreenNodeTests
         var child3 = new GreenLeaf(NodeKind.Ident, "c");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
-        var modified = block.WithRemove(1, 1);
+        // Remove slot 2 (second inner child 'b')
+        var modified = block.WithRemove(2, 1);
         
-        Assert.Equal(2, modified.SlotCount);
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(child3, modified.GetSlot(1));
+        // 4 slots remaining: opener + 2 inner + closer
+        Assert.Equal(4, modified.SlotCount);
+        Assert.Same(child1, modified.GetSlot(1)); // 'a' at slot 1
+        Assert.Same(child3, modified.GetSlot(2)); // 'c' moved to slot 2
     }
 
     [Fact]
@@ -547,11 +592,13 @@ public class GreenNodeTests
         var child4 = new GreenLeaf(NodeKind.Ident, "d");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3, child4));
         
-        var modified = block.WithRemove(1, 2); // Remove b and c
+        // Remove slots 2-3 (b and c, inner indices 1-2)
+        var modified = block.WithRemove(2, 2);
         
-        Assert.Equal(2, modified.SlotCount);
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(child4, modified.GetSlot(1));
+        // 4 slots remaining: opener + 2 inner + closer
+        Assert.Equal(4, modified.SlotCount);
+        Assert.Same(child1, modified.GetSlot(1)); // 'a' at slot 1
+        Assert.Same(child4, modified.GetSlot(2)); // 'd' moved to slot 2
     }
 
     [Fact]
@@ -560,8 +607,12 @@ public class GreenNodeTests
         var child = new GreenLeaf(NodeKind.Ident, "a");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child));
         
+        // Cannot remove opener (slot 0)
+        Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(0, 1));
+        // Cannot remove with negative index
         Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(-1, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(0, 5));
+        // Cannot remove past inner children (would affect closer)
+        Assert.Throws<ArgumentOutOfRangeException>(() => block.WithRemove(1, 5));
     }
 
     [Fact]
@@ -573,12 +624,14 @@ public class GreenNodeTests
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
-        var modified = block.WithReplace(1, 1, ImmutableArray.Create<GreenNode>(replacement));
+        // Replace slot 2 (second inner child 'b')
+        var modified = block.WithReplace(2, 1, ImmutableArray.Create<GreenNode>(replacement));
         
-        Assert.Equal(3, modified.SlotCount);
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(replacement, modified.GetSlot(1));
-        Assert.Same(child3, modified.GetSlot(2));
+        // 5 slots: opener + 3 inner + closer
+        Assert.Equal(5, modified.SlotCount);
+        Assert.Same(child1, modified.GetSlot(1));
+        Assert.Same(replacement, modified.GetSlot(2));
+        Assert.Same(child3, modified.GetSlot(3));
     }
 
     [Fact]
@@ -591,14 +644,15 @@ public class GreenNodeTests
         var repl3 = new GreenLeaf(NodeKind.Ident, "Z");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2));
         
-        // Replace 1 child with 3
-        var modified = block.WithReplace(1, 1, ImmutableArray.Create<GreenNode>(repl1, repl2, repl3));
+        // Replace slot 2 (second inner child 'b') with 3 nodes
+        var modified = block.WithReplace(2, 1, ImmutableArray.Create<GreenNode>(repl1, repl2, repl3));
         
-        Assert.Equal(4, modified.SlotCount);
-        Assert.Same(child1, modified.GetSlot(0));
-        Assert.Same(repl1, modified.GetSlot(1));
-        Assert.Same(repl2, modified.GetSlot(2));
-        Assert.Same(repl3, modified.GetSlot(3));
+        // 6 slots: opener + 4 inner + closer
+        Assert.Equal(6, modified.SlotCount);
+        Assert.Same(child1, modified.GetSlot(1));
+        Assert.Same(repl1, modified.GetSlot(2));
+        Assert.Same(repl2, modified.GetSlot(3));
+        Assert.Same(repl3, modified.GetSlot(4));
     }
 
     [Fact]
@@ -610,12 +664,13 @@ public class GreenNodeTests
         var replacement = new GreenLeaf(NodeKind.Ident, "X");
         var block = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(child1, child2, child3));
         
-        // Replace 2 children with 1
-        var modified = block.WithReplace(0, 2, ImmutableArray.Create<GreenNode>(replacement));
+        // Replace slots 1-2 (a and b) with 1 node
+        var modified = block.WithReplace(1, 2, ImmutableArray.Create<GreenNode>(replacement));
         
-        Assert.Equal(2, modified.SlotCount);
-        Assert.Same(replacement, modified.GetSlot(0));
-        Assert.Same(child3, modified.GetSlot(1));
+        // 4 slots: opener + 2 inner + closer
+        Assert.Equal(4, modified.SlotCount);
+        Assert.Same(replacement, modified.GetSlot(1));
+        Assert.Same(child3, modified.GetSlot(2));
     }
 
     [Fact]
@@ -624,10 +679,15 @@ public class GreenNodeTests
         var block = GreenBlock.Create('{', ImmutableArray<GreenNode>.Empty);
         var child = new GreenLeaf(NodeKind.Ident, "x");
         
+        // Cannot replace with negative index
         Assert.Throws<ArgumentOutOfRangeException>(() => 
             block.WithReplace(-1, 1, ImmutableArray.Create<GreenNode>(child)));
+        // Cannot replace range that exceeds total slots
         Assert.Throws<ArgumentOutOfRangeException>(() => 
-            block.WithReplace(0, 5, ImmutableArray.Create<GreenNode>(child)));
+            block.WithReplace(1, 5, ImmutableArray.Create<GreenNode>(child)));
+        // Cannot partially replace starting at opener without replacing entire block
+        Assert.Throws<ArgumentException>(() => 
+            block.WithReplace(0, 1, ImmutableArray.Create<GreenNode>(child)));
     }
 
     [Fact]
@@ -711,7 +771,8 @@ public class GreenNodeTests
         var outer = GreenBlock.Create('{', ImmutableArray.Create<GreenNode>(inner));
         
         Assert.Equal(4, outer.Width); // { + ( + ) + }
-        Assert.Same(inner, outer.GetSlot(0));
+        // Inner block is at slot 1 (slot 0 is opener)
+        Assert.Same(inner, outer.GetSlot(1));
     }
 
     [Fact]

@@ -3,6 +3,23 @@ using System.Runtime.CompilerServices;
 namespace TinyTokenizer.Ast;
 
 /// <summary>
+/// Helper for applying selection mode filtering to regions.
+/// </summary>
+internal static class SelectionModeHelper
+{
+    public static IEnumerable<QueryRegion> Apply(IEnumerable<QueryRegion> regions, SelectionMode mode, int modeArg) =>
+        mode switch
+        {
+            SelectionMode.First => regions.Take(1),
+            SelectionMode.Last => regions.TakeLast(1),
+            SelectionMode.Nth => regions.Skip(modeArg).Take(1),
+            SelectionMode.Skip => regions.Skip(modeArg),
+            SelectionMode.Take => regions.Take(modeArg),
+            _ => regions
+        };
+}
+
+/// <summary>
 /// Compares red nodes for equality using SyntaxNode's equality semantics.
 /// Two red nodes are equal if they wrap the same green node and have the same position.
 /// </summary>
@@ -96,6 +113,44 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     protected override KindNodeQuery CreateSkip(int count) => new(Kind, _predicate, SelectionMode.Skip, count, _textConstraint);
     protected override KindNodeQuery CreateTake(int count) => new(Kind, _predicate, SelectionMode.Take, count, _textConstraint);
     
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
+    
+    /// <summary>
+    /// Optimized region resolution: single-pass traversal that checks Kind directly
+    /// and applies selection mode inline for efficient First()/Take() short-circuit.
+    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// </summary>
+    internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        var regions = SelectRegionsFromWalker(walker);
+        return ApplyRegionFilter(regions);
+    }
+    
+    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
+    {
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            // Inline match check - avoids virtual TryMatch call
+            if (node.Kind == Kind && (_predicate == null || _predicate(node)))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + 1, // KindNodeQuery always consumes 1
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
+    
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
 }
@@ -172,9 +227,49 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     protected override BlockNodeQuery CreateSkip(int count) => new(_opener, _predicate, SelectionMode.Skip, count);
     protected override BlockNodeQuery CreateTake(int count) => new(_opener, _predicate, SelectionMode.Take, count);
     
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
+    
+    /// <summary>
+    /// Optimized region resolution: single-pass traversal that checks block type directly
+    /// and applies selection mode inline for efficient First()/Take() short-circuit.
+    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// </summary>
+    internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        var regions = SelectRegionsFromWalker(walker);
+        return ApplyRegionFilter(regions);
+    }
+    
+    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
+    {
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            // Inline match check - avoids virtual TryMatch call
+            if (node is SyntaxBlock block &&
+                (_opener == null || block.Opener == _opener.Value) &&
+                (_predicate == null || _predicate(node)))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + 1, // BlockNodeQuery always consumes 1
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
+    
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
-    
+
     /// <summary>
     /// Returns a query that selects the opening delimiter (start) of matched blocks.
     /// Use with <c>InsertAfter</c> to insert at the beginning of block content.
@@ -198,6 +293,22 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// </code>
     /// </example>
     public BoundaryQuery End() => new BoundaryQuery(this, BoundarySide.End);
+    
+    /// <summary>
+    /// Returns a query that selects all inner children of matched blocks as a range.
+    /// Use with Replace/Edit to modify block content while preserving delimiters.
+    /// Empty blocks yield an empty region, enabling insertion via Replace.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Replace content between braces
+    /// editor.Replace(Query.BraceBlock.Inner(), "new content")
+    /// 
+    /// // Works with empty blocks too
+    /// editor.Replace(Query.BraceBlock.Inner(), "inserted into empty")
+    /// </code>
+    /// </example>
+    public InnerContentQuery Inner() => new InnerContentQuery(this);
 }
 
 #endregion
@@ -225,7 +336,7 @@ public enum BoundarySide
 /// <see cref="SyntaxEditor"/> uses this metadata to compute insertion positions,
 /// even for empty containers where <see cref="Select"/> returns no results.
 /// </remarks>
-public sealed record BoundaryQuery : INodeQuery
+public sealed record BoundaryQuery : INodeQuery, IRegionQuery
 {
     /// <summary>Gets the underlying container query.</summary>
     public INodeQuery ContainerQuery { get; }
@@ -282,33 +393,156 @@ public sealed record BoundaryQuery : INodeQuery
         return false;
     }
     
+    #region IRegionQuery Implementation
+    
+    /// <summary>
+    /// Resolves this query to regions in the tree.
+    /// </summary>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => SelectRegionsCore(tree.Root);
+    
+    /// <summary>
+    /// Resolves this query to regions in a subtree.
+    /// </summary>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root) 
+        => SelectRegionsCore(root);
+    
+    private IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
+    {
+        foreach (var container in ContainerQuery.Select(root))
+        {
+            if (container.SlotCount == 0)
+                continue;
+            
+            int slot = Side == BoundarySide.Start ? 0 : container.SlotCount - 1;
+            var boundaryNode = container.GetChild(slot);
+            
+            if (boundaryNode != null)
+            {
+                yield return new QueryRegion(
+                    parent: container,
+                    startSlot: slot,
+                    endSlot: slot + 1,
+                    firstNode: boundaryNode,
+                    position: boundaryNode.Position
+                );
+            }
+        }
+    }
+    
+    #endregion
+    
     /// <summary>
     /// Gets the boundary node for a container.
-    /// For blocks: returns OpenerNode or CloserNode.
-    /// For other containers: returns first or last child.
+    /// Uses slot-based access which works uniformly for all container types:
+    /// - Blocks: slot 0 = opener, slot N = closer (Roslyn-style)
+    /// - Lists/other: slot 0 = first child, slot N = last child
     /// </summary>
     private SyntaxNode? GetBoundaryNode(SyntaxNode container)
     {
-        if (container is SyntaxBlock block)
-        {
-            return Side == BoundarySide.Start ? block.OpenerNode : block.CloserNode;
-        }
-        
-        // For non-block containers (lists, syntax nodes), return first/last child
-        var children = container.Children.ToList();
-        if (children.Count == 0)
+        if (container.SlotCount == 0)
             return null; // Empty container - no boundary node to return
         
-        return Side == BoundarySide.Start ? children[0] : children[^1];
+        return Side == BoundarySide.Start 
+            ? container.GetChild(0) 
+            : container.GetChild(container.SlotCount - 1);
+    }
+}
+
+#endregion
+
+#region Inner Content Query
+
+/// <summary>
+/// A query that selects all inner children of a block as a single range.
+/// Returns a region spanning slots 1 through SlotCount-2 (excluding opener/closer).
+/// Empty blocks yield an empty region at slot 1, enabling insertion.
+/// </summary>
+/// <remarks>
+/// Use <c>Query.BraceBlock.Inner()</c> to create this query.
+/// Works with <see cref="SyntaxEditor.Replace"/> to replace block content while preserving delimiters.
+/// </remarks>
+public sealed record InnerContentQuery : INodeQuery, IRegionQuery
+{
+    /// <summary>The container query that selects blocks.</summary>
+    public BlockNodeQuery ContainerQuery { get; }
+    
+    internal InnerContentQuery(BlockNodeQuery containerQuery)
+    {
+        ContainerQuery = containerQuery;
+    }
+    
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
+    
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
+    {
+        foreach (var region in SelectRegionsCore(root))
+        {
+            foreach (var node in region.Nodes)
+                yield return node;
+        }
+    }
+    
+    /// <inheritdoc/>
+    public bool Matches(SyntaxNode node)
+    {
+        // Check if node is an inner child of a matching block
+        var parent = node.Parent;
+        if (parent is SyntaxBlock block && ContainerQuery.Matches(block))
+        {
+            var index = node.SiblingIndex;
+            return index >= 1 && index < block.SlotCount - 1;
+        }
+        return false;
+    }
+    
+    /// <inheritdoc/>
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
+    {
+        var parent = startNode.Parent;
+        if (parent is SyntaxBlock block && 
+            ContainerQuery.Matches(block) && 
+            startNode.SiblingIndex == 1)
+        {
+            consumedCount = block.ChildCount;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
     }
     
     /// <summary>
-    /// Resolves the containers matched by this boundary query.
-    /// Used by <see cref="SyntaxEditor"/> to compute insertion positions.
+    /// Resolves this query to regions in the tree.
     /// </summary>
-    internal IEnumerable<SyntaxNode> ResolveContainers(SyntaxTree tree)
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => SelectRegionsCore(tree.Root);
+    
+    /// <summary>
+    /// Resolves this query to regions in a subtree.
+    /// </summary>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root) 
+        => SelectRegionsCore(root);
+    
+    private IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
-        return ContainerQuery.Select(tree);
+        foreach (var container in ContainerQuery.Select(root))
+        {
+            if (container is SyntaxBlock block)
+            {
+                var innerCount = block.ChildCount;
+                var firstInner = block.InnerChildren.FirstOrDefault();
+                
+                yield return new QueryRegion(
+                    parent: block,
+                    startSlot: 1,
+                    endSlot: 1 + innerCount,
+                    firstNode: firstInner,
+                    position: block.InnerStartPosition
+                );
+            }
+        }
     }
 }
 
@@ -368,6 +602,9 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     protected override AnyNodeQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n);
     protected override AnyNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override AnyNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
     
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
@@ -429,6 +666,9 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     protected override LeafNodeQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n);
     protected override LeafNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override LeafNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
     
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
@@ -569,6 +809,9 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     protected override NewlineNodeQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n, _negated);
     protected override NewlineNodeQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count, _negated);
     protected override NewlineNodeQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count, _negated);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
     
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
@@ -1246,6 +1489,9 @@ public sealed record ExactNodeQuery : NodeQuery<ExactNodeQuery>
     protected override ExactNodeQuery CreateSkip(int count) => new(_target, _predicate, SelectionMode.Skip, count);
     protected override ExactNodeQuery CreateTake(int count) => new(_target, _predicate, SelectionMode.Take, count);
     
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
+    
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
     
@@ -1319,6 +1565,9 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     protected override AnyKeywordQuery CreateNth(int n) => new(_predicate, SelectionMode.Nth, n);
     protected override AnyKeywordQuery CreateSkip(int count) => new(_predicate, SelectionMode.Skip, count);
     protected override AnyKeywordQuery CreateTake(int count) => new(_predicate, SelectionMode.Take, count);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
     
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);
@@ -1410,6 +1659,9 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
     protected override KeywordCategoryQuery CreateNth(int n) => new(_categoryName, _predicate, SelectionMode.Nth, n);
     protected override KeywordCategoryQuery CreateSkip(int count) => new(_categoryName, _predicate, SelectionMode.Skip, count);
     protected override KeywordCategoryQuery CreateTake(int count) => new(_categoryName, _predicate, SelectionMode.Take, count);
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
     
     private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
         a == null ? b : n => a(n) && b(n);

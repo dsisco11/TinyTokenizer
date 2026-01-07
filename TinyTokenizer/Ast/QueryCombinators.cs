@@ -76,7 +76,7 @@ public sealed record NotQuery : INodeQuery, IGreenNodeQuery
 /// Useful for extracting content between matching patterns:
 /// <code>Query.Between(Query.Symbol("("), Query.Symbol(")"))</code>
 /// </remarks>
-public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
+public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly INodeQuery _start;
     private readonly INodeQuery _end;
@@ -183,6 +183,34 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
         // End not found
         return false;
     }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
 }
 
 #endregion
@@ -192,7 +220,7 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery
 /// <summary>
 /// Matches a sequence of queries in order, consuming multiple sibling nodes.
 /// </summary>
-public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
+public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly ImmutableArray<INodeQuery> _parts;
     
@@ -308,6 +336,34 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
         consumedCount = totalConsumed;
         return true;
     }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
 }
 
 #endregion
@@ -318,7 +374,7 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery
 /// Matches zero or one occurrence of the inner query.
 /// Always succeeds - returns empty match if inner doesn't match.
 /// </summary>
-public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery
+public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly INodeQuery _inner;
     
@@ -355,6 +411,35 @@ public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery
         consumedCount = 0;
         return true; // Optional always succeeds with 0 consumed
     }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        // Optional delegates to inner query - traverse and match inner directly
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (_inner.TryMatch(node, out var consumedCount) && consumedCount > 0)
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
 }
 
 #endregion
@@ -364,7 +449,7 @@ public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery
 /// <summary>
 /// Matches the inner query multiple times (min to max occurrences).
 /// </summary>
-public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
+public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly INodeQuery _inner;
     private readonly int _min;
@@ -463,6 +548,34 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
         consumedCount = totalConsumed;
         return true;
     }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount) && consumedCount > 0)
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
 }
 
 #endregion
@@ -473,7 +586,7 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery
 /// Matches the inner query repeatedly until a terminator is encountered.
 /// The terminator is NOT consumed (lookahead-style matching).
 /// </summary>
-public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
+public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _terminator;
@@ -642,6 +755,34 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
         
         return false;
     }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
 }
 
 #endregion
@@ -652,7 +793,7 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery
 /// Matches the inner query only if followed by (or not followed by) the lookahead query.
 /// The lookahead is not consumed (zero-width assertion).
 /// </summary>
-public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
+public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _lookahead;
@@ -755,6 +896,34 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery
         // Return only the inner consumed count (lookahead not consumed)
         consumedCount = innerConsumed;
         return true;
+    }
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => ((IRegionQuery)this).SelectRegions(tree.Root);
+    
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
     }
 }
 

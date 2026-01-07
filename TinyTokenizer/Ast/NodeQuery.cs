@@ -27,11 +27,13 @@ public interface INodeQuery
 {
     /// <summary>
     /// Selects all nodes matching this query from the tree.
+    /// For range queries (e.g., BetweenQuery), returns only the start node of each match.
     /// </summary>
     IEnumerable<SyntaxNode> Select(SyntaxTree tree);
     
     /// <summary>
     /// Selects all nodes matching this query from a subtree.
+    /// For range queries, returns only the start node of each match.
     /// </summary>
     IEnumerable<SyntaxNode> Select(SyntaxNode root);
     
@@ -56,7 +58,7 @@ public interface INodeQuery
 /// preserving type-specific methods through the fluent chain.
 /// </summary>
 /// <typeparam name="TSelf">The derived query type.</typeparam>
-public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSelf : NodeQuery<TSelf>
+public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery, IRegionQuery where TSelf : NodeQuery<TSelf>
 {
     /// <summary>
     /// Selects all nodes matching this query from the tree.
@@ -67,6 +69,76 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery where TSel
     /// Selects all nodes matching this query from a subtree.
     /// </summary>
     public abstract IEnumerable<SyntaxNode> Select(SyntaxNode root);
+    
+    #region IRegionQuery Implementation
+    
+    /// <summary>
+    /// Resolves this query to regions in the tree.
+    /// </summary>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => SelectRegionsCore(tree.Root);
+    
+    /// <summary>
+    /// Resolves this query to regions in a subtree.
+    /// </summary>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root) 
+        => SelectRegionsCore(root);
+    
+    /// <summary>
+    /// Default region resolution: traverses tree with PathTrackingWalker, calls TryMatch once per node,
+    /// then applies selection filtering (First/Last/Nth via ApplyRegionFilter).
+    /// Uses incremental path tracking for O(1) per node instead of O(depth).
+    /// </summary>
+    internal virtual IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
+    {
+        return ApplyRegionFilter(SelectAllRegions(root));
+    }
+    
+    /// <summary>
+    /// Traverses tree and yields a region for each matching node.
+    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// </summary>
+    private IEnumerable<QueryRegion> SelectAllRegions(SyntaxNode root)
+    {
+        var walker = new PathTrackingWalker(root);
+        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        {
+            if (TryMatch(node, out var consumedCount))
+            {
+                var parent = node.Parent;
+                if (parent != null)
+                {
+                    yield return new QueryRegion(
+                        parentPath: parentPath,
+                        parent: parent,
+                        startSlot: node.SiblingIndex,
+                        endSlot: node.SiblingIndex + consumedCount,
+                        firstNode: node,
+                        position: node.Position
+                    );
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Gets the selection mode for this query. Override in derived classes.
+    /// </summary>
+    internal virtual SelectionMode Mode => SelectionMode.All;
+    
+    /// <summary>
+    /// Gets the selection mode argument (e.g., N for Nth, count for Skip/Take).
+    /// </summary>
+    internal virtual int ModeArg => 0;
+    
+    /// <summary>
+    /// Applies selection mode filtering (First/Last/Nth/Skip/Take) to regions.
+    /// Uses <see cref="Mode"/> and <see cref="ModeArg"/> properties.
+    /// </summary>
+    internal IEnumerable<QueryRegion> ApplyRegionFilter(IEnumerable<QueryRegion> regions) =>
+        SelectionModeHelper.Apply(regions, Mode, ModeArg);
+    
+    #endregion
     
     /// <summary>
     /// Tests whether a single node matches this query's criteria.
