@@ -1418,6 +1418,52 @@ public class SyntaxEditorTests
         Assert.Equal("a ]b ]c]", text);
     }
     
+    /// <summary>
+    /// BUG: InsertAfter steals leading trivia from the following node.
+    /// When inserting "X" after "a" in "a b", the output text looks correct ("aX b"),
+    /// but the space has been incorrectly attached to "X" as trailing trivia instead of
+    /// remaining on "b" as leading trivia.
+    /// 
+    /// Expected trivia ownership: a(L:0, T:0), X(L:0, T:0), b(L:1, T:0)
+    /// Actual trivia ownership:   a(L:0, T:0), X(L:0, T:1), b(L:0, T:0)
+    /// </summary>
+    [Fact]
+    public void InsertAfter_ShouldNotStealLeadingTriviaFromFollowingNode()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        // Verify initial trivia state: 'b' has a leading space
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves.Count);
+        Assert.Equal("a", leaves[0].Text);
+        Assert.Equal("b", leaves[1].Text);
+        Assert.Equal(1, leaves[1].LeadingTriviaWidth); // 'b' has leading space
+        
+        var aNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "a");
+        
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X")
+            .Commit();
+        
+        // The output text looks correct
+        var actualText = tree.ToText();
+        Assert.Equal("aX b", actualText);
+        
+        // But the trivia ownership is wrong!
+        // The space should still belong to 'b' as leading trivia,
+        // but it was incorrectly taken by 'X' as trailing trivia
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // Expected: X has no trailing trivia, b retains its leading space
+        Assert.Equal(0, xAfter.TrailingTriviaWidth); // X should NOT have stolen the space
+        Assert.Equal(1, bAfter.LeadingTriviaWidth);   // b should still have its leading space
+    }
+    
     [Fact]
     public void InsertBefore_RedNode_GreenNodes()
     {
