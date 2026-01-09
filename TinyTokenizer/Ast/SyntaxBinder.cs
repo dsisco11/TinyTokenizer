@@ -14,6 +14,7 @@ namespace TinyTokenizer.Ast;
 public sealed class SyntaxBinder
 {
     private readonly ImmutableArray<SyntaxNodeDefinition> _sortedDefinitions;
+    private readonly Schema? _schema;
     
     /// <summary>
     /// Creates a syntax binder for the specified definitions.
@@ -24,6 +25,7 @@ public sealed class SyntaxBinder
         _sortedDefinitions = definitions
             .OrderByDescending(d => d.Priority)
             .ToImmutableArray();
+        _schema = null;
     }
     
     /// <summary>
@@ -31,6 +33,7 @@ public sealed class SyntaxBinder
     /// </summary>
     public SyntaxBinder(Schema schema) : this(schema.GetSyntaxDefinitions())
     {
+        _schema = schema;
     }
     
     /// <summary>
@@ -248,11 +251,29 @@ public sealed class SyntaxBinder
     {
         foreach (var query in definition.Patterns)
         {
+            // Resolve schema-resolvable queries before matching
+            ResolveSchemaQueries(query);
+            
             var matchResult = TryMatchQuery(query, children, startIndex);
             if (matchResult.HasValue)
                 return matchResult;
         }
         return null;
+    }
+    
+    /// <summary>
+    /// Resolves schema-resolvable queries before matching.
+    /// Each query type handles its own recursive resolution internally.
+    /// </summary>
+    private void ResolveSchemaQueries(INodeQuery query)
+    {
+        if (_schema == null)
+            return;
+        
+        if (query is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+        {
+            resolvable.ResolveWithSchema(_schema);
+        }
     }
     
     /// <summary>

@@ -33,11 +33,19 @@ Keyword Query Refactoring:
     ✔ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery) @done
       - Propagate resolution state to derived queries
 
-  Phase 3 - Update SyntaxBinder:
-    ☐ Locate TryMatchQuery method in SyntaxBinder.cs
-    ☐ Before calling TryMatchGreen, check if query implements ISchemaResolvableQuery
-    ☐ If so, call ResolveWithSchema(_schema) to populate cached NodeKind
-    ☐ Ensure this happens for nested queries (SequenceQuery parts, AnyOf parts, etc.)
+  Phase 3 - Update SyntaxBinder & Composite Queries:
+    ✔ Store _schema field in SyntaxBinder (from Schema constructor) @done
+    ✔ Simplify ResolveSchemaQueries to single ISchemaResolvableQuery check @done
+    ✔ Make composite query types implement ISchemaResolvableQuery @done
+      - Each query type handles its own recursive resolution internally
+      - SequenceQuery, AnyOfQuery, NoneOfQuery - iterate over parts/queries
+      - OptionalQuery, RepeatQuery, NotQuery - resolve inner query
+      - RepeatUntilQuery, LookaheadQuery, BetweenQuery - resolve multiple inners
+    ✔ Added public properties for nested query access @done
+      - SequenceQuery.Parts, AnyOfQuery.Queries, NoneOfQuery.Queries
+      - OptionalQuery.InnerQuery, RepeatQuery.InnerQuery, NotQuery.InnerQuery
+      - RepeatUntilQuery.InnerQuery/Terminator, LookaheadQuery.InnerQuery/LookaheadPart
+      - BetweenQuery.Start/End
 
   Phase 4 - Update Query Factory:
     ☐ Update Query.Keyword(string text) in Query.cs line ~337

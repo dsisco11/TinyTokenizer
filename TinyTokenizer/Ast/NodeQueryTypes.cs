@@ -944,15 +944,31 @@ public sealed record IntersectionNodeQuery : INodeQuery
 /// Matches nodes that satisfy any of the provided queries (variadic OR).
 /// Short-circuits on first match for efficiency.
 /// </summary>
-public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
+public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvableQuery
 {
     private readonly IReadOnlyList<INodeQuery> _queries;
+    
+    /// <summary>Gets the inner queries.</summary>
+    public IReadOnlyList<INodeQuery> Queries => _queries;
     
     /// <summary>Creates a query that matches any of the specified queries.</summary>
     public AnyOfQuery(params INodeQuery[] queries) => _queries = queries;
     
     /// <summary>Creates a query that matches any of the specified queries.</summary>
     public AnyOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        foreach (var query in _queries)
+        {
+            if (query is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+                resolvable.ResolveWithSchema(schema);
+        }
+    }
     
     /// <inheritdoc/>
     public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
@@ -1029,7 +1045,7 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery
 /// Matches nodes that do NOT satisfy any of the provided queries.
 /// Inverse of AnyOf - consumes 1 node when all inner queries fail.
 /// </summary>
-public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
+public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvableQuery
 {
     private readonly IReadOnlyList<INodeQuery> _queries;
     
@@ -1038,6 +1054,19 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery
     
     /// <summary>Creates a query that matches when none of the specified queries match.</summary>
     public NoneOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        foreach (var query in _queries)
+        {
+            if (query is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+                resolvable.ResolveWithSchema(schema);
+        }
+    }
     
     /// <inheritdoc/>
     public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
