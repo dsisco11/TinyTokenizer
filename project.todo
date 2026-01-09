@@ -48,9 +48,10 @@ Keyword Query Refactoring:
       - BetweenQuery.Start/End
 
   Phase 4 - Update Query Factory:
-    ☐ Update Query.Keyword(string text) in Query.cs line ~337
-    ☐ Replace: new AnyKeywordQuery().Where(n => n is SyntaxToken leaf && leaf.Text == text)
-    ☐ With: new SpecificKeywordQuery(text)
+    ✔ Update Query.Keyword(string text) in Query.cs @done
+    ✔ Replace AnyKeywordQuery().Where(...) with new SpecificKeywordQuery(text) @done
+    ✔ Update return type from INodeQuery to SpecificKeywordQuery @done
+    ✔ Update XML docs to document schema requirement @done
 
   Phase 5 - Testing:
     ☐ Run existing keyword tests to verify backward compatibility
