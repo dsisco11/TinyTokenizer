@@ -1418,6 +1418,273 @@ public class SyntaxEditorTests
         Assert.Equal("a ]b ]c]", text);
     }
     
+    /// <summary>
+    /// Verifies trivia preservation when inserting after a node.
+    /// Trivia model: trailing trivia = consume until newline, leading trivia = remaining unconsumed.
+    /// For "a b" (no newline), the space is trailing trivia on 'a'.
+    /// </summary>
+    [Fact]
+    public void InsertAfter_ShouldPreserveTrailingTrivia()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        // Verify initial trivia state: space is trailing on 'a' (no newline to stop collection)
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves.Count);
+        Assert.Equal("a", leaves[0].Text);
+        Assert.Equal("b", leaves[1].Text);
+        Assert.Equal(1, leaves[0].TrailingTriviaWidth); // 'a' has trailing space
+        Assert.Equal(0, leaves[1].LeadingTriviaWidth);  // 'b' has no leading trivia
+        
+        var aNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "a");
+        
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X")
+            .Commit();
+        
+        // InsertAfter inserts after the node INCLUDING its trailing trivia
+        var actualText = tree.ToText();
+        Assert.Equal("a Xb", actualText);
+        
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // 'a' keeps trailing space, 'X' and 'b' have no trivia
+        Assert.Equal(1, aAfter.TrailingTriviaWidth);
+        Assert.Equal(0, xAfter.LeadingTriviaWidth);
+        Assert.Equal(0, xAfter.TrailingTriviaWidth);
+        Assert.Equal(0, bAfter.LeadingTriviaWidth);
+    }
+    
+    /// <summary>
+    /// Verifies trivia preservation when inserting before a node.
+    /// For "a b" (no newline), the space is trailing trivia on 'a', not leading on 'b'.
+    /// </summary>
+    [Fact]
+    public void InsertBefore_ShouldPreserveTrivia()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        // Verify initial trivia state
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves.Count);
+        Assert.Equal("a", leaves[0].Text);
+        Assert.Equal("b", leaves[1].Text);
+        Assert.Equal(1, leaves[0].TrailingTriviaWidth); // 'a' has trailing space
+        Assert.Equal(0, leaves[1].LeadingTriviaWidth);  // 'b' has no leading trivia
+        
+        var bNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "b");
+        
+        tree.CreateEditor()
+            .InsertBefore(bNode, "X")
+            .Commit();
+        
+        var actualText = tree.ToText();
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // InsertBefore inserts before the target (b has no leading trivia to consider)
+        Assert.Equal("a Xb", actualText);
+        Assert.Equal(1, aAfter.TrailingTriviaWidth);  // 'a' keeps trailing space
+        Assert.Equal(0, xAfter.LeadingTriviaWidth);
+        Assert.Equal(0, xAfter.TrailingTriviaWidth);
+        Assert.Equal(0, bAfter.LeadingTriviaWidth);
+    }
+
+    /// <summary>
+    /// Tests inserting after a node that has a trailing newline, where the following node has leading trivia.
+    /// Trivia model: trailing = up to newline, leading = after newline.
+    /// 
+    /// Input: "a\n  b" where:
+    ///   - 'a' has trailing trivia: "\n"
+    ///   - 'b' has leading trivia: "  " (indentation)
+    /// 
+    /// After InsertAfter(a, " X"):
+    ///   - 'a' keeps trailing "\n"
+    ///   - 'X' is inserted with its leading space
+    ///   - 'b' should retain its leading "  " trivia
+    /// </summary>
+    [Fact]
+    public void InsertAfter_WithNewline_ShouldNotStealLeadingTriviaFromFollowingNode()
+    {
+        var tree = SyntaxTree.Parse("a\n  b");
+        
+        // Verify initial trivia state
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves.Count);
+        Assert.Equal("a", leaves[0].Text);
+        Assert.Equal("b", leaves[1].Text);
+        Assert.Equal(1, leaves[0].TrailingTriviaWidth); // 'a' has trailing newline
+        Assert.Equal(2, leaves[1].LeadingTriviaWidth);  // 'b' has leading "  " (indentation after newline)
+        
+        var aNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "a");
+        
+        tree.CreateEditor()
+            .InsertAfter(aNode, " X")
+            .Commit();
+        
+        var actualText = tree.ToText();
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // 'a' keeps its trailing newline
+        // ' X' is parsed as X with leading space trivia
+        // 'b' should still have its leading "  " trivia (not stolen by X)
+        Assert.Equal("a\n X  b", actualText);
+        Assert.Equal(1, aAfter.TrailingTriviaWidth);   // 'a' keeps trailing newline
+        Assert.Equal(1, xAfter.LeadingTriviaWidth);    // X has leading space from " X"
+        Assert.Equal(0, xAfter.TrailingTriviaWidth);   // X has no trailing trivia
+        Assert.Equal(2, bAfter.LeadingTriviaWidth);    // b retains its "  " leading trivia
+    }
+
+    /// <summary>
+    /// Tests inserting after a node with trailing newline, where inserted text has no leading whitespace.
+    /// </summary>
+    [Fact]
+    public void InsertAfter_WithNewline_NoLeadingWhitespace_PreservesFollowingTrivia()
+    {
+        var tree = SyntaxTree.Parse("a\n  b");
+        
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves[1].LeadingTriviaWidth);  // 'b' has leading "  "
+        
+        var aNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "a");
+        
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X")
+            .Commit();
+        
+        var actualText = tree.ToText();
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // X has no trivia, b retains its leading trivia
+        Assert.Equal("a\nX  b", actualText);
+        Assert.Equal(0, xAfter.LeadingTriviaWidth);
+        Assert.Equal(0, xAfter.TrailingTriviaWidth);
+        Assert.Equal(2, bAfter.LeadingTriviaWidth);    // b retains its "  " leading trivia
+    }
+
+    /// <summary>
+    /// Tests inserting text with its own trailing newline after a node.
+    /// The inserted text's trailing trivia should be consumed properly.
+    /// </summary>
+    [Fact]
+    public void InsertAfter_InsertedTextWithTrailingNewline_PreservesFollowingTrivia()
+    {
+        var tree = SyntaxTree.Parse("a\n  b");
+        
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves[1].LeadingTriviaWidth);  // 'b' has leading "  "
+        
+        var aNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "a");
+        
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X\n")
+            .Commit();
+        
+        var actualText = tree.ToText();
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // 'a' has trailing newline, X has trailing newline, b retains leading trivia
+        Assert.Equal("a\nX\n  b", actualText);
+        Assert.Equal(1, aAfter.TrailingTriviaWidth);   // 'a' keeps trailing newline
+        Assert.Equal(0, xAfter.LeadingTriviaWidth);    // X has no leading trivia
+        Assert.Equal(1, xAfter.TrailingTriviaWidth);   // X has trailing newline
+        Assert.Equal(2, bAfter.LeadingTriviaWidth);    // b retains its "  " leading trivia
+    }
+
+    /// <summary>
+    /// Tests that block opener trivia follows the correct trivia model:
+    ///   - Trailing trivia: up to AND INCLUDING the newline
+    ///   - Leading trivia: content AFTER the newline (e.g., indentation)
+    /// 
+    /// For "{\n    x}":
+    ///   - '{' (opener) trailing trivia: "\n" (just the newline, width 1 or 2 for CRLF)
+    ///   - 'x' leading trivia: "    " (indentation, width 4)
+    /// </summary>
+    [Fact]
+    public void BlockOpener_TrailingTrivia_ShouldStopAtNewline()
+    {
+        // Parse a simple block with newline and indentation
+        var tree = SyntaxTree.Parse("{\n    x\n}");
+        
+        // Find the block
+        var block = tree.Root.Children.OfType<SyntaxBlock>().First();
+        Assert.Equal('{', block.Opener);
+        
+        // Get the opener node and first child
+        var openerNode = block.OpenerNode;
+        var firstChild = block.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "x");
+        
+        // BUG: The opener's trailing trivia includes the indentation that should be on 'x'
+        // Expected: opener trailing = 1 (LF) or 2 (CRLF), x leading = 4 (indentation)
+        // Actual:   opener trailing = 5 or 6 (newline + indent), x leading = 0
+        
+        // This is the EXPECTED behavior (currently fails):
+        Assert.True(openerNode.TrailingTriviaWidth <= 2, 
+            $"Opener trailing trivia should only be newline (1-2 chars), but was {openerNode.TrailingTriviaWidth}");
+        Assert.Equal(4, firstChild.LeadingTriviaWidth);
+    }
+
+    /// <summary>
+    /// Tests that inserting after block opener preserves first child's indentation.
+    /// 
+    /// Input: "{\n    x\n}"
+    /// After InsertAfter(opener, "/* comment */\n"):
+    /// Result: "{\n/* comment */\n    x\n}" where 'x' still has 4-space indentation
+    /// </summary>
+    [Fact]
+    public void InsertAfterBlockOpener_ShouldPreserveFirstChildIndentation()
+    {
+        var tree = SyntaxTree.Parse("{\n    x\n}");
+        
+        // Find the block and its opener
+        var block = tree.Root.Children.OfType<SyntaxBlock>().First();
+        var openerNode = block.OpenerNode;
+        var firstChild = block.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "x");
+        
+        // Verify original leading trivia is preserved (4 spaces of indentation)
+        Assert.Equal(4, firstChild.LeadingTriviaWidth);
+        
+        // Insert a comment after the opener node
+        tree.CreateEditor()
+            .InsertAfter(openerNode, "/* comment */\n")
+            .Commit();
+        
+        var result = tree.ToText();
+        
+        // Re-find the 'x' token after edit
+        var blockAfter = tree.Root.Children.OfType<SyntaxBlock>().First();
+        var xAfter = blockAfter.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "x");
+        
+        // 'x' should retain its 4-space indentation after the edit
+        Assert.Equal(4, xAfter.LeadingTriviaWidth);
+        
+        // The output should show proper formatting with indentation preserved
+        Assert.Contains("/* comment */\n    x", result);
+    }
+
     [Fact]
     public void InsertBefore_RedNode_GreenNodes()
     {

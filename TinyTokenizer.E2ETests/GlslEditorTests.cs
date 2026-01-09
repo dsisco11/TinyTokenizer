@@ -282,9 +282,10 @@ void main() {
         
         var result = NormalizeLineEndings(tree.Root.ToText());
         
-        // Verify insertion appears at inner start of main's body (after opener's trailing trivia)
-        // Original: {\n    vec4 color... -> After insert: {\n    \n    vec4 sample...vec4 color
-        Assert.Contains("void main() {\n    \n    vec4 sample = texture(tex, uv);", result);
+        // Verify insertion appears at inner start of main's body
+        // With correct trivia model: opener has trailing "\n", first child has leading "    "
+        // After insert: {\n + \n    vec4 sample... + (first child's leading trivia)vec4 color...
+        Assert.Contains("void main() {\n\n    vec4 sample = texture(tex, uv);    vec4 color", result);
     }
     
     #endregion
@@ -307,6 +308,125 @@ void main() {
         // Verify insertion appears at inner end of main's body, showing context (last statement + inserted + closing brace)
         // The exact whitespace may vary, so we check the key sequence
         Assert.Matches(@"foo\(uv\);\s*fragColor = color;\s*}", result);
+    }
+    
+    /// <summary>
+    /// Tests that inserting a comment block after the opening brace of a function
+    /// does not steal the leading trivia (indentation) from the following statement.
+    /// 
+    /// Trivia model:
+    ///   - Trailing trivia: up to AND INCLUDING the newline
+    ///   - Leading trivia: content AFTER the newline (e.g., indentation)
+    /// 
+    /// For "{\n    vec4":
+    ///   - '{' trailing trivia: "\n" (newline only)
+    ///   - 'vec4' leading trivia: "    " (indentation)
+    /// 
+    /// After InsertAfter(InnerStart, "/* debug */\n"):
+    ///   - Inserted comment appears after opener's trailing trivia
+    ///   - 'vec4' retains its leading indentation
+    /// </summary>
+    [Fact]
+    public void InsertAfterOpeningBrace_ShouldNotStealLeadingTriviaFromFollowingStatement()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // Find the main function
+        var mainFunc = Query.Syntax<GlFunctionNode>().Named("main")
+            .SelectTyped(tree)
+            .First();
+        
+        var body = mainFunc.Body;
+        var openerNode = body.OpenerNode;
+        
+        // Get the first ident token inside the body (vec4)
+        var firstStatementToken = body.InnerChildren.OfType<SyntaxToken>().FirstOrDefault(t => t.Kind == NodeKind.Ident);
+        Assert.NotNull(firstStatementToken);
+        Assert.Equal("vec4", firstStatementToken!.Text);
+        
+        _output.WriteLine($"Opener trailing trivia width: {openerNode.TrailingTriviaWidth}");
+        _output.WriteLine($"Original vec4 leading trivia width: {firstStatementToken.LeadingTriviaWidth}");
+        
+        // Opener trailing trivia should be just the newline (1 for LF, 2 for CRLF)
+        Assert.True(openerNode.TrailingTriviaWidth <= 2,
+            $"Opener trailing trivia should be just newline (1-2 chars), but was {openerNode.TrailingTriviaWidth}");
+        // First statement should have leading trivia (indentation after the newline)
+        Assert.Equal(4, firstStatementToken.LeadingTriviaWidth);
+        
+        // Insert a comment after the opening brace
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        tree.CreateEditor()
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    /* debug */")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.Root.ToText());
+        _output.WriteLine($"Result:\n{result}");
+        
+        // Verify the comment was inserted
+        Assert.Contains("/* debug */", result);
+        
+        // Re-find vec4 after edit
+        var mainFuncAfter = Query.Syntax<GlFunctionNode>().Named("main")
+            .SelectTyped(tree)
+            .First();
+        var vec4After = mainFuncAfter.Body.InnerChildren
+            .OfType<SyntaxToken>()
+            .FirstOrDefault(t => t.Kind == NodeKind.Ident && t.Text == "vec4");
+        Assert.NotNull(vec4After);
+        
+        _output.WriteLine($"After edit vec4 leading trivia width: {vec4After!.LeadingTriviaWidth}");
+        
+        // vec4 should retain its leading trivia (indentation)
+        Assert.Equal(4, vec4After.LeadingTriviaWidth);
+        
+        // The output should have proper formatting with indentation preserved
+        // After insert: {\n + \n    /* debug */ + (vec4's leading trivia)vec4
+        Assert.Contains("/* debug */    vec4 color", result);
+    }
+    
+    /// <summary>
+    /// Tests that inserting a multi-line comment block after opening brace
+    /// preserves the following statement's leading trivia (indentation).
+    /// </summary>
+    [Fact]
+    public void InsertMultiLineCommentAfterOpeningBrace_PreservesFollowingTrivia()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        
+        // Get original trivia width of first statement
+        var mainFunc = mainQuery.SelectTyped(tree).First();
+        var vec4Token = mainFunc.Body.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "vec4");
+        var openerNode = mainFunc.Body.OpenerNode;
+        
+        _output.WriteLine($"Opener trailing trivia width: {openerNode.TrailingTriviaWidth}");
+        _output.WriteLine($"Original vec4 leading trivia width: {vec4Token.LeadingTriviaWidth}");
+        
+        // vec4 should have 4 spaces of leading trivia (indentation)
+        Assert.Equal(4, vec4Token.LeadingTriviaWidth);
+        
+        // Insert a multi-line comment
+        tree.CreateEditor()
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    /*\n     * Debug block\n     */")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.Root.ToText());
+        _output.WriteLine($"Result:\n{result}");
+        
+        // Verify comment was inserted
+        Assert.Contains("* Debug block", result);
+        
+        // Re-find vec4 after edit
+        var mainFuncAfter = mainQuery.SelectTyped(tree).First();
+        var vec4After = mainFuncAfter.Body.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "vec4");
+        
+        _output.WriteLine($"After edit vec4 leading trivia width: {vec4After.LeadingTriviaWidth}");
+        
+        // vec4 should still have its leading trivia (indentation)
+        Assert.Equal(4, vec4After.LeadingTriviaWidth);
     }
     
     #endregion
@@ -417,8 +537,8 @@ void main() {
         Assert.Contains("/* foo comment */\n\n// A helper function to sample a texture\nvec4 foo", result);
         // 3. Comment above main (before leading trivia)
         Assert.Contains("// Entry point for the fragment shader\n\nvoid main()", result);
-        // 4. Sample at inner start of main body (opener's trailing trivia preserved: newline + indent)
-        Assert.Contains("void main() {\n    \n    vec4 sample = texture(tex, uv);", result);
+        // 4. Sample at inner start of main body (with correct trivia model: opener trailing = newline only)
+        Assert.Contains("void main() {\n\n    vec4 sample = texture(tex, uv);", result);
         // 5. fragColor at inner end of main body (shows context: last stmt + inserted + close brace)
         Assert.Matches(@"foo\(uv\);\s*fragColor = sample;\s*}", result);
         // 6. Comment after main (shows closing brace + trailing trivia + inserted content)
@@ -502,8 +622,9 @@ void main() {
             .Commit();
         
         var result = NormalizeLineEndings(tree.Root.ToText());
-        // With new GreenBlock design, opener's trailing trivia (newline + indent) is preserved
-        Assert.Contains("void main() {\n    \n    // Body start", result);
+        // With correct trivia model: opener has trailing newline, first child has leading indent
+        // InsertAfter(InnerStart) inserts after opener's trailing trivia
+        Assert.Contains("void main() {\n\n    // Body start", result);
     }
     
     [Fact]

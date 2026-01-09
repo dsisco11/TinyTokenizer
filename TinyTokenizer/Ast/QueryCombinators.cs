@@ -14,12 +14,22 @@ namespace TinyTokenizer.Ast;
 /// <code>Query.Sequence(Query.Not(Query.Ident("if")), Query.AnyIdent)</code>
 /// This matches any identifier that is NOT "if".
 /// </remarks>
-public sealed record NotQuery : INodeQuery, IGreenNodeQuery
+public sealed record NotQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _inner;
     
     /// <summary>Creates a negative lookahead assertion.</summary>
     public NotQuery(INodeQuery inner) => _inner = inner;
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _inner is not ISchemaResolvableQuery r || r.IsResolved;
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_inner is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+            resolvable.ResolveWithSchema(schema);
+    }
     
     /// <inheritdoc/>
     public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
@@ -76,7 +86,7 @@ public sealed record NotQuery : INodeQuery, IGreenNodeQuery
 /// Useful for extracting content between matching patterns:
 /// <code>Query.Between(Query.Symbol("("), Query.Symbol(")"))</code>
 /// </remarks>
-public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _start;
     private readonly INodeQuery _end;
@@ -91,6 +101,20 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
         _start = start;
         _end = end;
         _inclusive = inclusive;
+    }
+    
+    /// <inheritdoc/>
+    public bool IsResolved =>
+        (_start is not ISchemaResolvableQuery rs || rs.IsResolved) &&
+        (_end is not ISchemaResolvableQuery re || re.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_start is ISchemaResolvableQuery rs && !rs.IsResolved)
+            rs.ResolveWithSchema(schema);
+        if (_end is ISchemaResolvableQuery re && !re.IsResolved)
+            re.ResolveWithSchema(schema);
     }
     
     /// <inheritdoc/>
@@ -220,7 +244,7 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 /// <summary>
 /// Matches a sequence of queries in order, consuming multiple sibling nodes.
 /// </summary>
-public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly ImmutableArray<INodeQuery> _parts;
     
@@ -243,6 +267,19 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
     public SequenceQuery(params INodeQuery[] parts)
     {
         _parts = [.. parts];
+    }
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _parts.All(p => p is not ISchemaResolvableQuery r || r.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        foreach (var part in _parts)
+        {
+            if (part is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+                resolvable.ResolveWithSchema(schema);
+        }
     }
     
     /// <inheritdoc/>
@@ -374,11 +411,21 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 /// Matches zero or one occurrence of the inner query.
 /// Always succeeds - returns empty match if inner doesn't match.
 /// </summary>
-public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _inner;
     
     public OptionalQuery(INodeQuery inner) => _inner = inner;
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _inner is not ISchemaResolvableQuery r || r.IsResolved;
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_inner is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+            resolvable.ResolveWithSchema(schema);
+    }
     
     /// <inheritdoc/>
     public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => _inner.Select(tree);
@@ -449,7 +496,7 @@ public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 /// <summary>
 /// Matches the inner query multiple times (min to max occurrences).
 /// </summary>
-public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _inner;
     private readonly int _min;
@@ -460,6 +507,16 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
         _inner = inner;
         _min = min;
         _max = max;
+    }
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _inner is not ISchemaResolvableQuery r || r.IsResolved;
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_inner is ISchemaResolvableQuery resolvable && !resolvable.IsResolved)
+            resolvable.ResolveWithSchema(schema);
     }
     
     /// <inheritdoc/>
@@ -586,7 +643,7 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
 /// Matches the inner query repeatedly until a terminator is encountered.
 /// The terminator is NOT consumed (lookahead-style matching).
 /// </summary>
-public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _terminator;
@@ -595,6 +652,20 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuer
     {
         _inner = inner;
         _terminator = terminator;
+    }
+    
+    /// <inheritdoc/>
+    public bool IsResolved =>
+        (_inner is not ISchemaResolvableQuery ri || ri.IsResolved) &&
+        (_terminator is not ISchemaResolvableQuery rt || rt.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_inner is ISchemaResolvableQuery ri && !ri.IsResolved)
+            ri.ResolveWithSchema(schema);
+        if (_terminator is ISchemaResolvableQuery rt && !rt.IsResolved)
+            rt.ResolveWithSchema(schema);
     }
     
     /// <inheritdoc/>
@@ -793,7 +864,7 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuer
 /// Matches the inner query only if followed by (or not followed by) the lookahead query.
 /// The lookahead is not consumed (zero-width assertion).
 /// </summary>
-public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
+public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, ISchemaResolvableQuery
 {
     private readonly INodeQuery _inner;
     private readonly INodeQuery _lookahead;
@@ -810,6 +881,20 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery, IRegionQuery
         _inner = inner;
         _lookahead = lookahead;
         _positive = positive;
+    }
+    
+    /// <inheritdoc/>
+    public bool IsResolved =>
+        (_inner is not ISchemaResolvableQuery ri || ri.IsResolved) &&
+        (_lookahead is not ISchemaResolvableQuery rl || rl.IsResolved);
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_inner is ISchemaResolvableQuery ri && !ri.IsResolved)
+            ri.ResolveWithSchema(schema);
+        if (_lookahead is ISchemaResolvableQuery rl && !rl.IsResolved)
+            rl.ResolveWithSchema(schema);
     }
     
     /// <inheritdoc/>

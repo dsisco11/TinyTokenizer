@@ -323,18 +323,23 @@ public static class Query
     
     /// <summary>
     /// Matches a specific keyword by its text.
-    /// Uses <see cref="KindNodeQuery"/> with keyword NodeKind range constraint.
+    /// Requires a schema to be attached to the tree for keyword resolution.
     /// </summary>
     /// <param name="text">The exact keyword text to match.</param>
     /// <returns>A query matching nodes with the specified keyword text.</returns>
+    /// <remarks>
+    /// This query implements <see cref="ISchemaResolvableQuery"/> and resolves the keyword text
+    /// to a <see cref="NodeKind"/> via the schema. If no schema is available, returns no matches.
+    /// For syntax definitions used with <see cref="SyntaxBinder"/>, the schema is automatically
+    /// provided during binding.
+    /// </remarks>
     /// <example>
     /// <code>
     /// // Find all occurrences of the "class" keyword
     /// var classKeywords = tree.Select(Query.Keyword("class"));
     /// </code>
     /// </example>
-    public static INodeQuery Keyword(string text) => 
-        new AnyKeywordQuery().Where(n => n is SyntaxToken leaf && leaf.Text == text);
+    public static SpecificKeywordQuery Keyword(string text) => new SpecificKeywordQuery(text);
     
     /// <summary>
     /// Matches keywords in a specific category.

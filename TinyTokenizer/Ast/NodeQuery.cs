@@ -20,6 +20,36 @@ internal interface IGreenNodeQuery
 }
 
 /// <summary>
+/// Interface for queries that require schema resolution before green-tree matching.
+/// Used by queries like <see cref="Query.Keyword(string)"/> that need to resolve
+/// keyword text to NodeKind values for efficient matching.
+/// </summary>
+/// <remarks>
+/// SyntaxBinder checks for this interface and calls <see cref="ResolveWithSchema"/>
+/// before performing green-tree pattern matching. This allows queries to cache
+/// schema-derived data (like NodeKind values) for O(1) matching instead of string comparison.
+/// </remarks>
+internal interface ISchemaResolvableQuery
+{
+    /// <summary>
+    /// Resolves schema-dependent data before matching.
+    /// Called by SyntaxBinder before green-tree matching, and by Select(SyntaxTree) for red-tree queries.
+    /// </summary>
+    /// <param name="schema">The schema to resolve against.</param>
+    /// <remarks>
+    /// Implementations should cache resolved data and set a flag indicating resolution is complete.
+    /// This method may be called multiple times; subsequent calls should be no-ops.
+    /// </remarks>
+    void ResolveWithSchema(Schema schema);
+    
+    /// <summary>
+    /// Gets whether this query has been resolved with a schema.
+    /// Queries return no matches if not resolved (schemaless trees).
+    /// </summary>
+    bool IsResolved { get; }
+}
+
+/// <summary>
 /// Non-generic interface for node queries, enabling polymorphic collections and composition.
 /// Queries can match single nodes (via Matches) or sequences of siblings (via TryMatch).
 /// </summary>
@@ -74,8 +104,17 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery, IRegionQu
     
     /// <summary>
     /// Resolves this query to regions in the tree.
+    /// Default implementation calls <see cref="SelectRegionsFromTree"/> which can be overridden
+    /// by schema-resolvable queries to resolve before matching.
     /// </summary>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => SelectRegionsFromTree(tree);
+    
+    /// <summary>
+    /// Selects regions from a tree. Override in derived classes to add schema resolution.
+    /// Default implementation just calls <see cref="SelectRegionsCore"/> with tree.Root.
+    /// </summary>
+    internal virtual IEnumerable<QueryRegion> SelectRegionsFromTree(SyntaxTree tree)
         => SelectRegionsCore(tree.Root);
     
     /// <summary>

@@ -1,0 +1,76 @@
+Keyword Query Refactoring:
+  Bug: Query.Keyword("uniform") matches ANY keyword in same category, not just "uniform"
+  Root cause: MatchesGreen() only checks IsKeyword(), ignores text predicate
+  Solution: Create SpecificKeywordQuery that resolves text→NodeKind via schema, then matches by kind
+
+  Phase 1 - Define Interface:
+    ✔ Add ISchemaResolvableQuery interface to NodeQuery.cs @done
+      - Define `void ResolveWithSchema(Schema schema)` method
+      - Define `bool IsResolved { get; }` property
+      - Purpose: Allow queries to resolve schema-dependent data before green-tree matching
+
+  Phase 2 - Create SpecificKeywordQuery:
+    ✔ Create SpecificKeywordQuery record in NodeQueryTypes.cs (after AnyKeywordQuery) @done
+      - Store `_keywordText` (readonly string)
+      - Store `_resolvedKind` (nullable NodeKind, mutable cache)
+      - Store `_isResolved` (bool flag)
+    ✔ Implement ISchemaResolvableQuery.ResolveWithSchema(Schema schema) @done
+      - Call schema.GetKeywordKind(_keywordText)
+      - Cache result in _resolvedKind, set _isResolved = true
+      - If keyword not found, _resolvedKind = null (will match nothing)
+    ✔ Implement MatchesGreen(GreenNode node) @done
+      - Return false if !_isResolved (no schema = no matches, option C)
+      - Return false if _resolvedKind == null (keyword not in schema)
+      - Return node.Kind == _resolvedKind.Value
+    ✔ Implement Matches(SyntaxNode node) @done
+      - Same logic as MatchesGreen but for red nodes
+    ✔ Implement Select(SyntaxTree tree) @done
+      - If tree.Schema != null, call ResolveWithSchema(tree.Schema)
+      - If !_isResolved, return Enumerable.Empty<SyntaxNode>()
+      - Otherwise delegate to base traversal
+    ✔ Implement Select(SyntaxNode root) @done
+      - Return empty if !_isResolved (no way to get schema from root alone)
+    ✔ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery) @done
+      - Propagate resolution state to derived queries
+
+  Phase 3 - Update SyntaxBinder & Composite Queries:
+    ✔ Store _schema field in SyntaxBinder (from Schema constructor) @done
+    ✔ Simplify ResolveSchemaQueries to single ISchemaResolvableQuery check @done
+    ✔ Make composite query types implement ISchemaResolvableQuery @done
+      - Each query type handles its own recursive resolution internally
+      - SequenceQuery, AnyOfQuery, NoneOfQuery - iterate over parts/queries
+      - OptionalQuery, RepeatQuery, NotQuery - resolve inner query
+      - RepeatUntilQuery, LookaheadQuery, BetweenQuery - resolve multiple inners
+    ✔ Added public properties for nested query access @done
+      - SequenceQuery.Parts, AnyOfQuery.Queries, NoneOfQuery.Queries
+      - OptionalQuery.InnerQuery, RepeatQuery.InnerQuery, NotQuery.InnerQuery
+      - RepeatUntilQuery.InnerQuery/Terminator, LookaheadQuery.InnerQuery/LookaheadPart
+      - BetweenQuery.Start/End
+
+  Phase 4 - Update Query Factory:
+    ✔ Update Query.Keyword(string text) in Query.cs @done
+    ✔ Replace AnyKeywordQuery().Where(...) with new SpecificKeywordQuery(text) @done
+    ✔ Update return type from INodeQuery to SpecificKeywordQuery @done
+    ✔ Update XML docs to document schema requirement @done
+
+  Phase 5 - Testing:
+    ✔ Run existing keyword tests to verify backward compatibility @done
+      - dotnet test TinyTokenizer.Tests --filter "Query_Keyword"
+    ✔ Verify bug reproduction tests now pass @done
+      - Query_Keyword_InSyntaxDefinition_ShouldOnlyMatchSpecificKeyword
+      - Query_Keyword_InSyntaxDefinition_MatchesCorrectKeyword  
+      - Query_Keyword_InSyntaxDefinition_DistinguishesSameCategoryKeywords
+    ✔ Add test for schemaless tree returning empty (option C behavior) @done
+    ✔ Run full test suite to catch regressions @done
+      - dotnet test TinyTokenizer.Tests
+      - 2 pre-existing failing tests unrelated to keyword refactoring (trivia handling)
+
+  Phase 6 - Cleanup:
+    ✔ Update XML docs on Query.Keyword to document schema requirement @done
+    ✔ Add SelectRegionsFromTree hook for IRegionQuery schema resolution @done
+    ☐ Consider adding Query.Keyword overload that takes NodeKind directly (advanced usage)
+
+Notes:
+  - SpecificKeywordQuery should be a class (not record) due to mutable _resolvedKind cache
+  - Thread safety: Resolution is idempotent, concurrent writes are harmless
+  - Case sensitivity: Schema.GetKeywordKind() already handles case-insensitive categories
