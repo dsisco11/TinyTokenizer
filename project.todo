@@ -54,19 +54,20 @@ Keyword Query Refactoring:
     ✔ Update XML docs to document schema requirement @done
 
   Phase 5 - Testing:
-    ☐ Run existing keyword tests to verify backward compatibility
+    ✔ Run existing keyword tests to verify backward compatibility @done
       - dotnet test TinyTokenizer.Tests --filter "Query_Keyword"
-    ☐ Verify bug reproduction tests now pass
+    ✔ Verify bug reproduction tests now pass @done
       - Query_Keyword_InSyntaxDefinition_ShouldOnlyMatchSpecificKeyword
       - Query_Keyword_InSyntaxDefinition_MatchesCorrectKeyword  
       - Query_Keyword_InSyntaxDefinition_DistinguishesSameCategoryKeywords
-    ☐ Add test for schemaless tree returning empty (option C behavior)
-    ☐ Run full test suite to catch regressions
+    ✔ Add test for schemaless tree returning empty (option C behavior) @done
+    ✔ Run full test suite to catch regressions @done
       - dotnet test TinyTokenizer.Tests
+      - 2 pre-existing failing tests unrelated to keyword refactoring (trivia handling)
 
   Phase 6 - Cleanup:
-    ☐ Remove unused text predicate code path from AnyKeywordQuery if applicable
-    ☐ Update XML docs on Query.Keyword to document schema requirement
+    ✔ Update XML docs on Query.Keyword to document schema requirement @done
+    ✔ Add SelectRegionsFromTree hook for IRegionQuery schema resolution @done
     ☐ Consider adding Query.Keyword overload that takes NodeKind directly (advanced usage)
 
 Notes:

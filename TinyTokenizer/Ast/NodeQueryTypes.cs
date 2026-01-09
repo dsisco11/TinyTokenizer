@@ -1717,6 +1717,22 @@ public sealed record SpecificKeywordQuery : NodeQuery<SpecificKeywordQuery>, ISc
         return node.Kind == _resolvedKind.Value;
     }
     
+    /// <summary>
+    /// Overrides tree-based region selection to ensure schema resolution happens first.
+    /// </summary>
+    internal override IEnumerable<QueryRegion> SelectRegionsFromTree(SyntaxTree tree)
+    {
+        // Resolve with schema if available
+        if (tree.Schema != null)
+            ResolveWithSchema(tree.Schema);
+        
+        // No schema = no matches
+        if (!_isResolved || _resolvedKind == null)
+            return [];
+        
+        return base.SelectRegionsFromTree(tree);
+    }
+    
     /// <inheritdoc/>
     protected override SpecificKeywordQuery CreateFiltered(Func<SyntaxNode, bool> predicate)
     {

@@ -104,8 +104,17 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery, IRegionQu
     
     /// <summary>
     /// Resolves this query to regions in the tree.
+    /// Default implementation calls <see cref="SelectRegionsFromTree"/> which can be overridden
+    /// by schema-resolvable queries to resolve before matching.
     /// </summary>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+        => SelectRegionsFromTree(tree);
+    
+    /// <summary>
+    /// Selects regions from a tree. Override in derived classes to add schema resolution.
+    /// Default implementation just calls <see cref="SelectRegionsCore"/> with tree.Root.
+    /// </summary>
+    internal virtual IEnumerable<QueryRegion> SelectRegionsFromTree(SyntaxTree tree)
         => SelectRegionsCore(tree.Root);
     
     /// <summary>
