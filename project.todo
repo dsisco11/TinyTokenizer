@@ -1,0 +1,64 @@
+Keyword Query Refactoring:
+  Bug: Query.Keyword("uniform") matches ANY keyword in same category, not just "uniform"
+  Root cause: MatchesGreen() only checks IsKeyword(), ignores text predicate
+  Solution: Create SpecificKeywordQuery that resolves text→NodeKind via schema, then matches by kind
+
+  Phase 1 - Define Interface:
+    ☐ Add ISchemaResolvableQuery interface to NodeQueryTypes.cs
+      - Define `void ResolveWithSchema(Schema schema)` method
+      - Purpose: Allow queries to resolve schema-dependent data before green-tree matching
+
+  Phase 2 - Create SpecificKeywordQuery:
+    ☐ Create SpecificKeywordQuery class in NodeQueryTypes.cs (after AnyKeywordQuery)
+      - Store `_keywordText` (readonly string)
+      - Store `_resolvedKind` (nullable NodeKind, mutable cache)
+      - Store `_isResolved` (bool flag)
+    ☐ Implement ISchemaResolvableQuery.ResolveWithSchema(Schema schema)
+      - Call schema.GetKeywordKind(_keywordText)
+      - Cache result in _resolvedKind, set _isResolved = true
+      - If keyword not found, _resolvedKind = null (will match nothing)
+    ☐ Implement MatchesGreen(GreenNode node)
+      - Return false if !_isResolved (no schema = no matches, option C)
+      - Return false if _resolvedKind == null (keyword not in schema)
+      - Return node.Kind == _resolvedKind.Value
+    ☐ Implement Matches(SyntaxNode node)
+      - Same logic as MatchesGreen but for red nodes
+    ☐ Implement Select(SyntaxTree tree)
+      - If tree.Schema != null, call ResolveWithSchema(tree.Schema)
+      - If !_isResolved, return Enumerable.Empty<SyntaxNode>()
+      - Otherwise delegate to base traversal
+    ☐ Implement Select(SyntaxNode root) 
+      - Return empty if !_isResolved (no way to get schema from root alone)
+    ☐ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery)
+
+  Phase 3 - Update SyntaxBinder:
+    ☐ Locate TryMatchQuery method in SyntaxBinder.cs
+    ☐ Before calling TryMatchGreen, check if query implements ISchemaResolvableQuery
+    ☐ If so, call ResolveWithSchema(_schema) to populate cached NodeKind
+    ☐ Ensure this happens for nested queries (SequenceQuery parts, AnyOf parts, etc.)
+
+  Phase 4 - Update Query Factory:
+    ☐ Update Query.Keyword(string text) in Query.cs line ~337
+    ☐ Replace: new AnyKeywordQuery().Where(n => n is SyntaxToken leaf && leaf.Text == text)
+    ☐ With: new SpecificKeywordQuery(text)
+
+  Phase 5 - Testing:
+    ☐ Run existing keyword tests to verify backward compatibility
+      - dotnet test TinyTokenizer.Tests --filter "Query_Keyword"
+    ☐ Verify bug reproduction tests now pass
+      - Query_Keyword_InSyntaxDefinition_ShouldOnlyMatchSpecificKeyword
+      - Query_Keyword_InSyntaxDefinition_MatchesCorrectKeyword  
+      - Query_Keyword_InSyntaxDefinition_DistinguishesSameCategoryKeywords
+    ☐ Add test for schemaless tree returning empty (option C behavior)
+    ☐ Run full test suite to catch regressions
+      - dotnet test TinyTokenizer.Tests
+
+  Phase 6 - Cleanup:
+    ☐ Remove unused text predicate code path from AnyKeywordQuery if applicable
+    ☐ Update XML docs on Query.Keyword to document schema requirement
+    ☐ Consider adding Query.Keyword overload that takes NodeKind directly (advanced usage)
+
+Notes:
+  - SpecificKeywordQuery should be a class (not record) due to mutable _resolvedKind cache
+  - Thread safety: Resolution is idempotent, concurrent writes are harmless
+  - Case sensitivity: Schema.GetKeywordKind() already handles case-insensitive categories
