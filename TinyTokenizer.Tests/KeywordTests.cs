@@ -498,4 +498,263 @@ int add(int a, int b) {
     }
     
     #endregion
+    
+    #region Query.Keyword Bug Tests
+    
+    /// <summary>
+    /// BUG: Query.Keyword("int") incorrectly matches any keyword in the same category.
+    /// When searching for "int", it should only match "int" tokens, not "float" or "void".
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_ShouldOnlyMatchExactKeyword_NotOthersInSameCategory()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float", "void")
+            .Build();
+        
+        // Parse source with multiple type keywords
+        var tree = SyntaxTree.Parse("int a; float b; void c;", schema);
+        
+        // Query for only "int" keyword
+        var intKeywords = tree.Select(Query.Keyword("int")).ToList();
+        
+        // Should only find 1 match (the "int" keyword), not 3 (all type keywords)
+        Assert.Single(intKeywords);
+        
+        // Verify the matched node is actually "int"
+        var matchedText = ((SyntaxToken)intKeywords[0]).Text;
+        Assert.Equal("int", matchedText);
+    }
+    
+    /// <summary>
+    /// BUG: Query.Keyword should not match keywords from other categories.
+    /// This is a stricter test to ensure cross-category matching doesn't occur.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_ShouldNotMatchKeywordsFromOtherCategories()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float")
+            .DefineKeywordCategory("Control", "if", "else", "for")
+            .Build();
+        
+        // Parse source with keywords from both categories
+        var tree = SyntaxTree.Parse("int x; if (x) { float y; } else { for (;;) {} }", schema);
+        
+        // Query for "int" - should only match "int", not any control flow keywords
+        var intMatches = tree.Select(Query.Keyword("int")).ToList();
+        Assert.Single(intMatches);
+        Assert.Equal("int", ((SyntaxToken)intMatches[0]).Text);
+        
+        // Query for "if" - should only match "if"
+        var ifMatches = tree.Select(Query.Keyword("if")).ToList();
+        Assert.Single(ifMatches);
+        Assert.Equal("if", ((SyntaxToken)ifMatches[0]).Text);
+    }
+    
+    /// <summary>
+    /// Verifies that querying for a non-existent keyword returns no results.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_NonExistentKeyword_ReturnsEmpty()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float")
+            .Build();
+        
+        var tree = SyntaxTree.Parse("int x; float y;", schema);
+        
+        // Query for a keyword that doesn't exist in the schema
+        var matches = tree.Select(Query.Keyword("double")).ToList();
+        
+        Assert.Empty(matches);
+    }
+    
+    /// <summary>
+    /// Tests Query.Keyword selection - ensure it only matches the specific keyword even when
+    /// multiple keywords in the same category exist.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_First_ShouldOnlyMatchSpecificKeyword()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float", "void")
+            .Build();
+        
+        // "float" appears first in source, but we query for "int"
+        var tree = SyntaxTree.Parse("float a; int b; void c;", schema);
+        
+        // Query for "int" - should only match "int", not the first keyword ("float")
+        var matches = tree.Select(Query.Keyword("int")).ToList();
+        
+        Assert.Single(matches);
+        Assert.Equal("int", ((SyntaxToken)matches[0]).Text);
+    }
+    
+    /// <summary>
+    /// Tests Query.Keyword with SyntaxEditor Replace operation.
+    /// Ensures replacing "int" doesn't accidentally replace other keywords in the same category.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_WithSyntaxEditor_ShouldOnlyReplaceSpecificKeyword()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("Types", "int", "float", "void")
+            .Build();
+        
+        var tree = SyntaxTree.Parse("int a; float b; void c;", schema);
+        
+        // Replace only "int" keywords
+        tree.CreateEditor()
+            .Replace(Query.Keyword("int"), "long")
+            .Commit();
+        
+        // Should only replace "int" -> "long", leaving "float" and "void" unchanged
+        var result = tree.ToText();
+        Assert.Equal("long a; float b; void c;", result);
+        
+        // Verify "float" and "void" are still present as keywords
+        var floatMatches = tree.Select(Query.Keyword("float")).ToList();
+        var voidMatches = tree.Select(Query.Keyword("void")).ToList();
+        Assert.Single(floatMatches);
+        Assert.Single(voidMatches);
+    }
+    
+    #endregion
+    
+    #region Query.Keyword in Syntax Definition Bug
+    
+    /// <summary>
+    /// BUG: Query.Keyword("uniform") in a syntax definition pattern matches ANY keyword 
+    /// in the same category, not just "uniform".
+    /// 
+    /// This causes "in vec3 pos;" to be incorrectly matched as a uniform declaration
+    /// when "in" and "uniform" are in the same keyword category (GlslStorageQualifiers).
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_InSyntaxDefinition_ShouldOnlyMatchSpecificKeyword()
+    {
+        // Define a syntax node for GLSL uniform declarations
+        var schema = Schema.Create()
+            .DefineKeywordCategory("GlslStorageQualifiers", 
+                "const", "in", "out", "inout", "uniform", "buffer", "shared",
+                "attribute", "varying")
+            .DefineKeywordCategory("GlslTypes",
+                "vec2", "vec3", "vec4", "mat4", "float", "int")
+            .DefineSyntax(Syntax.Define<GlUniformTestNode>("glUniform")
+                .Match(
+                    Query.Keyword("uniform"),                      // The "uniform" keyword specifically
+                    Query.AnyOf(Query.AnyKeyword, Query.AnyIdent), // Type (keyword or custom type)
+                    Query.AnyIdent,                                // Name
+                    Query.BracketBlock.Optional(),                 // Optional array [size]
+                    Query.Symbol(";")
+                )
+                .WithPriority(15)
+                .Build())
+            .Build();
+        
+        // Parse source that has "in" declaration (NOT uniform)
+        var tree = SyntaxTree.Parse("in vec3 pos;", schema);
+        
+        // Query for uniform nodes - should find NONE because "in" is not "uniform"
+        var uniformNodes = tree.Select(Query.Syntax<GlUniformTestNode>()).ToList();
+        
+        // BUG: This fails because Query.Keyword("uniform") incorrectly matches "in"
+        // since they're in the same category
+        Assert.Empty(uniformNodes);
+    }
+    
+    /// <summary>
+    /// Verifies that Query.Keyword("uniform") correctly matches actual uniform declarations.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_InSyntaxDefinition_MatchesCorrectKeyword()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("GlslStorageQualifiers", 
+                "const", "in", "out", "inout", "uniform", "buffer", "shared")
+            .DefineKeywordCategory("GlslTypes",
+                "vec2", "vec3", "vec4", "mat4", "float", "int")
+            .DefineSyntax(Syntax.Define<GlUniformTestNode>("glUniform")
+                .Match(
+                    Query.Keyword("uniform"),
+                    Query.AnyOf(Query.AnyKeyword, Query.AnyIdent),
+                    Query.AnyIdent,
+                    Query.BracketBlock.Optional(),
+                    Query.Symbol(";")
+                )
+                .WithPriority(15)
+                .Build())
+            .Build();
+        
+        // Parse source with actual uniform declaration
+        var tree = SyntaxTree.Parse("uniform mat4 modelView;", schema);
+        
+        // Should find exactly one uniform node
+        var uniformNodes = tree.Select(Query.Syntax<GlUniformTestNode>()).ToList();
+        Assert.Single(uniformNodes);
+    }
+    
+    /// <summary>
+    /// Verifies that different keywords in the same category are distinguished correctly.
+    /// </summary>
+    [Fact]
+    public void Query_Keyword_InSyntaxDefinition_DistinguishesSameCategoryKeywords()
+    {
+        var schema = Schema.Create()
+            .DefineKeywordCategory("GlslStorageQualifiers", 
+                "const", "in", "out", "inout", "uniform", "buffer")
+            .DefineKeywordCategory("GlslTypes",
+                "vec2", "vec3", "vec4", "mat4", "float", "int")
+            .DefineSyntax(Syntax.Define<GlUniformTestNode>("glUniform")
+                .Match(
+                    Query.Keyword("uniform"),
+                    Query.AnyOf(Query.AnyKeyword, Query.AnyIdent),
+                    Query.AnyIdent,
+                    Query.Symbol(";")
+                )
+                .WithPriority(15)
+                .Build())
+            .DefineSyntax(Syntax.Define<GlInputTestNode>("glInput")
+                .Match(
+                    Query.Keyword("in"),
+                    Query.AnyOf(Query.AnyKeyword, Query.AnyIdent),
+                    Query.AnyIdent,
+                    Query.Symbol(";")
+                )
+                .WithPriority(15)
+                .Build())
+            .Build();
+        
+        // Parse source with both uniform and in declarations
+        var tree = SyntaxTree.Parse("uniform mat4 model; in vec3 pos; out vec4 color;", schema);
+        
+        // Should find exactly one uniform node
+        var uniformNodes = tree.Select(Query.Syntax<GlUniformTestNode>()).ToList();
+        Assert.Single(uniformNodes);
+        
+        // Should find exactly one input node  
+        var inputNodes = tree.Select(Query.Syntax<GlInputTestNode>()).ToList();
+        Assert.Single(inputNodes);
+        
+        // "out vec4 color;" should match neither (no syntax for "out" defined)
+    }
+    
+    #endregion
 }
+
+#region Test Syntax Nodes for Keyword Bug Tests
+
+/// <summary>Test syntax node for GLSL uniform declarations.</summary>
+public sealed class GlUniformTestNode : SyntaxNode
+{
+    internal GlUniformTestNode(CreationContext context) : base(context) { }
+}
+
+/// <summary>Test syntax node for GLSL input declarations.</summary>
+public sealed class GlInputTestNode : SyntaxNode
+{
+    internal GlInputTestNode(CreationContext context) : base(context) { }
+}
+
+#endregion
