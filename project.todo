@@ -4,8 +4,9 @@ Keyword Query Refactoring:
   Solution: Create SpecificKeywordQuery that resolves text→NodeKind via schema, then matches by kind
 
   Phase 1 - Define Interface:
-    ☐ Add ISchemaResolvableQuery interface to NodeQueryTypes.cs
+    ✔ Add ISchemaResolvableQuery interface to NodeQuery.cs @done
       - Define `void ResolveWithSchema(Schema schema)` method
+      - Define `bool IsResolved { get; }` property
       - Purpose: Allow queries to resolve schema-dependent data before green-tree matching
 
   Phase 2 - Create SpecificKeywordQuery:
