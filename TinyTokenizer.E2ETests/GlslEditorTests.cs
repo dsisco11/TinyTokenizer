@@ -309,6 +309,137 @@ void main() {
         Assert.Matches(@"foo\(uv\);\s*fragColor = color;\s*}", result);
     }
     
+    /// <summary>
+    /// BUG REPRODUCTION: This test documents incorrect trivia handling.
+    /// 
+    /// The trivia model SHOULD be:
+    ///   - Trailing trivia: up to AND INCLUDING the newline
+    ///   - Leading trivia: content AFTER the newline (e.g., indentation)
+    /// 
+    /// For "{\n    vec4":
+    ///   - '{' trailing trivia SHOULD BE: "\n" (newline only)
+    ///   - 'vec4' leading trivia SHOULD BE: "    " (indentation)
+    /// 
+    /// CURRENT (BUGGY) behavior:
+    ///   - '{' trailing trivia IS: "\n    " (newline + indentation)
+    ///   - 'vec4' leading trivia IS: "" (empty)
+    /// 
+    /// This causes problems when inserting after the opening brace because
+    /// the indentation that SHOULD belong to vec4 is instead part of {'s trailing trivia,
+    /// so insertions don't preserve proper formatting.
+    /// </summary>
+    [Fact]
+    public void InsertAfterOpeningBrace_ShouldNotStealLeadingTriviaFromFollowingStatement()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        // Find the main function
+        var mainFunc = Query.Syntax<GlFunctionNode>().Named("main")
+            .SelectTyped(tree)
+            .First();
+        
+        var body = mainFunc.Body;
+        var openerNode = body.OpenerNode;
+        
+        // Get the first ident token inside the body (vec4)
+        var firstStatementToken = body.InnerChildren.OfType<SyntaxToken>().FirstOrDefault(t => t.Kind == NodeKind.Ident);
+        Assert.NotNull(firstStatementToken);
+        Assert.Equal("vec4", firstStatementToken!.Text);
+        
+        _output.WriteLine($"Opener trailing trivia width: {openerNode.TrailingTriviaWidth}");
+        _output.WriteLine($"Original vec4 leading trivia width: {firstStatementToken.LeadingTriviaWidth}");
+        
+        // BUG: Currently, the indentation is on opener's trailing trivia, not vec4's leading trivia
+        // This SHOULD be: opener trailing = 1 (newline), vec4 leading = 4 (indentation)
+        // But currently IS: opener trailing = 5 (newline + indent), vec4 leading = 0
+        
+        // Document the EXPECTED behavior (currently fails):
+        Assert.Equal(1, openerNode.TrailingTriviaWidth);   // Should be just newline
+        Assert.Equal(4, firstStatementToken.LeadingTriviaWidth);  // Should be indentation
+        
+        // Insert a comment after the opening brace
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        tree.CreateEditor()
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    /* debug */")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.Root.ToText());
+        _output.WriteLine($"Result:\n{result}");
+        
+        // Verify the comment was inserted
+        Assert.Contains("/* debug */", result);
+        
+        // Re-find vec4 after edit
+        var mainFuncAfter = Query.Syntax<GlFunctionNode>().Named("main")
+            .SelectTyped(tree)
+            .First();
+        var vec4After = mainFuncAfter.Body.InnerChildren
+            .OfType<SyntaxToken>()
+            .FirstOrDefault(t => t.Kind == NodeKind.Ident && t.Text == "vec4");
+        Assert.NotNull(vec4After);
+        
+        _output.WriteLine($"After edit vec4 leading trivia width: {vec4After!.LeadingTriviaWidth}");
+        
+        // vec4 should retain its leading trivia (indentation)
+        Assert.Equal(4, vec4After.LeadingTriviaWidth);
+        
+        // The output should have proper formatting with indentation preserved
+        Assert.Contains("/* debug */\n    vec4 color", result);
+    }
+    
+    /// <summary>
+    /// Tests that inserting a multi-line comment block after opening brace
+    /// preserves the following statement's leading trivia.
+    /// </summary>
+    /// <summary>
+    /// BUG REPRODUCTION: Tests that inserting a multi-line comment block after opening brace
+    /// preserves the following statement's leading trivia (indentation).
+    /// 
+    /// This test currently passes because it only checks that vec4's leading trivia
+    /// is preserved (which is 0 before and 0 after). The real issue is that
+    /// vec4 SHOULD have leading trivia (indentation) but doesn't due to the trivia model bug.
+    /// </summary>
+    [Fact]
+    public void InsertMultiLineCommentAfterOpeningBrace_PreservesFollowingTrivia()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse(SampleShader, schema);
+        
+        var mainQuery = Query.Syntax<GlFunctionNode>().Named("main");
+        
+        // Get original trivia width of first statement
+        var mainFunc = mainQuery.SelectTyped(tree).First();
+        var vec4Token = mainFunc.Body.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "vec4");
+        var openerNode = mainFunc.Body.OpenerNode;
+        
+        _output.WriteLine($"Opener trailing trivia width: {openerNode.TrailingTriviaWidth}");
+        _output.WriteLine($"Original vec4 leading trivia width: {vec4Token.LeadingTriviaWidth}");
+        
+        // BUG: This SHOULD be 4 (indentation), but is 0 because trivia model is wrong
+        Assert.Equal(4, vec4Token.LeadingTriviaWidth);
+        
+        // Insert a multi-line comment
+        tree.CreateEditor()
+            .InsertAfter(mainQuery.InnerStart("body"), "\n    /*\n     * Debug block\n     */")
+            .Commit();
+        
+        var result = NormalizeLineEndings(tree.Root.ToText());
+        _output.WriteLine($"Result:\n{result}");
+        
+        // Verify comment was inserted
+        Assert.Contains("* Debug block", result);
+        
+        // Re-find vec4 after edit
+        var mainFuncAfter = mainQuery.SelectTyped(tree).First();
+        var vec4After = mainFuncAfter.Body.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "vec4");
+        
+        _output.WriteLine($"After edit vec4 leading trivia width: {vec4After.LeadingTriviaWidth}");
+        
+        // vec4 should still have its leading trivia (indentation)
+        Assert.Equal(4, vec4After.LeadingTriviaWidth);
+    }
+    
     #endregion
     
     #region 4. Insert Comment After main() Method
