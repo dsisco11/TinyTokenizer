@@ -264,11 +264,14 @@ internal sealed class GreenLexer
         
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         
-        // Collect trivia after opener (will become opener's trailing trivia)
-        var openerTrailingTrivia = CollectLeadingTrivia(ref reader);
+        // Collect trailing trivia for opener (stops at newline, per trivia model)
+        var openerTrailingTrivia = CollectTrailingTrivia(ref reader);
+        
+        // Collect leading trivia for first child (indentation after opener's trailing newline)
+        var firstChildLeading = CollectLeadingTrivia(ref reader);
         
         // This will hold trivia before the next element (leading trivia for next child or closer)
-        var childLeading = ImmutableArray<GreenTrivia>.Empty;
+        var childLeading = firstChildLeading;
         
         while (reader.HasMore)
         {
@@ -289,10 +292,7 @@ internal sealed class GreenLexer
             }
             
             // Parse child node with its leading trivia
-            // For the first child, use empty leading trivia (opener's trailing already captured)
-            // For subsequent children, use the collected childLeading
-            var childLeadingForParse = children.Count == 0 ? ImmutableArray<GreenTrivia>.Empty : childLeading;
-            var child = ParseNode(ref reader, closerType, childLeadingForParse);
+            var child = ParseNode(ref reader, closerType, childLeading);
             if (child != null)
             {
                 // Collect trailing trivia for this child

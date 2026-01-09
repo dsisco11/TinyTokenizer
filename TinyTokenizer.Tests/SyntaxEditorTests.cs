@@ -1615,22 +1615,13 @@ public class SyntaxEditorTests
     }
 
     /// <summary>
-    /// BUG REPRODUCTION: Block opener trivia is incorrectly collected.
-    /// 
-    /// The trivia model SHOULD be:
+    /// Tests that block opener trivia follows the correct trivia model:
     ///   - Trailing trivia: up to AND INCLUDING the newline
     ///   - Leading trivia: content AFTER the newline (e.g., indentation)
     /// 
     /// For "{\n    x}":
-    ///   - '{' (opener) trailing trivia SHOULD BE: "\n" (just the newline, width 1 or 2 for CRLF)
-    ///   - 'x' leading trivia SHOULD BE: "    " (indentation, width 4)
-    /// 
-    /// CURRENT (BUGGY) behavior in GreenLexer.ParseBlock():
-    ///   - '{' trailing trivia IS: "\n    " (newline + indentation)
-    ///   - 'x' leading trivia IS: "" (empty)
-    /// 
-    /// Root cause: ParseBlock calls CollectLeadingTrivia() for opener's trailing trivia,
-    /// but should call CollectTrailingTrivia() which stops at the newline.
+    ///   - '{' (opener) trailing trivia: "\n" (just the newline, width 1 or 2 for CRLF)
+    ///   - 'x' leading trivia: "    " (indentation, width 4)
     /// </summary>
     [Fact]
     public void BlockOpener_TrailingTrivia_ShouldStopAtNewline()
@@ -1657,14 +1648,11 @@ public class SyntaxEditorTests
     }
 
     /// <summary>
-    /// BUG REPRODUCTION: Inserting after block opener steals indentation from first statement.
-    /// 
-    /// When inserting content after the opening brace of a block, the inserted content
-    /// should NOT affect the leading trivia (indentation) of the existing first statement.
+    /// Tests that inserting after block opener preserves first child's indentation.
     /// 
     /// Input: "{\n    x\n}"
     /// After InsertAfter(opener, "/* comment */\n"):
-    /// Expected: "{\n/* comment */\n    x\n}" where 'x' still has 4-space indentation
+    /// Result: "{\n/* comment */\n    x\n}" where 'x' still has 4-space indentation
     /// </summary>
     [Fact]
     public void InsertAfterBlockOpener_ShouldPreserveFirstChildIndentation()
@@ -1676,8 +1664,8 @@ public class SyntaxEditorTests
         var openerNode = block.OpenerNode;
         var firstChild = block.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "x");
         
-        // Capture original leading trivia (should be 4 spaces, but due to bug it's 0)
-        var originalLeadingTrivia = firstChild.LeadingTriviaWidth;
+        // Verify original leading trivia is preserved (4 spaces of indentation)
+        Assert.Equal(4, firstChild.LeadingTriviaWidth);
         
         // Insert a comment after the opener node
         tree.CreateEditor()
@@ -1690,8 +1678,7 @@ public class SyntaxEditorTests
         var blockAfter = tree.Root.Children.OfType<SyntaxBlock>().First();
         var xAfter = blockAfter.InnerChildren.OfType<SyntaxToken>().First(t => t.Text == "x");
         
-        // EXPECTED: 'x' should retain its 4-space indentation
-        // Due to the bug, originalLeadingTrivia is 0, so this assertion documents the broken state
+        // 'x' should retain its 4-space indentation after the edit
         Assert.Equal(4, xAfter.LeadingTriviaWidth);
         
         // The output should show proper formatting with indentation preserved
