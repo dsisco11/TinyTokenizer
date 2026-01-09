@@ -1574,6 +1574,190 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
 }
 
 /// <summary>
+/// Matches a specific keyword by its text, resolving to NodeKind via schema.
+/// Implements <see cref="ISchemaResolvableQuery"/> to resolve keyword text to NodeKind
+/// before green-tree matching, enabling O(1) kind comparison instead of string matching.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This query requires a schema to function. When used with <see cref="SyntaxTree.Select"/>,
+/// the schema is automatically resolved if available. When used in syntax definitions
+/// (via <see cref="SyntaxBinder"/>), the binder calls <see cref="ResolveWithSchema"/> before matching.
+/// </para>
+/// <para>
+/// If no schema is available (schemaless tree or root-only query), returns no matches.
+/// </para>
+/// </remarks>
+public sealed record SpecificKeywordQuery : NodeQuery<SpecificKeywordQuery>, ISchemaResolvableQuery
+{
+    private readonly string _keywordText;
+    private readonly Func<SyntaxNode, bool>? _predicate;
+    private readonly SelectionMode _mode;
+    private readonly int _modeArg;
+    
+    // Mutable state for schema resolution (thread-safe: idempotent writes)
+    private NodeKind? _resolvedKind;
+    private bool _isResolved;
+    
+    /// <summary>Creates a query matching a specific keyword by text.</summary>
+    /// <param name="keywordText">The exact keyword text to match (e.g., "uniform", "int").</param>
+    public SpecificKeywordQuery(string keywordText) : this(keywordText, null, SelectionMode.All, 0) { }
+    
+    private SpecificKeywordQuery(string keywordText, Func<SyntaxNode, bool>? predicate, SelectionMode mode, int modeArg)
+    {
+        _keywordText = keywordText;
+        _predicate = predicate;
+        _mode = mode;
+        _modeArg = modeArg;
+    }
+    
+    /// <summary>Gets the keyword text being matched.</summary>
+    public string KeywordText => _keywordText;
+    
+    /// <inheritdoc/>
+    public bool IsResolved => _isResolved;
+    
+    /// <inheritdoc/>
+    public void ResolveWithSchema(Schema schema)
+    {
+        if (_isResolved)
+            return;
+        
+        _resolvedKind = schema.GetKeywordKind(_keywordText);
+        _isResolved = true;
+    }
+    
+    /// <inheritdoc/>
+    public override IEnumerable<SyntaxNode> Select(SyntaxTree tree)
+    {
+        // Resolve with schema if available
+        if (tree.Schema != null)
+            ResolveWithSchema(tree.Schema);
+        
+        // No schema = no matches (option C)
+        if (!_isResolved)
+            return [];
+        
+        // Keyword not in schema = no matches
+        if (_resolvedKind == null)
+            return [];
+        
+        return Select(tree.Root);
+    }
+    
+    /// <inheritdoc/>
+    public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
+    {
+        // Without schema resolution, return empty (no way to get schema from root alone)
+        if (!_isResolved || _resolvedKind == null)
+            return [];
+        
+        var targetKind = _resolvedKind.Value;
+        var walker = new TreeWalker(root);
+        var matches = walker.DescendantsAndSelf()
+            .Where(n => n.Kind == targetKind && (_predicate == null || _predicate(n)));
+        
+        return _mode switch
+        {
+            SelectionMode.First => matches.Take(1),
+            SelectionMode.Last => matches.TakeLast(1),
+            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
+            SelectionMode.Skip => matches.Skip(_modeArg),
+            SelectionMode.Take => matches.Take(_modeArg),
+            _ => matches
+        };
+    }
+    
+    /// <inheritdoc/>
+    public override bool Matches(SyntaxNode node)
+    {
+        if (!_isResolved || _resolvedKind == null)
+            return false;
+        
+        return node.Kind == _resolvedKind.Value && (_predicate == null || _predicate(node));
+    }
+    
+    /// <inheritdoc/>
+    internal override bool MatchesGreen(GreenNode node)
+    {
+        // If not resolved, don't match anything
+        if (!_isResolved || _resolvedKind == null)
+            return false;
+        
+        // O(1) kind comparison instead of string matching
+        return node.Kind == _resolvedKind.Value;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateFiltered(Func<SyntaxNode, bool> predicate)
+    {
+        var query = new SpecificKeywordQuery(_keywordText, CombinePredicates(_predicate, predicate), _mode, _modeArg);
+        // Propagate resolution state to filtered query
+        if (_isResolved)
+        {
+            query._resolvedKind = _resolvedKind;
+            query._isResolved = true;
+        }
+        return query;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateFirst()
+    {
+        var query = new SpecificKeywordQuery(_keywordText, _predicate, SelectionMode.First, 0);
+        PropagateResolution(query);
+        return query;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateLast()
+    {
+        var query = new SpecificKeywordQuery(_keywordText, _predicate, SelectionMode.Last, 0);
+        PropagateResolution(query);
+        return query;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateNth(int n)
+    {
+        var query = new SpecificKeywordQuery(_keywordText, _predicate, SelectionMode.Nth, n);
+        PropagateResolution(query);
+        return query;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateSkip(int count)
+    {
+        var query = new SpecificKeywordQuery(_keywordText, _predicate, SelectionMode.Skip, count);
+        PropagateResolution(query);
+        return query;
+    }
+    
+    /// <inheritdoc/>
+    protected override SpecificKeywordQuery CreateTake(int count)
+    {
+        var query = new SpecificKeywordQuery(_keywordText, _predicate, SelectionMode.Take, count);
+        PropagateResolution(query);
+        return query;
+    }
+    
+    internal override SelectionMode Mode => _mode;
+    internal override int ModeArg => _modeArg;
+    
+    private void PropagateResolution(SpecificKeywordQuery target)
+    {
+        if (_isResolved)
+        {
+            target._resolvedKind = _resolvedKind;
+            target._isResolved = true;
+        }
+    }
+    
+    private static Func<SyntaxNode, bool>? CombinePredicates(Func<SyntaxNode, bool>? a, Func<SyntaxNode, bool> b) =>
+        a == null ? b : n => a(n) && b(n);
+}
+
+/// <summary>
 /// Matches keyword nodes in a specific category.
 /// Requires a schema to be attached to the tree for category resolution.
 /// </summary>

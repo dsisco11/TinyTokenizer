@@ -10,27 +10,28 @@ Keyword Query Refactoring:
       - Purpose: Allow queries to resolve schema-dependent data before green-tree matching
 
   Phase 2 - Create SpecificKeywordQuery:
-    ☐ Create SpecificKeywordQuery class in NodeQueryTypes.cs (after AnyKeywordQuery)
+    ✔ Create SpecificKeywordQuery record in NodeQueryTypes.cs (after AnyKeywordQuery) @done
       - Store `_keywordText` (readonly string)
       - Store `_resolvedKind` (nullable NodeKind, mutable cache)
       - Store `_isResolved` (bool flag)
-    ☐ Implement ISchemaResolvableQuery.ResolveWithSchema(Schema schema)
+    ✔ Implement ISchemaResolvableQuery.ResolveWithSchema(Schema schema) @done
       - Call schema.GetKeywordKind(_keywordText)
       - Cache result in _resolvedKind, set _isResolved = true
       - If keyword not found, _resolvedKind = null (will match nothing)
-    ☐ Implement MatchesGreen(GreenNode node)
+    ✔ Implement MatchesGreen(GreenNode node) @done
       - Return false if !_isResolved (no schema = no matches, option C)
       - Return false if _resolvedKind == null (keyword not in schema)
       - Return node.Kind == _resolvedKind.Value
-    ☐ Implement Matches(SyntaxNode node)
+    ✔ Implement Matches(SyntaxNode node) @done
       - Same logic as MatchesGreen but for red nodes
-    ☐ Implement Select(SyntaxTree tree)
+    ✔ Implement Select(SyntaxTree tree) @done
       - If tree.Schema != null, call ResolveWithSchema(tree.Schema)
       - If !_isResolved, return Enumerable.Empty<SyntaxNode>()
       - Otherwise delegate to base traversal
-    ☐ Implement Select(SyntaxNode root) 
+    ✔ Implement Select(SyntaxNode root) @done
       - Return empty if !_isResolved (no way to get schema from root alone)
-    ☐ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery)
+    ✔ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery) @done
+      - Propagate resolution state to derived queries
 
   Phase 3 - Update SyntaxBinder:
     ☐ Locate TryMatchQuery method in SyntaxBinder.cs
