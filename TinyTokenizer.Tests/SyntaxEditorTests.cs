@@ -1464,6 +1464,53 @@ public class SyntaxEditorTests
         Assert.Equal(1, bAfter.LeadingTriviaWidth);   // b should still have its leading space
     }
     
+    /// <summary>
+    /// Tests whether InsertBefore has similar trivia issues.
+    /// When inserting "X" before "b" in "a b", check if trivia ownership is preserved correctly.
+    /// 
+    /// TinyTokenizer uses leading trivia attachment (Roslyn-style), so 'b' has the leading space.
+    /// InsertBefore should insert content before the target node (including its leading trivia).
+    /// </summary>
+    [Fact]
+    public void InsertBefore_ShouldPreserveTrivia()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        
+        // Verify initial trivia state: 'b' has a leading space (leading trivia style)
+        var leaves = tree.Leaves.ToList();
+        Assert.Equal(2, leaves.Count);
+        Assert.Equal("a", leaves[0].Text);
+        Assert.Equal("b", leaves[1].Text);
+        Assert.Equal(1, leaves[1].LeadingTriviaWidth);  // 'b' has leading space
+        
+        var bNode = tree.Root.Children.First(n => n is SyntaxToken t && t.Text == "b");
+        
+        tree.CreateEditor()
+            .InsertBefore(bNode, "X")
+            .Commit();
+        
+        var actualText = tree.ToText();
+        var leavesAfter = tree.Leaves.ToList();
+        Assert.Equal(3, leavesAfter.Count);
+        
+        var aAfter = leavesAfter.First(l => l.Text == "a");
+        var xAfter = leavesAfter.First(l => l.Text == "X");
+        var bAfter = leavesAfter.First(l => l.Text == "b");
+        
+        // Document what actually happens with trivia
+        var aTrivia = $"a(L:{aAfter.LeadingTriviaWidth}, T:{aAfter.TrailingTriviaWidth})";
+        var xTrivia = $"X(L:{xAfter.LeadingTriviaWidth}, T:{xAfter.TrailingTriviaWidth})";
+        var bTrivia = $"b(L:{bAfter.LeadingTriviaWidth}, T:{bAfter.TrailingTriviaWidth})";
+        
+        // InsertBefore should insert before the target including its leading trivia.
+        // So if we insert X before b (which has leading space), the space should stay with b.
+        // Expected output: "aX b" where b keeps its leading space
+        // OR: "a Xb" if X takes b's leading space (transfer behavior)
+        
+        // The key question: does 'b' still have its leading trivia after InsertBefore?
+        Assert.Equal(1, bAfter.LeadingTriviaWidth); // b should retain its leading space
+    }
+
     [Fact]
     public void InsertBefore_RedNode_GreenNodes()
     {
