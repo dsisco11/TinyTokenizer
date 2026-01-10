@@ -1,0 +1,184 @@
+
+# TinyTokenizer → TinyAst transition plan
+
+Goal: move the library branding and NuGet package to `TinyAst` with minimal breakage now (Strategy A),
+then later perform a controlled breaking change to migrate namespaces from `TinyTokenizer.*` to `TinyAst.*`.
+
+Key constraints:
+- We already have a git repo and an existing NuGet package.
+- Short-term: keep runtime/type identity stable (assembly + namespaces) while changing the NuGet package id.
+- Long-term: we want namespaces to change, which is a breaking change that requires a major-release plan.
+
+------------------------------------------------------------------------
+
+## Phase 0 — Decisions + Policy (one-time)
+
+- [ ] Decide timeline + support window
+	- [ ] Define how long `TinyTokenizer` package stays available after `TinyAst` ships
+	- [ ] Define how many releases we keep compatibility shims during namespace migration (recommend: 1 major)
+
+- [ ] Define identity strategy per phase
+	- [ ] Phase 1 (Strategy A):
+		- [ ] Keep namespaces: `TinyTokenizer` / `TinyTokenizer.Ast`
+		- [ ] Keep assembly name: `TinyTokenizer` (important for runtime identity)
+		- [ ] Change only NuGet PackageId to `TinyAst`
+	- [ ] Phase 4/5 (namespace migration):
+		- [ ] New namespaces `TinyAst.*`
+		- [ ] Decide whether to rename the assembly to `TinyAst` at the same time (recommended)
+
+- [ ] Versioning policy
+	- [ ] Strategy A release can be a MINOR/PATCH in old package line, but new package `TinyAst` can start at:
+		- [ ] Option A1: same version as current `TinyTokenizer` (easy mapping)
+		- [ ] Option A2: `1.0.0` for `TinyAst` (clean slate) while keeping `TinyTokenizer` updated temporarily
+	- [ ] Namespace migration MUST be a major version bump
+
+Acceptance criteria:
+- Strategy A causes no source changes for consumers (only package id changes).
+- Namespace migration has a clear major-version boundary + documented shims/deprecations.
+
+------------------------------------------------------------------------
+
+## Phase 1 — Ship `TinyAst` NuGet package (Strategy A, non-breaking)
+
+Objective: publish a new package id `TinyAst` while keeping the compiled assembly + namespaces unchanged.
+
+- [ ] Update NuGet/package metadata in the main library project
+	- [ ] Set `PackageId=TinyAst`
+	- [ ] Set `Title=TinyAst` and update `Description/Summary/Tags`
+	- [ ] Pin `AssemblyName=TinyTokenizer` (explicit, to ensure stability)
+	- [ ] Pin `RootNamespace=TinyTokenizer` (explicit, to avoid accidental namespace drift)
+	- [ ] Update `RepositoryUrl`, `PackageProjectUrl`, `PackageReadmeFile` (if used)
+	- [ ] Ensure `InternalsVisibleTo` entries still match friend assembly names
+
+- [ ] Update artifacts and docs that mention installation
+	- [ ] README: `dotnet add package TinyAst`
+	- [ ] Wiki: Getting Started + any page that mentions installing `TinyTokenizer`
+	- [ ] Keep code examples using `using TinyTokenizer.Ast;` for now (Strategy A)
+
+- [ ] CI/release pipeline supports publishing `TinyAst`
+	- [ ] Update packing step to produce `TinyAst` package
+	- [ ] Ensure publishing does NOT overwrite or conflict with old package
+	- [ ] Verify symbols/SourceLink continue to work (if enabled)
+
+- [ ] Validate locally before publishing
+	- [ ] `dotnet build`
+	- [ ] `dotnet test TinyTokenizer.Tests`
+	- [ ] Pack the library and confirm produced `.nupkg` id is `TinyAst`
+	- [ ] Create a minimal external consumer test project that references `TinyAst`
+		- [ ] Confirm `using TinyTokenizer.Ast;` compiles unchanged
+		- [ ] Confirm runtime loads `TinyTokenizer.dll` as before
+
+Acceptance criteria:
+- Consumers can replace `PackageReference TinyTokenizer` with `TinyAst` with no code changes.
+- The generated package id is `TinyAst` and contains the same public API.
+
+------------------------------------------------------------------------
+
+## Phase 2 — Transition old NuGet package `TinyTokenizer`
+
+Objective: gently move existing users by deprecating `TinyTokenizer` and pointing them to `TinyAst`.
+
+Decision: we will DEPRECATE `TinyTokenizer` on nuget.org (no metapackage / no dependency-forwarding).
+
+- [ ] Deprecate `TinyTokenizer` on nuget.org
+	- [ ] Deprecation reason + message: “Package renamed to TinyAst. Replace package reference.”
+	- [ ] Provide `TinyAst` as the alternative in NuGet UI
+
+- [ ] (No metapackage) Ensure `TinyTokenizer` remains installable for existing users during the support window
+	- [x] Stop publishing `TinyTokenizer` versions immediately (decision)
+	- [ ] Ensure the last published `TinyTokenizer` version remains available and clearly points to `TinyAst`
+	- [ ] Ensure release notes for `TinyAst` mention that `TinyTokenizer` is deprecated and no longer updated
+
+- [ ] Communications
+	- [ ] Release notes: explain rename + timeline
+	- [ ] Add a migration note in wiki Home + Getting Started
+
+Acceptance criteria:
+- `TinyTokenizer` is clearly marked deprecated and points to `TinyAst`.
+- Users who do nothing still have a functioning package within the support window (but will not auto-migrate).
+
+------------------------------------------------------------------------
+
+## Phase 3 — Prepare for namespace migration (non-breaking groundwork)
+
+Objective: get the codebase ready so the later breaking namespace move is controlled and testable.
+
+- [ ] Inventory public API surface
+	- [ ] List public types in `TinyTokenizer.*` and `TinyTokenizer.Ast.*`
+	- [ ] Identify any serialized type-name usage (JSON, binary, configs) that might embed namespaces
+	- [ ] Identify reflection consumers or string-based type usage in docs/examples
+
+- [ ] Establish compatibility test harness
+	- [ ] Add/maintain a “consumer sample” that uses the public API like real users
+	- [ ] Ensure tests cover:
+		- [ ] `SyntaxTree.Parse()` + `Query.*` selectors
+		- [ ] `SyntaxEditor` edits + undo/redo
+		- [ ] Schema-based matching
+
+- [ ] Documentation structure for the coming break
+	- [ ] Add a dedicated “Namespace Migration” page in wiki (draft)
+	- [ ] Document expected code changes: `using TinyTokenizer.Ast;` → `using TinyAst;` (final target)
+
+Acceptance criteria:
+- We have a clear list of what will break and tests that catch regressions during the move.
+
+------------------------------------------------------------------------
+
+## Phase 4 — Ship namespace migration (MAJOR release)
+
+Objective: introduce `TinyAst.*` namespaces (breaking), while providing a compatibility path.
+
+Important: type-forwarding cannot translate namespaces. If namespaces change, compatibility requires wrappers/shims.
+
+- [ ] Choose compatibility approach
+	- [ ] Option 4A (recommended): Compatibility shim assembly/package
+		- [ ] New “main” implementation: `TinyAst` namespaces (and likely `TinyAst` assembly)
+		- [ ] Add a shim package/assembly that provides old namespaces (`TinyTokenizer.*`) as wrappers
+			- [ ] Mark old namespace types `[Obsolete]` with clear message and migration target
+			- [ ] Keep shim for 1 major cycle, then remove
+	- [ ] Option 4B: Hard break (no shim)
+		- [ ] Simpler maintenance, but higher migration cost for users
+
+- [ ] Implement namespace move
+	- [ ] Rename namespaces across the codebase to `TinyAst.*`
+	- [ ] Rename assembly/project to `TinyAst` (if chosen)
+	- [ ] Update docs/examples to `using TinyAst;` (or the final namespace layout)
+	- [ ] Update tests/benchmarks accordingly
+
+- [ ] Introduce shims (if Option 4A)
+	- [ ] Create wrapper types in `TinyTokenizer.*` that delegate to `TinyAst.*`
+	- [ ] Ensure behavior parity (tests must pass in both surfaces)
+	- [ ] Avoid duplicating complex logic in shim; keep it thin
+
+- [ ] Release packaging
+	- [ ] Publish `TinyAst` major (e.g., `2.0.0`)
+	- [ ] Publish shim package (if used) with clear deprecation warnings
+
+Acceptance criteria:
+- New users: install `TinyAst` and use `TinyAst.*` namespaces.
+- Existing users: have a documented upgrade path; if shims exist, they compile with warnings.
+
+------------------------------------------------------------------------
+
+## Phase 5 — Remove old namespaces (next MAJOR or scheduled removal)
+
+Objective: remove compatibility shims and fully complete the migration.
+
+- [ ] Announce shim removal release ahead of time
+- [ ] Delete `TinyTokenizer.*` shim surface (if it exists)
+- [ ] Ensure wiki/docs no longer mention old namespaces
+- [ ] Keep `TinyTokenizer` NuGet package deprecated indefinitely or unlist (policy decision)
+
+Acceptance criteria:
+- Only `TinyAst` remains as supported API namespace.
+- Docs and samples are consistent.
+
+------------------------------------------------------------------------
+
+## Risks / Gotchas checklist
+
+- [ ] `InternalsVisibleTo` must be revisited if assembly names change or if strong-name signing is introduced.
+- [ ] Namespace changes break serialization/type-name strings; document mitigation (custom converters, migration steps).
+- [ ] Metapackage approach must avoid shipping duplicate DLL assets under old id.
+- [ ] Ensure CI publishes exactly the intended packages (avoid double publish / conflicts).
+
