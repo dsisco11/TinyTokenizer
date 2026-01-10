@@ -1,76 +1,184 @@
-Keyword Query Refactoring:
-  Bug: Query.Keyword("uniform") matches ANY keyword in same category, not just "uniform"
-  Root cause: MatchesGreen() only checks IsKeyword(), ignores text predicate
-  Solution: Create SpecificKeywordQuery that resolves text→NodeKind via schema, then matches by kind
 
-  Phase 1 - Define Interface:
-    ✔ Add ISchemaResolvableQuery interface to NodeQuery.cs @done
-      - Define `void ResolveWithSchema(Schema schema)` method
-      - Define `bool IsResolved { get; }` property
-      - Purpose: Allow queries to resolve schema-dependent data before green-tree matching
+# TinyTokenizer → TinyAst transition plan
 
-  Phase 2 - Create SpecificKeywordQuery:
-    ✔ Create SpecificKeywordQuery record in NodeQueryTypes.cs (after AnyKeywordQuery) @done
-      - Store `_keywordText` (readonly string)
-      - Store `_resolvedKind` (nullable NodeKind, mutable cache)
-      - Store `_isResolved` (bool flag)
-    ✔ Implement ISchemaResolvableQuery.ResolveWithSchema(Schema schema) @done
-      - Call schema.GetKeywordKind(_keywordText)
-      - Cache result in _resolvedKind, set _isResolved = true
-      - If keyword not found, _resolvedKind = null (will match nothing)
-    ✔ Implement MatchesGreen(GreenNode node) @done
-      - Return false if !_isResolved (no schema = no matches, option C)
-      - Return false if _resolvedKind == null (keyword not in schema)
-      - Return node.Kind == _resolvedKind.Value
-    ✔ Implement Matches(SyntaxNode node) @done
-      - Same logic as MatchesGreen but for red nodes
-    ✔ Implement Select(SyntaxTree tree) @done
-      - If tree.Schema != null, call ResolveWithSchema(tree.Schema)
-      - If !_isResolved, return Enumerable.Empty<SyntaxNode>()
-      - Otherwise delegate to base traversal
-    ✔ Implement Select(SyntaxNode root) @done
-      - Return empty if !_isResolved (no way to get schema from root alone)
-    ✔ Implement CreateFiltered, CreateFirst, CreateLast, etc. (copy pattern from AnyKeywordQuery) @done
-      - Propagate resolution state to derived queries
+Goal: move the library branding and NuGet package to `TinyAst` with minimal breakage now (Strategy A),
+then later perform a controlled breaking change to migrate namespaces from `TinyTokenizer.*` to `TinyAst.*`.
 
-  Phase 3 - Update SyntaxBinder & Composite Queries:
-    ✔ Store _schema field in SyntaxBinder (from Schema constructor) @done
-    ✔ Simplify ResolveSchemaQueries to single ISchemaResolvableQuery check @done
-    ✔ Make composite query types implement ISchemaResolvableQuery @done
-      - Each query type handles its own recursive resolution internally
-      - SequenceQuery, AnyOfQuery, NoneOfQuery - iterate over parts/queries
-      - OptionalQuery, RepeatQuery, NotQuery - resolve inner query
-      - RepeatUntilQuery, LookaheadQuery, BetweenQuery - resolve multiple inners
-    ✔ Added public properties for nested query access @done
-      - SequenceQuery.Parts, AnyOfQuery.Queries, NoneOfQuery.Queries
-      - OptionalQuery.InnerQuery, RepeatQuery.InnerQuery, NotQuery.InnerQuery
-      - RepeatUntilQuery.InnerQuery/Terminator, LookaheadQuery.InnerQuery/LookaheadPart
-      - BetweenQuery.Start/End
+Key constraints:
+- We already have a git repo and an existing NuGet package.
+- Short-term: keep runtime/type identity stable (assembly + namespaces) while changing the NuGet package id.
+- Long-term: we want namespaces to change, which is a breaking change that requires a major-release plan.
 
-  Phase 4 - Update Query Factory:
-    ✔ Update Query.Keyword(string text) in Query.cs @done
-    ✔ Replace AnyKeywordQuery().Where(...) with new SpecificKeywordQuery(text) @done
-    ✔ Update return type from INodeQuery to SpecificKeywordQuery @done
-    ✔ Update XML docs to document schema requirement @done
+------------------------------------------------------------------------
 
-  Phase 5 - Testing:
-    ✔ Run existing keyword tests to verify backward compatibility @done
-      - dotnet test TinyTokenizer.Tests --filter "Query_Keyword"
-    ✔ Verify bug reproduction tests now pass @done
-      - Query_Keyword_InSyntaxDefinition_ShouldOnlyMatchSpecificKeyword
-      - Query_Keyword_InSyntaxDefinition_MatchesCorrectKeyword  
-      - Query_Keyword_InSyntaxDefinition_DistinguishesSameCategoryKeywords
-    ✔ Add test for schemaless tree returning empty (option C behavior) @done
-    ✔ Run full test suite to catch regressions @done
-      - dotnet test TinyTokenizer.Tests
-      - 2 pre-existing failing tests unrelated to keyword refactoring (trivia handling)
+## Phase 0 — Decisions + Policy (one-time)
 
-  Phase 6 - Cleanup:
-    ✔ Update XML docs on Query.Keyword to document schema requirement @done
-    ✔ Add SelectRegionsFromTree hook for IRegionQuery schema resolution @done
-    ☐ Consider adding Query.Keyword overload that takes NodeKind directly (advanced usage)
+- [ ] Decide timeline + support window
+	- [ ] Define how long `TinyTokenizer` package stays available after `TinyAst` ships
+	- [ ] Define how many releases we keep compatibility shims during namespace migration (recommend: 1 major)
 
-Notes:
-  - SpecificKeywordQuery should be a class (not record) due to mutable _resolvedKind cache
-  - Thread safety: Resolution is idempotent, concurrent writes are harmless
-  - Case sensitivity: Schema.GetKeywordKind() already handles case-insensitive categories
+- [ ] Define identity strategy per phase
+	- [ ] Phase 1 (Strategy A):
+		- [ ] Keep namespaces: `TinyTokenizer` / `TinyTokenizer.Ast`
+		- [ ] Keep assembly name: `TinyTokenizer` (important for runtime identity)
+		- [ ] Change only NuGet PackageId to `TinyAst`
+	- [ ] Phase 4/5 (namespace migration):
+		- [ ] New namespaces `TinyAst.*`
+		- [ ] Decide whether to rename the assembly to `TinyAst` at the same time (recommended)
+
+- [ ] Versioning policy
+	- [ ] Strategy A release can be a MINOR/PATCH in old package line, but new package `TinyAst` can start at:
+		- [ ] Option A1: same version as current `TinyTokenizer` (easy mapping)
+		- [ ] Option A2: `1.0.0` for `TinyAst` (clean slate) while keeping `TinyTokenizer` updated temporarily
+	- [ ] Namespace migration MUST be a major version bump
+
+Acceptance criteria:
+- Strategy A causes no source changes for consumers (only package id changes).
+- Namespace migration has a clear major-version boundary + documented shims/deprecations.
+
+------------------------------------------------------------------------
+
+## Phase 1 — Ship `TinyAst` NuGet package (Strategy A, non-breaking)
+
+Objective: publish a new package id `TinyAst` while keeping the compiled assembly + namespaces unchanged.
+
+- [ ] Update NuGet/package metadata in the main library project
+	- [ ] Set `PackageId=TinyAst`
+	- [ ] Set `Title=TinyAst` and update `Description/Summary/Tags`
+	- [ ] Pin `AssemblyName=TinyTokenizer` (explicit, to ensure stability)
+	- [ ] Pin `RootNamespace=TinyTokenizer` (explicit, to avoid accidental namespace drift)
+	- [ ] Update `RepositoryUrl`, `PackageProjectUrl`, `PackageReadmeFile` (if used)
+	- [ ] Ensure `InternalsVisibleTo` entries still match friend assembly names
+
+- [ ] Update artifacts and docs that mention installation
+	- [ ] README: `dotnet add package TinyAst`
+	- [ ] Wiki: Getting Started + any page that mentions installing `TinyTokenizer`
+	- [ ] Keep code examples using `using TinyTokenizer.Ast;` for now (Strategy A)
+
+- [ ] CI/release pipeline supports publishing `TinyAst`
+	- [ ] Update packing step to produce `TinyAst` package
+	- [ ] Ensure publishing does NOT overwrite or conflict with old package
+	- [ ] Verify symbols/SourceLink continue to work (if enabled)
+
+- [ ] Validate locally before publishing
+	- [ ] `dotnet build`
+	- [ ] `dotnet test TinyTokenizer.Tests`
+	- [ ] Pack the library and confirm produced `.nupkg` id is `TinyAst`
+	- [ ] Create a minimal external consumer test project that references `TinyAst`
+		- [ ] Confirm `using TinyTokenizer.Ast;` compiles unchanged
+		- [ ] Confirm runtime loads `TinyTokenizer.dll` as before
+
+Acceptance criteria:
+- Consumers can replace `PackageReference TinyTokenizer` with `TinyAst` with no code changes.
+- The generated package id is `TinyAst` and contains the same public API.
+
+------------------------------------------------------------------------
+
+## Phase 2 — Transition old NuGet package `TinyTokenizer`
+
+Objective: gently move existing users by deprecating `TinyTokenizer` and pointing them to `TinyAst`.
+
+Decision: we will DEPRECATE `TinyTokenizer` on nuget.org (no metapackage / no dependency-forwarding).
+
+- [ ] Deprecate `TinyTokenizer` on nuget.org
+	- [ ] Deprecation reason + message: “Package renamed to TinyAst. Replace package reference.”
+	- [ ] Provide `TinyAst` as the alternative in NuGet UI
+
+- [ ] (No metapackage) Ensure `TinyTokenizer` remains installable for existing users during the support window
+	- [x] Stop publishing `TinyTokenizer` versions immediately (decision)
+	- [ ] Ensure the last published `TinyTokenizer` version remains available and clearly points to `TinyAst`
+	- [ ] Ensure release notes for `TinyAst` mention that `TinyTokenizer` is deprecated and no longer updated
+
+- [ ] Communications
+	- [ ] Release notes: explain rename + timeline
+	- [ ] Add a migration note in wiki Home + Getting Started
+
+Acceptance criteria:
+- `TinyTokenizer` is clearly marked deprecated and points to `TinyAst`.
+- Users who do nothing still have a functioning package within the support window (but will not auto-migrate).
+
+------------------------------------------------------------------------
+
+## Phase 3 — Prepare for namespace migration (non-breaking groundwork)
+
+Objective: get the codebase ready so the later breaking namespace move is controlled and testable.
+
+- [ ] Inventory public API surface
+	- [ ] List public types in `TinyTokenizer.*` and `TinyTokenizer.Ast.*`
+	- [ ] Identify any serialized type-name usage (JSON, binary, configs) that might embed namespaces
+	- [ ] Identify reflection consumers or string-based type usage in docs/examples
+
+- [ ] Establish compatibility test harness
+	- [ ] Add/maintain a “consumer sample” that uses the public API like real users
+	- [ ] Ensure tests cover:
+		- [ ] `SyntaxTree.Parse()` + `Query.*` selectors
+		- [ ] `SyntaxEditor` edits + undo/redo
+		- [ ] Schema-based matching
+
+- [ ] Documentation structure for the coming break
+	- [ ] Add a dedicated “Namespace Migration” page in wiki (draft)
+	- [ ] Document expected code changes: `using TinyTokenizer.Ast;` → `using TinyAst;` (final target)
+
+Acceptance criteria:
+- We have a clear list of what will break and tests that catch regressions during the move.
+
+------------------------------------------------------------------------
+
+## Phase 4 — Ship namespace migration (MAJOR release)
+
+Objective: introduce `TinyAst.*` namespaces (breaking), while providing a compatibility path.
+
+Important: type-forwarding cannot translate namespaces. If namespaces change, compatibility requires wrappers/shims.
+
+- [ ] Choose compatibility approach
+	- [ ] Option 4A (recommended): Compatibility shim assembly/package
+		- [ ] New “main” implementation: `TinyAst` namespaces (and likely `TinyAst` assembly)
+		- [ ] Add a shim package/assembly that provides old namespaces (`TinyTokenizer.*`) as wrappers
+			- [ ] Mark old namespace types `[Obsolete]` with clear message and migration target
+			- [ ] Keep shim for 1 major cycle, then remove
+	- [ ] Option 4B: Hard break (no shim)
+		- [ ] Simpler maintenance, but higher migration cost for users
+
+- [ ] Implement namespace move
+	- [ ] Rename namespaces across the codebase to `TinyAst.*`
+	- [ ] Rename assembly/project to `TinyAst` (if chosen)
+	- [ ] Update docs/examples to `using TinyAst;` (or the final namespace layout)
+	- [ ] Update tests/benchmarks accordingly
+
+- [ ] Introduce shims (if Option 4A)
+	- [ ] Create wrapper types in `TinyTokenizer.*` that delegate to `TinyAst.*`
+	- [ ] Ensure behavior parity (tests must pass in both surfaces)
+	- [ ] Avoid duplicating complex logic in shim; keep it thin
+
+- [ ] Release packaging
+	- [ ] Publish `TinyAst` major (e.g., `2.0.0`)
+	- [ ] Publish shim package (if used) with clear deprecation warnings
+
+Acceptance criteria:
+- New users: install `TinyAst` and use `TinyAst.*` namespaces.
+- Existing users: have a documented upgrade path; if shims exist, they compile with warnings.
+
+------------------------------------------------------------------------
+
+## Phase 5 — Remove old namespaces (next MAJOR or scheduled removal)
+
+Objective: remove compatibility shims and fully complete the migration.
+
+- [ ] Announce shim removal release ahead of time
+- [ ] Delete `TinyTokenizer.*` shim surface (if it exists)
+- [ ] Ensure wiki/docs no longer mention old namespaces
+- [ ] Keep `TinyTokenizer` NuGet package deprecated indefinitely or unlist (policy decision)
+
+Acceptance criteria:
+- Only `TinyAst` remains as supported API namespace.
+- Docs and samples are consistent.
+
+------------------------------------------------------------------------
+
+## Risks / Gotchas checklist
+
+- [ ] `InternalsVisibleTo` must be revisited if assembly names change or if strong-name signing is introduced.
+- [ ] Namespace changes break serialization/type-name strings; document mitigation (custom converters, migration steps).
+- [ ] Metapackage approach must avoid shipping duplicate DLL assets under old id.
+- [ ] Ensure CI publishes exactly the intended packages (avoid double publish / conflicts).
+
