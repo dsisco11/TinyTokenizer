@@ -16,7 +16,7 @@ A high-performance syntax tree library for .NET 8+ with fluent queries, pattern 
 ## Installation
 
 ```bash
-dotnet add package TinyTokenizer
+dotnet add package TinyAst
 ```
 
 ## Quick Start

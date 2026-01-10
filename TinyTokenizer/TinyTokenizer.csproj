@@ -4,17 +4,21 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- Compatibility: keep assembly + root namespace stable while package id changes -->
+    <AssemblyName>TinyTokenizer</AssemblyName>
+    <RootNamespace>TinyTokenizer</RootNamespace>
     
     <!-- XML Documentation for IntelliSense -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     
     <!-- NuGet Package Metadata -->
-    <PackageId>TinyTokenizer</PackageId>
-    <Title>TinyTokenizer</Title>
-    <Description>A high-performance, zero-allocation tokenizer library for .NET that parses text into abstract tokens using ReadOnlySpan for maximum efficiency.</Description>
+    <PackageId>TinyAst</PackageId>
+    <Title>TinyAst</Title>
+    <Description>A high-performance syntax tree library for .NET 8+ with fluent queries, pattern matching, and undo/redo editing — built on a zero-allocation tokenizer with SIMD optimization.</Description>
     <Authors>David Sisco</Authors>
-    <PackageTags>tokenizer;parser;span;memory;performance;zero-allocation;async;streaming</PackageTags>
+    <PackageTags>tinyast;syntax-tree;ast;tokenizer;parser;span;memory;performance;zero-allocation;async;streaming</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/dsisco11/TinyTokenizer</RepositoryUrl>
