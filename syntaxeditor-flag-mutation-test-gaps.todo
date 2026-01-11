@@ -28,24 +28,24 @@ Acceptance criteria:
 
 ## Phase 1 — Boundary Flags After Replace
 
-- [ ] Replace preserves *trailing newline* boundary ownership
-	- [ ] Source: `"a\nb"`
-	- [ ] Replace `a` -> `X`
-	- [ ] Assert `X.Green.Flags` includes `HasTrailingNewlineTrivia`
-	- [ ] Assert `b.Green.Flags` does NOT include `HasLeadingNewlineTrivia`
-	- [ ] Assert `tree.GreenRoot.Flags` includes `ContainsNewlineTrivia`
+- [x] Replace preserves *trailing newline* boundary ownership
+	- [x] Source: `"a\nb"`
+	- [x] Replace `a` -> `X`
+	- [x] Assert `X.Green.Flags` includes `HasTrailingNewlineTrivia`
+	- [x] Assert `b.Green.Flags` does NOT include `HasLeadingNewlineTrivia`
+	- [x] Assert `tree.GreenRoot.Flags` includes `ContainsNewlineTrivia`
 
-- [ ] Replace preserves *same-line comment* trailing boundary flags
-	- [ ] Use `TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine)`
-	- [ ] Source: `"a // c\nb"`
-	- [ ] Replace `a` -> `X`
-	- [ ] Assert `X.Green.Flags` includes `HasTrailingCommentTrivia` AND `HasTrailingNewlineTrivia`
-	- [ ] Assert `b.Green.Flags` does NOT include `HasLeadingCommentTrivia` or `HasLeadingNewlineTrivia`
+- [x] Replace preserves *same-line comment* trailing boundary flags
+	- [x] Use `TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine)`
+	- [x] Source: `"a // c\nb"`
+	- [x] Replace `a` -> `X`
+	- [x] Assert `X.Green.Flags` includes `HasTrailingCommentTrivia` AND `HasTrailingNewlineTrivia`
+	- [x] Assert `b.Green.Flags` does NOT include `HasLeadingCommentTrivia` or `HasLeadingNewlineTrivia`
 
-- [ ] Replace preserves/tranfers *trailing whitespace* boundary (non-newline)
-	- [ ] Source that produces trailing whitespace trivia on the replaced token (e.g., `"a \nb"` or similar)
-	- [ ] Replace target token
-	- [ ] Assert `HasTrailingWhitespaceTrivia` is preserved on replacement token
+- [x] Replace preserves/tranfers *trailing whitespace* boundary (non-newline)
+	- [x] Source that produces trailing whitespace trivia on the replaced token (e.g., `"a \nb"` or similar)
+	- [x] Replace target token
+	- [x] Assert `HasTrailingWhitespaceTrivia` is preserved on replacement token
 
 Acceptance criteria:
 - Boundary flags remain token-centric and are preserved on replacement where trivia is preserved.

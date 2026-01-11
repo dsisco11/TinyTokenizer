@@ -1664,6 +1664,67 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void Replace_TokenOwningTrailingNewline_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var tree = SyntaxTree.Parse("a\nb");
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_SameLineCommentTrailingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a // c\nb", options);
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_TokenOwningTrailingWhitespace_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var tree = SyntaxTree.Parse("a b");
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingWhitespaceTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
     public void InsertAfter_InsertedTextWithTrailingNewline_SetsGreenFlags_OnInsertedAndFollowingTokens()
     {
         var tree = SyntaxTree.Parse("a b");
