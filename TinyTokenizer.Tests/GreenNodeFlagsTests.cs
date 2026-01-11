@@ -139,7 +139,7 @@ public class GreenNodeFlagsTests
     }
 
     [Fact]
-    public void GreenList_Flags_UseFirstLeadingAndLastTrailingAsBoundary()
+    public void GreenList_Flags_DoNotPropagateBoundaryFlags_FromChildren()
     {
         var first = new GreenLeaf(NodeKind.Ident, "a", leadingTrivia: ImmutableArray.Create(GreenTrivia.Whitespace("  ")));
         var middle = new GreenLeaf(NodeKind.Ident, "b", trailingTrivia: ImmutableArray.Create(GreenTrivia.SingleLineComment("// c")));
@@ -147,8 +147,8 @@ public class GreenNodeFlagsTests
 
         var list = new GreenList(ImmutableArray.Create<GreenNode>(first, middle, last));
 
-        AssertHas(list.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
-        AssertHas(list.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        // Token-centric boundary semantics: lists do not own boundary trivia.
+        AssertNotHas(list.Flags, GreenNodeFlagMasks.Boundary);
 
         AssertHas(list.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
         AssertHas(list.Flags, GreenNodeFlags.ContainsCommentTrivia);
@@ -165,8 +165,8 @@ public class GreenNodeFlagsTests
 
         var node = new GreenSyntaxNode(kind, first, last);
 
-        AssertHas(node.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
-        AssertHas(node.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        // Token-centric boundary semantics: syntax containers do not own boundary trivia.
+        AssertNotHas(node.Flags, GreenNodeFlagMasks.Boundary);
         AssertHas(node.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
         AssertHas(node.Flags, GreenNodeFlags.ContainsNewlineTrivia);
     }

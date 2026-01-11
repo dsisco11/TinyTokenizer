@@ -53,12 +53,9 @@ internal sealed record GreenList : GreenContainer
         }
         else
         {
-            var first = _children[0];
-            var last = _children[^1];
-
-            var boundary =
-                (first.Flags & GreenNodeFlagMasks.LeadingBoundary) |
-                (last.Flags & GreenNodeFlagMasks.TrailingBoundary);
+            // Token-centric boundary semantics:
+            // Lists do not own boundary trivia, so boundary flags are not propagated from children.
+            var boundary = GreenNodeFlags.None;
 
             var contains = GreenNodeFlags.None;
             foreach (var child in _children)

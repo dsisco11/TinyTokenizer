@@ -43,16 +43,16 @@ Acceptance criteria:
 
 ## Phase 2 — Fix Boundary Flag Propagation in Container Nodes
 
-- [ ] Stop propagating boundary newline flags from children in container nodes
-	- [ ] Update `GreenList` flags computation
-		- [ ] Remove: boundary = (first.Flags & LeadingBoundary) | (last.Flags & TrailingBoundary)
-		- [ ] Replace with: boundary is always `None` for lists (or only set if list truly owns boundary trivia, which it currently does not)
-		- [ ] Keep: `contains` = OR of children `Contains` masks
-	- [ ] Update `GreenSyntaxNode` flags computation similarly
-		- [ ] Remove boundary propagation from first/last child
-		- [ ] Keep contains propagation
-	- [ ] Double-check any other `GreenContainer` types that compute flags similarly
-		- [ ] Search for `LeadingBoundary` / `TrailingBoundary` usage outside `GreenLeaf`/`GreenBlock`
+- [x] Stop propagating boundary newline flags from children in container nodes
+	- [x] Update `GreenList` flags computation
+		- [x] Remove: boundary = (first.Flags & LeadingBoundary) | (last.Flags & TrailingBoundary)
+		- [x] Replace with: boundary is always `None` for lists (or only set if list truly owns boundary trivia, which it currently does not)
+		- [x] Keep: `contains` = OR of children `Contains` masks
+	- [x] Update `GreenSyntaxNode` flags computation similarly
+		- [x] Remove boundary propagation from first/last child
+		- [x] Keep contains propagation
+	- [x] Double-check any other `GreenContainer` types that compute flags similarly
+		- [x] Search for `LeadingBoundary` / `TrailingBoundary` usage outside `GreenLeaf`/`GreenBlock`
 
 Acceptance criteria:
 - Container nodes no longer report `HasLeadingNewlineTrivia` / `HasTrailingNewlineTrivia` via child propagation.
