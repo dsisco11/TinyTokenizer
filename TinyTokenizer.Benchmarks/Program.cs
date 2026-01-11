@@ -1,6 +1,4 @@
 using BenchmarkDotNet.Running;
 using TinyTokenizer.Benchmarks;
 
-BenchmarkSwitcher.FromTypes([
-	typeof(NewlineQueryBenchmarks)
-]).Run(args);
+BenchmarkSwitcher.FromAssembly(typeof(LexerBenchmarks).Assembly).Run(args);
