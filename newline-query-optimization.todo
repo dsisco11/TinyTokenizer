@@ -8,6 +8,11 @@ Confirmed semantics:
 	- The node’s leading trivia contains a newline, OR
 	- The previous sibling’s trailing trivia contains a newline.
 
+Implementation note (post node-flags work):
+- These semantics are implemented via green-node *boundary* flags (token-centric):
+	- `HasLeadingNewline` on the current node, OR
+	- `HasTrailingNewline` on the previous sibling.
+
 Constraints:
 - Keep change surface minimal: rewrite only the hottest LINQ paths.
 - Preserve document order and all existing query semantics.
@@ -36,19 +41,42 @@ Acceptance criteria:
 
 ## Phase 1 — Align Newline Semantics (Green Matching)
 
-- [ ] Update green matching for newline
-	- [ ] Implement both checks in `NewlineNodeQuery.TryMatchGreen(parent, childIndex, out consumedCount)`:
-		- [ ] Current node leading trivia contains newline
-		- [ ] Previous sibling trailing trivia contains newline (when `childIndex > 0`)
-	- [ ] Use only `(parent, childIndex)` context; do not allocate red siblings
-	- [ ] Keep `consumedCount` behavior identical (should remain 1)
+- [x] Update green matching for newline
+	- [x] Implement both checks in `NewlineNodeQuery.TryMatchGreen(parent, childIndex, out consumedCount)`:
+		- [x] Current node `HasLeadingNewline`
+		- [x] Previous sibling `HasTrailingNewline` (when `childIndex > 0`)
+	- [x] Use only `(parent, childIndex)` context; do not allocate red siblings
+	- [x] Keep `consumedCount` behavior identical (should remain 1)
 
-- [ ] Validate parity with red matching
-	- [ ] Ensure red matching logic (if separate) uses the same semantics
-	- [ ] Add a regression test that validates both red and green paths (if both are reachable)
+- [x] Validate parity with red matching
+	- [x] Ensure red matching logic uses the same semantics (leading OR previous sibling trailing)
 
 Acceptance criteria:
 - `Query.Newline` matches exactly the confirmed semantics in all test cases.
+- Green matching uses boundary flags (`HasLeadingNewline`/`HasTrailingNewline`) and does not scan trivia.
+
+------------------------------------------------------------------------
+
+## Phase 1b — SyntaxEditor Flag Mutation Tests (Green Flags)
+
+Goal: ensure green-node flags remain correct after `SyntaxEditor` mutations and undo/redo.
+
+- [ ] Add SyntaxEditor tests that assert *green* flag values after mutations
+	- [ ] Assert boundary flags (token-centric ownership)
+		- [ ] `Replace(...)` preserves `HasLeadingNewline` on the replaced token when leading newline trivia is preserved
+		- [ ] `InsertAfter(...)` with a trailing newline causes the next sibling to match newline semantics via previous sibling `HasTrailingNewline`
+		- [ ] `Remove(...)` of a token that owns trailing newline removes the `HasTrailingNewline` boundary from the tree
+	- [ ] Assert subtree "contains" flags remain correct
+		- [ ] `ContainsNewline` propagates correctly through blocks/lists after insert/replace/remove
+	- [ ] Undo/Redo restores flag state
+		- [ ] After `Commit()`, `Undo()` restores the original green flags
+		- [ ] After `Undo()`, `Redo()` restores the mutated green flags
+	- [ ] Prefer stable selection + direct assertions
+		- [ ] Select the target node via `Query`/positions, then assert `node.Green` flags (`GreenNodeFlags`)
+		- [ ] (Optional) also assert `Query.Newline` results as a behavioral cross-check
+
+Acceptance criteria:
+- Tests directly assert green flag bits (not just query behavior) for the above scenarios.
 
 ------------------------------------------------------------------------
 
@@ -121,6 +149,7 @@ Acceptance criteria:
 - [ ] Update docs/comments to explicitly state newline semantics
 	- [ ] Clarify "node after newline" definition (leading trivia OR previous sibling trailing trivia)
 	- [ ] Remove/correct any mention of "newline whitespace tokens" if newline is trivia-only
+	- [ ] Call out token-centric boundary ownership (containers do not "own" boundary newline flags)
 	- [ ] Ensure docs match actual implementation
 
 Suggested doc touchpoints:
@@ -145,7 +174,7 @@ Acceptance criteria:
 		- [ ] `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxEditorBenchmarks*`
 
 - [ ] (Optional) Add a targeted benchmark if needed
-	- [ ] Benchmark `SyntaxTree.Select(Query.Newline)`
+	- [x] Benchmark `SyntaxTree.Select(Query.Newline)`
 	- [ ] Benchmark `SelectModes.Last` on a newline-heavy query
 
 Acceptance criteria:
