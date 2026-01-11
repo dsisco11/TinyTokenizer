@@ -114,14 +114,14 @@ Acceptance criteria:
 
 ## Phase 4 — Replace LINQ in the Hottest Combinators (Small Scope)
 
-- [ ] Remove LINQ where it forces buffering/extra iterators
-	- [ ] OR / AnyOf-style combinators
-	- [ ] AND / sequence-style combinators
-	- [ ] Any other combinator used by newline queries or editor/region resolution
+- [x] Remove LINQ where it forces buffering/extra iterators
+	- [x] OR / AnyOf-style combinators
+	- [x] AND / sequence-style combinators
+	- [x] Any other combinator used by newline queries or editor/region resolution
 
-- [ ] Preserve semantics and ordering
-	- [ ] Document order remains stable
-	- [ ] No duplicate matches unless already part of the semantics
+- [x] Preserve semantics and ordering
+	- [x] Document order remains stable
+	- [x] No duplicate matches unless already part of the semantics
 
 Acceptance criteria:
 - Combinator behavior remains unchanged; perf improves in existing suites.

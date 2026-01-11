@@ -270,7 +270,19 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, 
     }
     
     /// <inheritdoc/>
-    public bool IsResolved => _parts.All(p => p is not ISchemaResolvableQuery r || r.IsResolved);
+    public bool IsResolved
+    {
+        get
+        {
+            foreach (var part in _parts)
+            {
+                if (part is ISchemaResolvableQuery r && !r.IsResolved)
+                    return false;
+            }
+
+            return true;
+        }
+    }
     
     /// <inheritdoc/>
     public void ResolveWithSchema(Schema schema)

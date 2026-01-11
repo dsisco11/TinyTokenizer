@@ -1032,10 +1032,26 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvable
     public AnyOfQuery(params INodeQuery[] queries) => _queries = queries;
     
     /// <summary>Creates a query that matches any of the specified queries.</summary>
-    public AnyOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    public AnyOfQuery(IEnumerable<INodeQuery> queries)
+    {
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = MaterializeQueries(queries);
+    }
     
     /// <inheritdoc/>
-    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    public bool IsResolved
+    {
+        get
+        {
+            foreach (var query in _queries)
+            {
+                if (query is ISchemaResolvableQuery r && !r.IsResolved)
+                    return false;
+            }
+
+            return true;
+        }
+    }
     
     /// <inheritdoc/>
     public void ResolveWithSchema(Schema schema)
@@ -1112,6 +1128,27 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvable
         consumedCount = 0;
         return false;
     }
+
+    private static INodeQuery[] MaterializeQueries(IEnumerable<INodeQuery> queries)
+    {
+        if (queries is INodeQuery[] arr)
+            return arr;
+
+        if (queries is ICollection<INodeQuery> col)
+        {
+            if (col.Count == 0)
+                return [];
+
+            var buffer = new INodeQuery[col.Count];
+            col.CopyTo(buffer, 0);
+            return buffer;
+        }
+
+        var list = new List<INodeQuery>();
+        foreach (var q in queries)
+            list.Add(q);
+        return list.ToArray();
+    }
 }
 
 #endregion
@@ -1130,10 +1167,26 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvabl
     public NoneOfQuery(params INodeQuery[] queries) => _queries = queries;
     
     /// <summary>Creates a query that matches when none of the specified queries match.</summary>
-    public NoneOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    public NoneOfQuery(IEnumerable<INodeQuery> queries)
+    {
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = MaterializeQueries(queries);
+    }
     
     /// <inheritdoc/>
-    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    public bool IsResolved
+    {
+        get
+        {
+            foreach (var query in _queries)
+            {
+                if (query is ISchemaResolvableQuery r && !r.IsResolved)
+                    return false;
+            }
+
+            return true;
+        }
+    }
     
     /// <inheritdoc/>
     public void ResolveWithSchema(Schema schema)
@@ -1219,6 +1272,27 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvabl
         // None matched, consume 1
         consumedCount = 1;
         return true;
+    }
+
+    private static INodeQuery[] MaterializeQueries(IEnumerable<INodeQuery> queries)
+    {
+        if (queries is INodeQuery[] arr)
+            return arr;
+
+        if (queries is ICollection<INodeQuery> col)
+        {
+            if (col.Count == 0)
+                return [];
+
+            var buffer = new INodeQuery[col.Count];
+            col.CopyTo(buffer, 0);
+            return buffer;
+        }
+
+        var list = new List<INodeQuery>();
+        foreach (var q in queries)
+            list.Add(q);
+        return list.ToArray();
     }
 }
 
