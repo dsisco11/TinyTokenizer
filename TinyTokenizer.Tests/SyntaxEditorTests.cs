@@ -1645,6 +1645,31 @@ public class SyntaxEditorTests
         return matches[occurrence];
     }
 
+    private static void AssertReparseOracleFlagsMatch(SyntaxTree tree, SyntaxTree oracle)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(oracle);
+
+        Assert.Equal(oracle.GreenRoot.Flags, tree.GreenRoot.Flags);
+
+        var treeLeaves = tree.Leaves.ToList();
+        var oracleLeaves = oracle.Leaves.ToList();
+        Assert.Equal(oracleLeaves.Count, treeLeaves.Count);
+
+        for (int i = 0; i < treeLeaves.Count; i++)
+        {
+            Assert.Equal(oracleLeaves[i].Kind, treeLeaves[i].Kind);
+            Assert.Equal(oracleLeaves[i].Text, treeLeaves[i].Text);
+
+            var expected = oracleLeaves[i].Green.Flags;
+            var actual = treeLeaves[i].Green.Flags;
+            Assert.True(
+                expected == actual,
+                $"Leaf flags mismatch at index {i}: {treeLeaves[i].Kind} '{treeLeaves[i].Text}'. Expected={expected} Actual={actual}"
+            );
+        }
+    }
+
     [Fact]
     public void Replace_OwnLineCommentLeadingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
     {
@@ -2050,6 +2075,132 @@ public class SyntaxEditorTests
         AssertNotHasFlags(afterAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
 
         AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterComplexEdit_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source = "a{\n  b // c1\n  d(e) /* c2 */\n}\n";
+        var tree = SyntaxTree.Parse(source, options);
+
+        tree.CreateEditor(options)
+            .Replace(Q.Ident("b"), "{x}")
+            .InsertAfter(Q.Ident("d"), ".Y\n")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterComplexEdit_MatchesRootAndLeafFlags_WithSchemaAndBinding()
+    {
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\" // c\nafter", schema);
+
+        tree.CreateEditor()
+            .InsertBefore(Q.Syntax<TestTaggedNode>(), "X\n")
+            .Replace(Q.String("\"value\""), "\"Z\"")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, schema);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterRemoveReplaceAndCRLFInsert_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source = "a // c1\r\n  b /* c2 */\r\nc  d";
+        var tree = SyntaxTree.Parse(source, options);
+
+        tree.CreateEditor(options)
+            // Remove token that owns trailing comment+newline
+            .Remove(Q.Ident("a"))
+            // Replace a token that owns leading indentation
+            .Replace(Q.Ident("b"), "{x}")
+            // Insert a token that owns CRLF; avoid leading trivia by starting with a symbol
+            .InsertAfter(Q.Ident("c"), ".Y\r\n")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterEditsOnMultipleSyntaxNodes_MatchesRootAndLeafFlags_WithSchemaAndBinding()
+    {
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("funcCall")
+                .Match(Q.AnyIdent, Q.ParenBlock)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("@tag \"value\"\nfoo(a, b)\n", schema);
+
+        tree.CreateEditor()
+            .Replace(Q.String("\"value\""), "\"Z\"")
+            // Insert inside the function call argument list. Start with a symbol to avoid leading trivia.
+            .InsertAfter(Q.Ident("a"), ",c")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, schema);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterDeeplyNestedBlockEdits_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source =
+            "root {\n" +
+            "  a(b[c{d(e)}]) // c1\n" +
+            "  { x /* c2 */ }\n" +
+            "}\n";
+
+        var tree = SyntaxTree.Parse(source, options);
+
+        // Perform multiple edits inside deeply nested structures.
+        tree.CreateEditor(options)
+            // Replace an inner identifier.
+            .Replace(Q.Ident("d"), "D")
+            // Insert inside the deepest paren. Start with a symbol to avoid leading-trivia ambiguity.
+            .InsertAfter(Q.Ident("e"), ".Y\n")
+            // Replace an identifier with a block to exercise block-edge trivia semantics.
+            .Replace(Q.Ident("x"), "{z}")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
     }
 
     [Fact]

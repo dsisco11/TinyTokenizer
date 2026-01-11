@@ -145,13 +145,13 @@ Acceptance criteria:
 
 ## Phase 7 — Oracle-Style Regression Test (Optional “Big Hammer”)
 
-- [ ] Add a “reparse oracle” test for flags
-	- [ ] After an edit, compute `editedText = tree.ToText()`
-	- [ ] Parse a fresh `oracle = SyntaxTree.Parse(editedText, sameOptionsOrSchema)`
-	- [ ] Compare:
-		- [ ] `tree.GreenRoot.Flags == oracle.GreenRoot.Flags`
-		- [ ] Per-leaf flags match for corresponding leaves (by `(Kind, Text, occurrence index)` or by positions)
-	- [ ] Use this for 1–2 representative complex edits (nested blocks + comments)
+- [x] Add a “reparse oracle” test for flags
+	- [x] After an edit, compute `editedText = tree.ToText()`
+	- [x] Parse a fresh `oracle = SyntaxTree.Parse(editedText, sameOptionsOrSchema)`
+	- [x] Compare:
+		- [x] `tree.GreenRoot.Flags == oracle.GreenRoot.Flags`
+		- [x] Per-leaf flags match for corresponding leaves (by `(Kind, Text, occurrence index)` or by positions)
+	- [x] Use this for 1–2 representative complex edits (nested blocks + comments)
 
 Acceptance criteria:
 - A broad regression net exists that catches stale/miscomputed flags without enumerating every case.
