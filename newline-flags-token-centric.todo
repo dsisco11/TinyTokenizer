@@ -28,13 +28,13 @@ Acceptance criteria:
 
 ## Phase 1 — Define Flag Semantics (Strict Meaning)
 
-- [ ] Decide/document strict meaning of newline-related flags
-	- [ ] `HasLeadingNewlineTrivia` / `HasTrailingNewlineTrivia`:
-		- [ ] MUST mean: this node *owns* newline trivia on its boundary (not inherited from children)
-		- [ ] Valid for: `GreenLeaf` trivia boundaries, `GreenBlock` delimiter boundaries
-	- [ ] `ContainsNewlineTrivia`:
-		- [ ] MUST mean: newline trivia exists anywhere inside the node’s subtree (including children)
-	- [ ] Update inline comments in [TinyTokenizer/Ast/GreenNodeFlags.cs] to match this strict meaning
+- [x] Decide/document strict meaning of newline-related flags
+	- [x] `HasLeadingNewlineTrivia` / `HasTrailingNewlineTrivia`:
+		- [x] MUST mean: this node *owns* newline trivia on its boundary (not inherited from children)
+		- [x] Valid for: `GreenLeaf` trivia boundaries, `GreenBlock` delimiter boundaries
+	- [x] `ContainsNewlineTrivia`:
+		- [x] MUST mean: newline trivia exists anywhere inside the node’s subtree (including children)
+	- [x] Update inline comments in [TinyTokenizer/Ast/GreenNodeFlags.cs] to match this strict meaning
 
 Acceptance criteria:
 - “Boundary” flags are never used to represent “first child boundary”.
