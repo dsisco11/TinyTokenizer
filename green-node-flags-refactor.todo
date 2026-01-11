@@ -92,16 +92,20 @@ Acceptance criteria:
 
 ## Phase 2 — Compute Flags in Leaves
 
-- [ ] Update `GreenLeaf` constructor
-	- [ ] Scan `LeadingTrivia` once to set boundary flags
-	- [ ] Scan `TrailingTrivia` once to set boundary flags
-	- [ ] Set subtree flags based on boundary results
-	- [ ] Ensure no extra passes beyond existing trivia width computation (piggyback loops)
+- [x] Update `GreenLeaf` constructor
+	- [x] Scan `LeadingTrivia` once to set boundary flags
+	- [x] Scan `TrailingTrivia` once to set boundary flags
+	- [x] Set subtree flags based on boundary results
+	- [x] Ensure no extra passes beyond existing trivia width computation (piggyback loops)
+		- Implemented as a single trivia scan per side that returns both width + flags.
+		- Also sets subtree flags derived from node kind: `ContainsKeyword` / `ContainsTaggedIdent` / `ContainsErrorNode`.
 
-- [ ] Verify `GreenNodeCache` behavior is still correct
-	- [ ] Cached leaves with no trivia have stable flags (`None`)
-	- [ ] Cached “trailing space” leaves have whitespace flags but no newline/comment
-	- [ ] Leaves with trivia remain non-cached (unchanged behavior)
+- [x] Verify `GreenNodeCache` behavior is still correct
+	- [x] Cached leaves with no trivia have stable trivia flags (`None`)
+		- Note: subtree-kind flags can still apply (e.g., cached keyword kinds will include `ContainsKeyword`).
+	- [x] Cached “trailing space” leaves have whitespace flags but no newline/comment
+		- Note: subtree-kind flags can still apply depending on `NodeKind`.
+	- [x] Leaves with trivia remain non-cached (unchanged behavior)
 
 Acceptance criteria:
 - Leaf flags are correct for leading/trailing trivia kinds and don’t add noticeable allocations.
