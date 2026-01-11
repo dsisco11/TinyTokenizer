@@ -104,13 +104,17 @@ public static class Query
     public static LeafNodeQuery Leaf => new LeafNodeQuery();
     
     /// <summary>
-    /// Matches nodes that are preceded by a newline (in trivia or as whitespace token).
+    /// Matches nodes that occur after a newline.
+    /// A node matches when either:
+    /// - The node owns leading newline trivia, OR
+    /// - The previous sibling owns trailing newline trivia.
     /// Useful for line-based pattern matching.
     /// </summary>
     public static NewlineNodeQuery Newline => new NewlineNodeQuery();
     
     /// <summary>
-    /// Matches nodes that are NOT preceded by a newline.
+    /// Matches nodes that do NOT occur after a newline.
+    /// This is the exact negation of <see cref="Newline"/> under the same context.
     /// Useful for matching tokens on the same line.
     /// </summary>
     public static NewlineNodeQuery NotNewline => new NewlineNodeQuery(negated: true);

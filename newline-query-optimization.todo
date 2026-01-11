@@ -146,15 +146,15 @@ Acceptance criteria:
 
 ## Phase 6 — Documentation Sanity
 
-- [ ] Update docs/comments to explicitly state newline semantics
-	- [ ] Clarify "node after newline" definition (leading trivia OR previous sibling trailing trivia)
-	- [ ] Remove/correct any mention of "newline whitespace tokens" if newline is trivia-only
-	- [ ] Call out token-centric boundary ownership (containers do not "own" boundary newline flags)
-	- [ ] Ensure docs match actual implementation
+- [x] Update docs/comments to explicitly state newline semantics
+	- [x] Clarify "node after newline" definition (leading trivia OR previous sibling trailing trivia)
+	- [x] Remove/correct any mention of "newline whitespace tokens" if newline is trivia-only
+	- [x] Call out token-centric boundary ownership (containers do not "own" boundary newline flags)
+	- [x] Ensure docs match actual implementation
 
 Suggested doc touchpoints:
-- [ ] TinyTokenizer.wiki/Query-API.md
-- [ ] TinyTokenizer.wiki/Trivia.md
+- [x] TinyTokenizer.wiki/Query-API.md
+- [x] TinyTokenizer.wiki/Trivia.md
 - [ ] TinyTokenizer.wiki/TreeWalker.md (only if it mentions newline semantics)
 
 Acceptance criteria:

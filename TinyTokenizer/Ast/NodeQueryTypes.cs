@@ -739,12 +739,15 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 #region Newline Query
 
 /// <summary>
-/// Matches nodes that represent or are preceded by a newline.
-/// Checks:
-/// 1. The node's leading boundary trivia contains a newline.
-/// 2. The previous sibling's trailing boundary trivia contains a newline.
+/// Matches nodes that occur after a newline.
+/// A node matches when either:
+/// 1) The node owns leading newline trivia, OR
+/// 2) The previous sibling owns trailing newline trivia.
 /// </summary>
 /// <remarks>
+/// Newline detection is token-centric: the newline boundary is owned by a token's
+/// leading/trailing trivia, not by container nodes.
+/// <para />
 /// This query is particularly useful for line-based pattern matching, such as
 /// matching directive lines that should consume tokens until a newline.
 /// </remarks>
