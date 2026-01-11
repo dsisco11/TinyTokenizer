@@ -97,17 +97,17 @@ Acceptance criteria:
 
 ## Phase 4 — Multi-node Replacement Trivia Transfer (First/Last)
 
-- [ ] Replace a token with *multiple nodes* transfers leading boundary to first and trailing boundary to last
-	- [ ] Source where target has leading boundary trivia and trailing boundary trivia
-	- [ ] Replace target with `"X Y"`
-	- [ ] Assert `X` receives the leading boundary flags expected
-	- [ ] Assert `Y` receives the trailing boundary flags expected
-	- [ ] Assert middle nodes (if any) do not get boundary flags unless their own trivia demands it
+- [x] Replace a token with *multiple nodes* transfers leading boundary to first and trailing boundary to last
+	- [x] Source where target has leading boundary trivia and trailing boundary trivia
+	- [x] Replace target with `"X Y"`
+	- [x] Assert `X` receives the leading boundary flags expected
+	- [x] Assert `Y` receives the trailing boundary flags expected
+	- [x] Assert middle nodes (if any) do not get boundary flags unless their own trivia demands it
 
-- [ ] Replace with nodes that begin/end with containers (edge-case semantics)
-	- [ ] Replace a token with something like `"{x}"` or `"(x)"`
-	- [ ] Decide expected behavior: boundary trivia should attach only if first/last replacement nodes are leaves
-	- [ ] Add assertions to lock in intended behavior (or adjust `TransferTrivia` if desired)
+- [x] Replace with nodes that begin/end with containers (edge-case semantics)
+	- [x] Replace a token with something like `"{x}"` or `"(x)"`
+	- [x] Decide expected behavior: preserve boundary trivia on block opener/closer when replacement is a block
+	- [x] Add assertions to lock in intended behavior
 
 Acceptance criteria:
 - Trivia transfer semantics are explicitly tested and stable.

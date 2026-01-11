@@ -1854,6 +1854,60 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void Replace_MultipleNodes_TransfersLeadingToFirst_AndTrailingToLast_GreenBoundaryFlags()
+    {
+        // b owns leading whitespace (indentation) and trailing newline.
+        var tree = SyntaxTree.Parse("a\n  b\nc");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "X Y")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var yAfter = FindToken(tree, NodeKind.Ident, "Y");
+        var cAfter = FindToken(tree, NodeKind.Ident, "c");
+
+        // Leading boundary transfers to first replacement node.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        // Trailing boundary transfers to last replacement node.
+        AssertHasFlags(yAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(yAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // Following token should not incorrectly gain leading newline ownership.
+        AssertNotHasFlags(cAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_WithBlockAtEdges_TransfersTriviaToBlockBoundaries_GreenFlags()
+    {
+        // Replacement begins/ends with a container (block). Trivia should attach to opener/closer boundaries.
+        var tree = SyntaxTree.Parse("a\n  b\nc");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "{x}")
+            .Commit();
+
+        var block = Assert.Single(tree.Select(Q.BraceBlock).OfType<SyntaxBlock>());
+
+        // Boundary trivia should be preserved on the block boundaries.
+        AssertHasFlags(block.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        // Containers must not accidentally carry child boundary flags beyond their own semantics.
+        // (Block boundary flags are only opener-leading and closer-trailing.)
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
     public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
     {
         var tree = SyntaxTree.Parse("{a}");

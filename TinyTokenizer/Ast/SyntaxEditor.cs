@@ -1066,21 +1066,43 @@ internal sealed class ReplaceEdit : PendingEdit
         var result = nodes.ToBuilder();
         
         // Add leading trivia to first node
-        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        if (!leading.IsEmpty)
         {
-            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
-                ? leading 
-                : leading.AddRange(firstLeaf.LeadingTrivia);
-            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            if (result[0] is GreenLeaf firstLeaf)
+            {
+                var newLeading = firstLeaf.LeadingTrivia.IsEmpty
+                    ? leading
+                    : leading.AddRange(firstLeaf.LeadingTrivia);
+                result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            }
+            else if (result[0] is GreenBlock firstBlock)
+            {
+                var existingLeading = firstBlock.OpenerNode.LeadingTrivia;
+                var newLeading = existingLeading.IsEmpty
+                    ? leading
+                    : leading.AddRange(existingLeading);
+                result[0] = firstBlock.WithLeadingTrivia(newLeading);
+            }
         }
         
         // Add trailing trivia to last node
-        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        if (!trailing.IsEmpty)
         {
-            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
-                ? trailing 
-                : lastLeaf.TrailingTrivia.AddRange(trailing);
-            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            if (result[^1] is GreenLeaf lastLeaf)
+            {
+                var newTrailing = lastLeaf.TrailingTrivia.IsEmpty
+                    ? trailing
+                    : lastLeaf.TrailingTrivia.AddRange(trailing);
+                result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            }
+            else if (result[^1] is GreenBlock lastBlock)
+            {
+                var existingTrailing = lastBlock.CloserNode.TrailingTrivia;
+                var newTrailing = existingTrailing.IsEmpty
+                    ? trailing
+                    : existingTrailing.AddRange(trailing);
+                result[^1] = lastBlock.WithTrailingTrivia(newTrailing);
+            }
         }
         
         return result.ToImmutable();
@@ -1143,21 +1165,43 @@ internal sealed class ReplaceNodesEdit : PendingEdit
         var result = nodes.ToBuilder();
         
         // Add leading trivia to first node
-        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        if (!leading.IsEmpty)
         {
-            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
-                ? leading 
-                : leading.AddRange(firstLeaf.LeadingTrivia);
-            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            if (result[0] is GreenLeaf firstLeaf)
+            {
+                var newLeading = firstLeaf.LeadingTrivia.IsEmpty
+                    ? leading
+                    : leading.AddRange(firstLeaf.LeadingTrivia);
+                result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            }
+            else if (result[0] is GreenBlock firstBlock)
+            {
+                var existingLeading = firstBlock.OpenerNode.LeadingTrivia;
+                var newLeading = existingLeading.IsEmpty
+                    ? leading
+                    : leading.AddRange(existingLeading);
+                result[0] = firstBlock.WithLeadingTrivia(newLeading);
+            }
         }
         
         // Add trailing trivia to last node
-        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        if (!trailing.IsEmpty)
         {
-            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
-                ? trailing 
-                : lastLeaf.TrailingTrivia.AddRange(trailing);
-            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            if (result[^1] is GreenLeaf lastLeaf)
+            {
+                var newTrailing = lastLeaf.TrailingTrivia.IsEmpty
+                    ? trailing
+                    : lastLeaf.TrailingTrivia.AddRange(trailing);
+                result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            }
+            else if (result[^1] is GreenBlock lastBlock)
+            {
+                var existingTrailing = lastBlock.CloserNode.TrailingTrivia;
+                var newTrailing = existingTrailing.IsEmpty
+                    ? trailing
+                    : existingTrailing.AddRange(trailing);
+                result[^1] = lastBlock.WithTrailingTrivia(newTrailing);
+            }
         }
         
         return result.ToImmutable();
@@ -1241,20 +1285,42 @@ internal sealed class ReplaceRegionEdit : PendingEdit
         
         var result = nodes.ToBuilder();
         
-        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        if (!leading.IsEmpty)
         {
-            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
-                ? leading 
-                : leading.AddRange(firstLeaf.LeadingTrivia);
-            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            if (result[0] is GreenLeaf firstLeaf)
+            {
+                var newLeading = firstLeaf.LeadingTrivia.IsEmpty
+                    ? leading
+                    : leading.AddRange(firstLeaf.LeadingTrivia);
+                result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            }
+            else if (result[0] is GreenBlock firstBlock)
+            {
+                var existingLeading = firstBlock.OpenerNode.LeadingTrivia;
+                var newLeading = existingLeading.IsEmpty
+                    ? leading
+                    : leading.AddRange(existingLeading);
+                result[0] = firstBlock.WithLeadingTrivia(newLeading);
+            }
         }
         
-        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        if (!trailing.IsEmpty)
         {
-            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
-                ? trailing 
-                : lastLeaf.TrailingTrivia.AddRange(trailing);
-            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            if (result[^1] is GreenLeaf lastLeaf)
+            {
+                var newTrailing = lastLeaf.TrailingTrivia.IsEmpty
+                    ? trailing
+                    : lastLeaf.TrailingTrivia.AddRange(trailing);
+                result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            }
+            else if (result[^1] is GreenBlock lastBlock)
+            {
+                var existingTrailing = lastBlock.CloserNode.TrailingTrivia;
+                var newTrailing = existingTrailing.IsEmpty
+                    ? trailing
+                    : existingTrailing.AddRange(trailing);
+                result[^1] = lastBlock.WithTrailingTrivia(newTrailing);
+            }
         }
         
         return result.ToImmutable();
@@ -1309,20 +1375,42 @@ internal sealed class ReplaceNodesRegionEdit : PendingEdit
         
         var result = nodes.ToBuilder();
         
-        if (!leading.IsEmpty && result[0] is GreenLeaf firstLeaf)
+        if (!leading.IsEmpty)
         {
-            var newLeading = firstLeaf.LeadingTrivia.IsEmpty 
-                ? leading 
-                : leading.AddRange(firstLeaf.LeadingTrivia);
-            result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            if (result[0] is GreenLeaf firstLeaf)
+            {
+                var newLeading = firstLeaf.LeadingTrivia.IsEmpty
+                    ? leading
+                    : leading.AddRange(firstLeaf.LeadingTrivia);
+                result[0] = firstLeaf.WithLeadingTrivia(newLeading);
+            }
+            else if (result[0] is GreenBlock firstBlock)
+            {
+                var existingLeading = firstBlock.OpenerNode.LeadingTrivia;
+                var newLeading = existingLeading.IsEmpty
+                    ? leading
+                    : leading.AddRange(existingLeading);
+                result[0] = firstBlock.WithLeadingTrivia(newLeading);
+            }
         }
         
-        if (!trailing.IsEmpty && result[^1] is GreenLeaf lastLeaf)
+        if (!trailing.IsEmpty)
         {
-            var newTrailing = lastLeaf.TrailingTrivia.IsEmpty 
-                ? trailing 
-                : lastLeaf.TrailingTrivia.AddRange(trailing);
-            result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            if (result[^1] is GreenLeaf lastLeaf)
+            {
+                var newTrailing = lastLeaf.TrailingTrivia.IsEmpty
+                    ? trailing
+                    : lastLeaf.TrailingTrivia.AddRange(trailing);
+                result[^1] = lastLeaf.WithTrailingTrivia(newTrailing);
+            }
+            else if (result[^1] is GreenBlock lastBlock)
+            {
+                var existingTrailing = lastBlock.CloserNode.TrailingTrivia;
+                var newTrailing = existingTrailing.IsEmpty
+                    ? trailing
+                    : existingTrailing.AddRange(trailing);
+                result[^1] = lastBlock.WithTrailingTrivia(newTrailing);
+            }
         }
         
         return result.ToImmutable();
