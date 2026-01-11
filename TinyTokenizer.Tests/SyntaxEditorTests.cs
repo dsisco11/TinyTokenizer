@@ -1746,6 +1746,50 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void InsertBefore_DoesNotStealLeadingWhitespace_FromFollowingToken_GreenFlags()
+    {
+        // In the token-centric trivia model, indentation after a newline is leading trivia on the following token.
+        var tree = SyntaxTree.Parse("a\n  b");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .InsertBefore(bBefore, "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        // Insertion must not transfer whitespace ownership from b to X.
+        AssertHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // Root should reflect subtree contains.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
+    public void InsertAfter_InsertedTextWithTrailingCRLF_SetsGreenFlags_OnInsertedAndFollowingTokens()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aNode = FindToken(tree, NodeKind.Ident, "a");
+
+        tree.CreateEditor()
+            .InsertAfter(aNode, " X\r\n")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        // Inserted token owns the trailing newline; following token should NOT gain leading newline ownership.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
     public void Remove_TokenOwningTrailingNewline_RemovesNewlineBoundaryAndContainsFlags()
     {
         var tree = SyntaxTree.Parse("a\nb");

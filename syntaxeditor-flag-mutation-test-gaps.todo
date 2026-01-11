@@ -54,18 +54,18 @@ Acceptance criteria:
 
 ## Phase 2 — Boundary Flags After InsertBefore / InsertAfter
 
-- [ ] InsertBefore does NOT steal leading whitespace from the following node
-	- [ ] Source: `"a  b"` (two spaces before `b`)
-	- [ ] InsertBefore(`b`, `"X"`)
-	- [ ] Assert `b.Green.Flags` includes `HasLeadingWhitespaceTrivia`
-	- [ ] Assert `X.Green.Flags` does NOT unexpectedly include `HasLeadingWhitespaceTrivia`
-	- [ ] Assert `tree.GreenRoot.Flags` includes `ContainsWhitespaceTrivia`
+- [x] InsertBefore does NOT steal leading whitespace from the following node
+	- [x] Source: `"a\n  b"` (indentation is leading whitespace on `b`)
+	- [x] InsertBefore(`b`, `"X"`)
+	- [x] Assert `b.Green.Flags` includes `HasLeadingWhitespaceTrivia`
+	- [x] Assert `X.Green.Flags` does NOT unexpectedly include `HasLeadingWhitespaceTrivia`
+	- [x] Assert `tree.GreenRoot.Flags` includes `ContainsWhitespaceTrivia`
 
-- [ ] InsertAfter does not accidentally manufacture leading newline on following token
-	- [ ] Already partially covered for inserted `X\n`; add coverage for variations:
-		- [ ] InsertAfter with `"X\r\n"` (CRLF)
-		- [ ] InsertAfter with `" X\n"` (inserted node has leading whitespace + trailing newline)
-	- [ ] Assert following token does NOT gain `HasLeadingNewlineTrivia`
+- [x] InsertAfter does not accidentally manufacture leading newline on following token
+	- [x] Already partially covered for inserted `X\n`; add coverage for variations:
+		- [x] InsertAfter with `"X\r\n"` (CRLF)
+		- [x] InsertAfter with `" X\n"` (inserted node has leading whitespace + trailing newline)
+	- [x] Assert following token does NOT gain `HasLeadingNewlineTrivia`
 
 Acceptance criteria:
 - Insertion doesn’t transfer boundary ownership incorrectly and doesn’t corrupt following-token boundary flags.
