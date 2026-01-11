@@ -1810,6 +1810,50 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void Remove_OneNewlineOwner_DoesNotClearContainsNewlineTrivia_WhenOthersRemain()
+    {
+        var tree = SyntaxTree.Parse("a\nb\nc");
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The newline between b and c should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Remove_OneCommentOwner_DoesNotClearContainsCommentTrivia_WhenOthersRemain()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a // c1\nb // c2\nc", options);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The comment after b should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia);
+    }
+
+    [Fact]
+    public void Remove_OneWhitespaceOwner_DoesNotClearContainsWhitespaceTrivia_WhenOthersRemain()
+    {
+        // Two separate whitespace regions: after 'a' and after 'b'.
+        var tree = SyntaxTree.Parse("a  b c");
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The remaining space between b and c should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
     public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
     {
         var tree = SyntaxTree.Parse("{a}");

@@ -74,21 +74,21 @@ Acceptance criteria:
 
 ## Phase 3 — Contains Flags Correctness Under Partial Removal
 
-- [ ] Removing one newline owner does not clear `ContainsNewlineTrivia` when others remain
-	- [ ] Source: `"a\nb\nc"`
-	- [ ] Remove `a`
-	- [ ] Assert `tree.GreenRoot.Flags` still includes `ContainsNewlineTrivia`
+- [x] Removing one newline owner does not clear `ContainsNewlineTrivia` when others remain
+	- [x] Source: `"a\nb\nc"`
+	- [x] Remove `a`
+	- [x] Assert `tree.GreenRoot.Flags` still includes `ContainsNewlineTrivia`
 
-- [ ] Removing one comment owner does not clear `ContainsCommentTrivia` when others remain
-	- [ ] Use `CommentStyle.CStyleSingleLine`
-	- [ ] Source with multiple comments
-	- [ ] Remove one token owning a comment
-	- [ ] Assert `ContainsCommentTrivia` remains set
+- [x] Removing one comment owner does not clear `ContainsCommentTrivia` when others remain
+	- [x] Use `CommentStyle.CStyleSingleLine`
+	- [x] Source with multiple comments
+	- [x] Remove one token owning a comment
+	- [x] Assert `ContainsCommentTrivia` remains set
 
-- [ ] Removing one whitespace owner does not clear `ContainsWhitespaceTrivia` when others remain
-	- [ ] Source with multiple leading/trailing whitespace trivia across tokens
-	- [ ] Remove one token
-	- [ ] Assert `ContainsWhitespaceTrivia` remains set
+- [x] Removing one whitespace owner does not clear `ContainsWhitespaceTrivia` when others remain
+	- [x] Source with multiple leading/trailing whitespace trivia across tokens
+	- [x] Remove one token
+	- [x] Assert `ContainsWhitespaceTrivia` remains set
 
 Acceptance criteria:
 - Contains flags behave like true subtree aggregations (don’t clear prematurely).
