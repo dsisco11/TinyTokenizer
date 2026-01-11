@@ -1,0 +1,159 @@
+```todo
+# SyntaxEditor Green-Flag Mutation Test Gaps
+
+Goal: expand `SyntaxEditor` test coverage to ensure `GreenNodeFlags` stay correct after mutations,
+with emphasis on boundary-vs-contains semantics and undo/redo correctness.
+
+Context:
+- Boundary flags are token-owned (`HasLeading*` / `HasTrailing*`), and containers must not inherit them.
+- Contains flags (`Contains*`) must accurately reflect subtree presence.
+- We already have a small set of green-flag mutation tests in `TinyTokenizer.Tests/SyntaxEditorTests.cs`.
+
+------------------------------------------------------------------------------
+
+## Phase 0 — Inventory + Harness
+
+- [x] Decide location for new tests
+	- [x] Keep under `#region Green Flag Mutation Tests` in `TinyTokenizer.Tests/SyntaxEditorTests.cs`, OR
+	- [ ] Create a dedicated test class file (e.g., `TinyTokenizer.Tests/SyntaxEditorGreenFlagsTests.cs`) for clarity
+
+- [x] Add a small helper to find leaves consistently after edits
+	- [x] Helper: `FindToken(tree, kind, text)` (or `Query.Ident("...")` + `.OfType<SyntaxToken>()`)
+	- [x] Avoid relying on indexes when trivia can shift; prefer `Query` + text predicates
+
+Acceptance criteria:
+- Tests are easy to read and robust to trivia shape.
+
+------------------------------------------------------------------------------
+
+## Phase 1 — Boundary Flags After Replace
+
+- [x] Replace preserves *trailing newline* boundary ownership
+	- [x] Source: `"a\nb"`
+	- [x] Replace `a` -> `X`
+	- [x] Assert `X.Green.Flags` includes `HasTrailingNewlineTrivia`
+	- [x] Assert `b.Green.Flags` does NOT include `HasLeadingNewlineTrivia`
+	- [x] Assert `tree.GreenRoot.Flags` includes `ContainsNewlineTrivia`
+
+- [x] Replace preserves *same-line comment* trailing boundary flags
+	- [x] Use `TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine)`
+	- [x] Source: `"a // c\nb"`
+	- [x] Replace `a` -> `X`
+	- [x] Assert `X.Green.Flags` includes `HasTrailingCommentTrivia` AND `HasTrailingNewlineTrivia`
+	- [x] Assert `b.Green.Flags` does NOT include `HasLeadingCommentTrivia` or `HasLeadingNewlineTrivia`
+
+- [x] Replace preserves/tranfers *trailing whitespace* boundary (non-newline)
+	- [x] Source that produces trailing whitespace trivia on the replaced token (e.g., `"a \nb"` or similar)
+	- [x] Replace target token
+	- [x] Assert `HasTrailingWhitespaceTrivia` is preserved on replacement token
+
+Acceptance criteria:
+- Boundary flags remain token-centric and are preserved on replacement where trivia is preserved.
+
+------------------------------------------------------------------------------
+
+## Phase 2 — Boundary Flags After InsertBefore / InsertAfter
+
+- [x] InsertBefore does NOT steal leading whitespace from the following node
+	- [x] Source: `"a\n  b"` (indentation is leading whitespace on `b`)
+	- [x] InsertBefore(`b`, `"X"`)
+	- [x] Assert `b.Green.Flags` includes `HasLeadingWhitespaceTrivia`
+	- [x] Assert `X.Green.Flags` does NOT unexpectedly include `HasLeadingWhitespaceTrivia`
+	- [x] Assert `tree.GreenRoot.Flags` includes `ContainsWhitespaceTrivia`
+
+- [x] InsertAfter does not accidentally manufacture leading newline on following token
+	- [x] Already partially covered for inserted `X\n`; add coverage for variations:
+		- [x] InsertAfter with `"X\r\n"` (CRLF)
+		- [x] InsertAfter with `" X\n"` (inserted node has leading whitespace + trailing newline)
+	- [x] Assert following token does NOT gain `HasLeadingNewlineTrivia`
+
+Acceptance criteria:
+- Insertion doesn’t transfer boundary ownership incorrectly and doesn’t corrupt following-token boundary flags.
+
+------------------------------------------------------------------------------
+
+## Phase 3 — Contains Flags Correctness Under Partial Removal
+
+- [x] Removing one newline owner does not clear `ContainsNewlineTrivia` when others remain
+	- [x] Source: `"a\nb\nc"`
+	- [x] Remove `a`
+	- [x] Assert `tree.GreenRoot.Flags` still includes `ContainsNewlineTrivia`
+
+- [x] Removing one comment owner does not clear `ContainsCommentTrivia` when others remain
+	- [x] Use `CommentStyle.CStyleSingleLine`
+	- [x] Source with multiple comments
+	- [x] Remove one token owning a comment
+	- [x] Assert `ContainsCommentTrivia` remains set
+
+- [x] Removing one whitespace owner does not clear `ContainsWhitespaceTrivia` when others remain
+	- [x] Source with multiple leading/trailing whitespace trivia across tokens
+	- [x] Remove one token
+	- [x] Assert `ContainsWhitespaceTrivia` remains set
+
+Acceptance criteria:
+- Contains flags behave like true subtree aggregations (don’t clear prematurely).
+
+------------------------------------------------------------------------------
+
+## Phase 4 — Multi-node Replacement Trivia Transfer (First/Last)
+
+- [x] Replace a token with *multiple nodes* transfers leading boundary to first and trailing boundary to last
+	- [x] Source where target has leading boundary trivia and trailing boundary trivia
+	- [x] Replace target with `"X Y"`
+	- [x] Assert `X` receives the leading boundary flags expected
+	- [x] Assert `Y` receives the trailing boundary flags expected
+	- [x] Assert middle nodes (if any) do not get boundary flags unless their own trivia demands it
+
+- [x] Replace with nodes that begin/end with containers (edge-case semantics)
+	- [x] Replace a token with something like `"{x}"` or `"(x)"`
+	- [x] Decide expected behavior: preserve boundary trivia on block opener/closer when replacement is a block
+	- [x] Add assertions to lock in intended behavior
+
+Acceptance criteria:
+- Trivia transfer semantics are explicitly tested and stable.
+
+------------------------------------------------------------------------------
+
+## Phase 5 — Undo/Redo Leaf-Level Flag Restoration
+
+- [x] Undo/Redo restores *leaf* boundary flags, not just root flags
+	- [x] Start with a tree where a target leaf’s flags are known
+	- [x] Commit an edit that changes boundary/contains flags (e.g., insert `X\n`)
+	- [x] Capture the leaf flags before/after
+	- [x] Undo and assert leaf flags are restored
+	- [x] Redo and assert leaf flags match the mutated state
+
+Acceptance criteria:
+- Undo/Redo correctness is verified at the leaf level.
+
+------------------------------------------------------------------------------
+
+## Phase 6 — Schema/Rebind Interaction (Syntax Binding)
+
+- [x] Ensure edits with schema + syntax definitions do not violate token-centric boundary semantics
+	- [x] Parse with a schema that includes syntax definitions (so `Commit()` triggers `RebindAt`)
+	- [x] Perform insert/replace/remove inside or around bound syntax nodes
+	- [x] Assert:
+		- [x] leaf boundary flags are correct
+		- [x] syntax containers do NOT have `GreenNodeFlagMasks.Boundary`
+		- [x] contains flags reflect subtree
+
+Acceptance criteria:
+- Rebinding does not break boundary/contains invariants.
+
+------------------------------------------------------------------------------
+
+## Phase 7 — Oracle-Style Regression Test (Optional “Big Hammer”)
+
+- [x] Add a “reparse oracle” test for flags
+	- [x] After an edit, compute `editedText = tree.ToText()`
+	- [x] Parse a fresh `oracle = SyntaxTree.Parse(editedText, sameOptionsOrSchema)`
+	- [x] Compare:
+		- [x] `tree.GreenRoot.Flags == oracle.GreenRoot.Flags`
+		- [x] Per-leaf flags match for corresponding leaves (by `(Kind, Text, occurrence index)` or by positions)
+	- [x] Use this for 1–2 representative complex edits (nested blocks + comments)
+
+Acceptance criteria:
+- A broad regression net exists that catches stale/miscomputed flags without enumerating every case.
+
+```

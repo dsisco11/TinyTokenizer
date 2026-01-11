@@ -1614,6 +1614,636 @@ public class SyntaxEditorTests
         Assert.Equal(2, bAfter.LeadingTriviaWidth);    // b retains its "  " leading trivia
     }
 
+    #region Green Flag Mutation Tests
+
+    private static void AssertHasFlags(GreenNodeFlags actual, GreenNodeFlags expected)
+    {
+        Assert.True((actual & expected) == expected, $"Expected flags to include {expected} but was {actual}");
+    }
+
+    private static void AssertNotHasFlags(GreenNodeFlags actual, GreenNodeFlags unexpected)
+    {
+        Assert.True((actual & unexpected) == 0, $"Expected flags to NOT include {unexpected} but was {actual}");
+    }
+
+    private static SyntaxToken FindToken(SyntaxTree tree, NodeKind kind, string text, int occurrence = 0)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(text);
+
+        var matches = tree
+            .Select(Query.Kind(kind).WithText(text))
+            .OfType<SyntaxToken>()
+            .ToList();
+
+        Assert.True(matches.Count > 0, $"Expected to find at least 1 token of kind '{kind}' with text '{text}', but found none.");
+        Assert.True(
+            occurrence >= 0 && occurrence < matches.Count,
+            $"Expected occurrence {occurrence} for token kind '{kind}' text '{text}', but only found {matches.Count} match(es)."
+        );
+
+        return matches[occurrence];
+    }
+
+    private static void AssertReparseOracleFlagsMatch(SyntaxTree tree, SyntaxTree oracle)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(oracle);
+
+        Assert.Equal(oracle.GreenRoot.Flags, tree.GreenRoot.Flags);
+
+        var treeLeaves = tree.Leaves.ToList();
+        var oracleLeaves = oracle.Leaves.ToList();
+        Assert.Equal(oracleLeaves.Count, treeLeaves.Count);
+
+        for (int i = 0; i < treeLeaves.Count; i++)
+        {
+            Assert.Equal(oracleLeaves[i].Kind, treeLeaves[i].Kind);
+            Assert.Equal(oracleLeaves[i].Text, treeLeaves[i].Text);
+
+            var expected = oracleLeaves[i].Green.Flags;
+            var actual = treeLeaves[i].Green.Flags;
+            Assert.True(
+                expected == actual,
+                $"Leaf flags mismatch at index {i}: {treeLeaves[i].Kind} '{treeLeaves[i].Text}'. Expected={expected} Actual={actual}"
+            );
+        }
+    }
+
+    [Fact]
+    public void Replace_OwnLineCommentLeadingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a\n// c\nb", options);
+
+        var bBefore = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasLeadingCommentTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "X")
+            .Commit();
+
+        var xAfter = Assert.Single(tree.Select(Q.Ident("X")).OfType<SyntaxToken>());
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasLeadingCommentTrivia);
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia | GreenNodeFlags.ContainsCommentTrivia);
+    }
+
+    [Fact]
+    public void Replace_TokenOwningTrailingNewline_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var tree = SyntaxTree.Parse("a\nb");
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_SameLineCommentTrailingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a // c\nb", options);
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_TokenOwningTrailingWhitespace_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var tree = SyntaxTree.Parse("a b");
+
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        AssertHasFlags(aBefore.Green.Flags, GreenNodeFlags.HasTrailingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("a"), "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingWhitespaceTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
+    public void InsertAfter_InsertedTextWithTrailingNewline_SetsGreenFlags_OnInsertedAndFollowingTokens()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+
+        tree.CreateEditor()
+            .InsertAfter(aNode, " X\n")
+            .Commit();
+
+        var xAfter = Assert.Single(tree.Select(Q.Ident("X")).OfType<SyntaxToken>());
+        var bAfter = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+
+        // Inserted token owns the trailing newline; following token should NOT gain leading newline ownership.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        // Root list should reflect subtree contains.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void InsertBefore_DoesNotStealLeadingWhitespace_FromFollowingToken_GreenFlags()
+    {
+        // In the token-centric trivia model, indentation after a newline is leading trivia on the following token.
+        var tree = SyntaxTree.Parse("a\n  b");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .InsertBefore(bBefore, "X")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        // Insertion must not transfer whitespace ownership from b to X.
+        AssertHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // Root should reflect subtree contains.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
+    public void InsertAfter_InsertedTextWithTrailingCRLF_SetsGreenFlags_OnInsertedAndFollowingTokens()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aNode = FindToken(tree, NodeKind.Ident, "a");
+
+        tree.CreateEditor()
+            .InsertAfter(aNode, " X\r\n")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        // Inserted token owns the trailing newline; following token should NOT gain leading newline ownership.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Remove_TokenOwningTrailingNewline_RemovesNewlineBoundaryAndContainsFlags()
+    {
+        var tree = SyntaxTree.Parse("a\nb");
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+
+        // Sanity: 'a' owns the trailing newline in the token-centric trivia model.
+        AssertHasFlags(aNode.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        Assert.Equal("b", tree.ToText());
+        var bAfter = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Remove_OneNewlineOwner_DoesNotClearContainsNewlineTrivia_WhenOthersRemain()
+    {
+        var tree = SyntaxTree.Parse("a\nb\nc");
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The newline between b and c should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Remove_OneCommentOwner_DoesNotClearContainsCommentTrivia_WhenOthersRemain()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a // c1\nb // c2\nc", options);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The comment after b should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsCommentTrivia);
+    }
+
+    [Fact]
+    public void Remove_OneWhitespaceOwner_DoesNotClearContainsWhitespaceTrivia_WhenOthersRemain()
+    {
+        // Two separate whitespace regions: after 'a' and after 'b'.
+        var tree = SyntaxTree.Parse("a  b c");
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        // The remaining space between b and c should still exist.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia);
+    }
+
+    [Fact]
+    public void Replace_MultipleNodes_TransfersLeadingToFirst_AndTrailingToLast_GreenBoundaryFlags()
+    {
+        // b owns leading whitespace (indentation) and trailing newline.
+        var tree = SyntaxTree.Parse("a\n  b\nc");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "X Y")
+            .Commit();
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var yAfter = FindToken(tree, NodeKind.Ident, "Y");
+        var cAfter = FindToken(tree, NodeKind.Ident, "c");
+
+        // Leading boundary transfers to first replacement node.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        // Trailing boundary transfers to last replacement node.
+        AssertHasFlags(yAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(yAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // Following token should not incorrectly gain leading newline ownership.
+        AssertNotHasFlags(cAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Replace_WithBlockAtEdges_TransfersTriviaToBlockBoundaries_GreenFlags()
+    {
+        // Replacement begins/ends with a container (block). Trivia should attach to opener/closer boundaries.
+        var tree = SyntaxTree.Parse("a\n  b\nc");
+
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "{x}")
+            .Commit();
+
+        var block = Assert.Single(tree.Select(Q.BraceBlock).OfType<SyntaxBlock>());
+
+        // Boundary trivia should be preserved on the block boundaries.
+        AssertHasFlags(block.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+
+        // Containers must not accidentally carry child boundary flags beyond their own semantics.
+        // (Block boundary flags are only opener-leading and closer-trailing.)
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void UndoRedo_RestoresLeafBoundaryFlags_NotJustRootFlags()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+
+        var aFlagsBefore = aBefore.Green.Flags;
+        var bFlagsBefore = bBefore.Green.Flags;
+        var rootFlagsBefore = tree.GreenRoot.Flags;
+
+        tree.CreateEditor()
+            .InsertAfter(aBefore, " X\n")
+            .Commit();
+
+        var aAfter = FindToken(tree, NodeKind.Ident, "a");
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        var aFlagsAfter = aAfter.Green.Flags;
+        var xFlagsAfter = xAfter.Green.Flags;
+        var bFlagsAfter = bAfter.Green.Flags;
+        var rootFlagsAfter = tree.GreenRoot.Flags;
+
+        // Sanity: mutation should introduce a newline owner.
+        AssertHasFlags(xFlagsAfter, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(rootFlagsAfter, GreenNodeFlags.ContainsNewlineTrivia);
+
+        Assert.True(tree.Undo());
+
+        var aUndo = FindToken(tree, NodeKind.Ident, "a");
+        var bUndo = FindToken(tree, NodeKind.Ident, "b");
+        Assert.Equal(aFlagsBefore, aUndo.Green.Flags);
+        Assert.Equal(bFlagsBefore, bUndo.Green.Flags);
+        Assert.Equal(rootFlagsBefore, tree.GreenRoot.Flags);
+
+        Assert.True(tree.Redo());
+
+        var aRedo = FindToken(tree, NodeKind.Ident, "a");
+        var xRedo = FindToken(tree, NodeKind.Ident, "X");
+        var bRedo = FindToken(tree, NodeKind.Ident, "b");
+        Assert.Equal(aFlagsAfter, aRedo.Green.Flags);
+        Assert.Equal(xFlagsAfter, xRedo.Green.Flags);
+        Assert.Equal(bFlagsAfter, bRedo.Green.Flags);
+        Assert.Equal(rootFlagsAfter, tree.GreenRoot.Flags);
+    }
+
+    [Fact]
+    public void SchemaRebind_ReplaceInsideSyntaxNode_PreservesLeafBoundaryFlags_AndKeepsSyntaxContainersBoundaryFree()
+    {
+        const GreenNodeFlags boundaryMask =
+            GreenNodeFlags.HasLeadingNewlineTrivia |
+            GreenNodeFlags.HasTrailingNewlineTrivia |
+            GreenNodeFlags.HasLeadingWhitespaceTrivia |
+            GreenNodeFlags.HasTrailingWhitespaceTrivia |
+            GreenNodeFlags.HasLeadingCommentTrivia |
+            GreenNodeFlags.HasTrailingCommentTrivia;
+
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\" // c\nnext", schema);
+
+        var syntaxBefore = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxBefore.Green.Flags, boundaryMask);
+
+        var tagBefore = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var valueBefore = FindToken(tree, NodeKind.String, "\"value\"");
+        var nextBefore = FindToken(tree, NodeKind.Ident, "next");
+
+        // Indentation is leading whitespace on the first token inside the syntax node.
+        AssertHasFlags(tagBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // The string token owns same-line comment + newline.
+        AssertHasFlags(valueBefore.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(nextBefore.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.String("\"value\""), "\"X\"")
+            .Commit();
+
+        var syntaxAfter = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxAfter.Green.Flags, boundaryMask);
+
+        var tagAfter = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var xAfter = FindToken(tree, NodeKind.String, "\"X\"");
+        var nextAfter = FindToken(tree, NodeKind.Ident, "next");
+
+        AssertHasFlags(tagAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(nextAfter.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsCommentTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void SchemaRebind_InsertBeforeSyntaxNode_DoesNotStealLeadingWhitespace_AndKeepsSyntaxContainersBoundaryFree()
+    {
+        const GreenNodeFlags boundaryMask =
+            GreenNodeFlags.HasLeadingNewlineTrivia |
+            GreenNodeFlags.HasTrailingNewlineTrivia |
+            GreenNodeFlags.HasLeadingWhitespaceTrivia |
+            GreenNodeFlags.HasTrailingWhitespaceTrivia |
+            GreenNodeFlags.HasLeadingCommentTrivia |
+            GreenNodeFlags.HasTrailingCommentTrivia;
+
+        var schema = Schema.Create()
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\"\nafter", schema);
+
+        var syntaxBefore = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxBefore.Green.Flags, boundaryMask);
+
+        var tagBefore = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        AssertHasFlags(tagBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .InsertBefore(Q.Syntax<TestTaggedNode>(), "X\n")
+            .Commit();
+
+        var syntaxAfter = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxAfter.Green.Flags, boundaryMask);
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var tagAfter = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var afterAfter = FindToken(tree, NodeKind.Ident, "after");
+
+        // Inserted token owns its trailing newline; syntax node's first token keeps its indentation.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(tagAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(afterAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterComplexEdit_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source = "a{\n  b // c1\n  d(e) /* c2 */\n}\n";
+        var tree = SyntaxTree.Parse(source, options);
+
+        tree.CreateEditor(options)
+            .Replace(Q.Ident("b"), "{x}")
+            .InsertAfter(Q.Ident("d"), ".Y\n")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterComplexEdit_MatchesRootAndLeafFlags_WithSchemaAndBinding()
+    {
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\" // c\nafter", schema);
+
+        tree.CreateEditor()
+            .InsertBefore(Q.Syntax<TestTaggedNode>(), "X\n")
+            .Replace(Q.String("\"value\""), "\"Z\"")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, schema);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterRemoveReplaceAndCRLFInsert_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source = "a // c1\r\n  b /* c2 */\r\nc  d";
+        var tree = SyntaxTree.Parse(source, options);
+
+        tree.CreateEditor(options)
+            // Remove token that owns trailing comment+newline
+            .Remove(Q.Ident("a"))
+            // Replace a token that owns leading indentation
+            .Replace(Q.Ident("b"), "{x}")
+            // Insert a token that owns CRLF; avoid leading trivia by starting with a symbol
+            .InsertAfter(Q.Ident("c"), ".Y\r\n")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterEditsOnMultipleSyntaxNodes_MatchesRootAndLeafFlags_WithSchemaAndBinding()
+    {
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("funcCall")
+                .Match(Q.AnyIdent, Q.ParenBlock)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("@tag \"value\"\nfoo(a, b)\n", schema);
+
+        tree.CreateEditor()
+            .Replace(Q.String("\"value\""), "\"Z\"")
+            // Insert inside the function call argument list. Start with a symbol to avoid leading trivia.
+            .InsertAfter(Q.Ident("a"), ",c")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, schema);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void ReparseOracle_AfterDeeplyNestedBlockEdits_MatchesRootAndLeafFlags_WithOptions()
+    {
+        var options = TokenizerOptions.Default
+            .WithCommentStyles(CommentStyle.CStyleSingleLine, CommentStyle.CStyleMultiLine);
+
+        const string source =
+            "root {\n" +
+            "  a(b[c{d(e)}]) // c1\n" +
+            "  { x /* c2 */ }\n" +
+            "}\n";
+
+        var tree = SyntaxTree.Parse(source, options);
+
+        // Perform multiple edits inside deeply nested structures.
+        tree.CreateEditor(options)
+            // Replace an inner identifier.
+            .Replace(Q.Ident("d"), "D")
+            // Insert inside the deepest paren. Start with a symbol to avoid leading-trivia ambiguity.
+            .InsertAfter(Q.Ident("e"), ".Y\n")
+            // Replace an identifier with a block to exercise block-edge trivia semantics.
+            .Replace(Q.Ident("x"), "{z}")
+            .Commit();
+
+        var editedText = tree.ToText();
+        var oracle = SyntaxTree.Parse(editedText, options);
+
+        AssertReparseOracleFlagsMatch(tree, oracle);
+    }
+
+    [Fact]
+    public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        var blockBefore = (SyntaxBlock)Assert.Single(tree.Select(Q.BraceBlock));
+
+        AssertNotHasFlags(blockBefore.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X\n")
+            .Commit();
+
+        var blockAfter = (SyntaxBlock)Assert.Single(tree.Select(Q.BraceBlock));
+        AssertHasFlags(blockAfter.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void GreenFlags_UndoRedo_RestoreFlagState_AfterMutation()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var before = tree.GreenRoot.Flags;
+        AssertNotHasFlags(before, GreenNodeFlags.ContainsNewlineTrivia);
+
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X\n")
+            .Commit();
+
+        var after = tree.GreenRoot.Flags;
+        AssertHasFlags(after, GreenNodeFlags.ContainsNewlineTrivia);
+
+        Assert.True(tree.Undo());
+        Assert.Equal(before, tree.GreenRoot.Flags);
+
+        Assert.True(tree.Redo());
+        Assert.Equal(after, tree.GreenRoot.Flags);
+    }
+
+    #endregion
+
     /// <summary>
     /// Tests that block opener trivia follows the correct trivia model:
     ///   - Trailing trivia: up to AND INCLUDING the newline

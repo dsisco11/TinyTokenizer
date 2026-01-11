@@ -133,113 +133,103 @@ internal interface IRegionQuery
 }
 
 /// <summary>
-/// A tree walker that incrementally tracks the path during traversal.
-/// O(1) per traversal step instead of O(depth) for NodePath.FromNode().
+/// Low-allocation traversal helper for region resolution.
+/// Maintains an incremental slot-index stack while walking the tree and only snapshots
+/// a <see cref="NodePath"/> when a match is found.
 /// </summary>
-internal sealed class PathTrackingWalker
+internal static class RegionTraversal
 {
-    private readonly SyntaxNode _root;
-    private readonly List<int> _pathStack;
-    private SyntaxNode _current;
-    
-    public PathTrackingWalker(SyntaxNode root)
+    internal delegate bool TryGetRegionDelegate(SyntaxNode node, out int consumedCount);
+
+    internal static IEnumerable<QueryRegion> SelectRegions(SyntaxNode root, TryGetRegionDelegate tryGetRegion)
     {
-        _root = root;
-        _current = root;
-        _pathStack = new List<int>(8); // Pre-allocate for typical tree depth
-    }
-    
-    /// <summary>The current node.</summary>
-    public SyntaxNode Current => _current;
-    
-    /// <summary>
-    /// Gets the current path as a NodePath.
-    /// The path leads to the CURRENT node (not its parent).
-    /// </summary>
-    public NodePath CurrentPath => new NodePath(ImmutableArray.CreateRange(_pathStack));
-    
-    /// <summary>
-    /// Gets the path to the parent of the current node.
-    /// Returns Root path if current is the root.
-    /// </summary>
-    public NodePath ParentPath
-    {
-        get
+        ArgumentNullException.ThrowIfNull(tryGetRegion);
+
+        var pathStack = new List<int>(8);
+        var current = root;
+
+        while (true)
         {
-            if (_pathStack.Count == 0)
-                return NodePath.Root;
-            
-            // Return path without the last index (current node's sibling index)
-            return new NodePath(ImmutableArray.CreateRange(_pathStack.Take(_pathStack.Count - 1)));
-        }
-    }
-    
-    /// <summary>
-    /// Enumerates all descendants of the root in document order,
-    /// yielding each node along with its parent path.
-    /// </summary>
-    public IEnumerable<(SyntaxNode Node, NodePath ParentPath)> DescendantsAndSelfWithPath()
-    {
-        // Yield root first
-        yield return (_root, NodePath.Root);
-        
-        // Reset state for traversal
-        _current = _root;
-        _pathStack.Clear();
-        
-        while (MoveNext())
-        {
-            yield return (_current, ParentPath);
-        }
-    }
-    
-    /// <summary>
-    /// Moves to the next node in document order (depth-first pre-order).
-    /// Returns true if moved, false if at end.
-    /// </summary>
-    private bool MoveNext()
-    {
-        // Try first child
-        if (_current.SlotCount > 0)
-        {
-            for (int i = 0; i < _current.SlotCount; i++)
+            if (current.Parent != null && tryGetRegion(current, out var consumedCount))
             {
-                var child = _current.GetChild(i);
-                if (child != null)
-                {
-                    _pathStack.Add(i);
-                    _current = child;
-                    return true;
-                }
+                var parent = current.Parent;
+                var startSlot = current.SiblingIndex;
+                yield return new QueryRegion(
+                    parentPath: CreateParentPath(pathStack),
+                    parent: parent,
+                    startSlot: startSlot,
+                    endSlot: startSlot + consumedCount,
+                    firstNode: current,
+                    position: current.Position
+                );
+            }
+
+            if (TryMoveToFirstChild(ref current, pathStack))
+                continue;
+
+            if (!TryMoveToNextSiblingOrAncestor(ref current, pathStack))
+                break;
+        }
+    }
+
+    private static NodePath CreateParentPath(List<int> pathStack)
+    {
+        // pathStack is the path to the CURRENT node; parent path is pathStack without the last element.
+        var parentDepth = pathStack.Count - 1;
+        if (parentDepth <= 0)
+            return NodePath.Root;
+
+        var builder = ImmutableArray.CreateBuilder<int>(parentDepth);
+        for (int i = 0; i < parentDepth; i++)
+            builder.Add(pathStack[i]);
+
+        return new NodePath(builder.ToImmutable());
+    }
+
+    private static bool TryMoveToFirstChild(ref SyntaxNode current, List<int> pathStack)
+    {
+        if (current.SlotCount == 0)
+            return false;
+
+        for (int i = 0; i < current.SlotCount; i++)
+        {
+            var child = current.GetChild(i);
+            if (child != null)
+            {
+                pathStack.Add(i);
+                current = child;
+                return true;
             }
         }
-        
-        // Try next sibling or ancestor's next sibling
-        while (_pathStack.Count > 0)
+
+        return false;
+    }
+
+    private static bool TryMoveToNextSiblingOrAncestor(ref SyntaxNode current, List<int> pathStack)
+    {
+        while (pathStack.Count > 0)
         {
-            var parent = _current.Parent;
+            var parent = current.Parent;
             if (parent == null)
-                break;
-            
-            var currentIndex = _pathStack[_pathStack.Count - 1];
-            _pathStack.RemoveAt(_pathStack.Count - 1);
-            
-            // Try next sibling
+                return false;
+
+            var currentIndex = pathStack[^1];
+            pathStack.RemoveAt(pathStack.Count - 1);
+
             for (int i = currentIndex + 1; i < parent.SlotCount; i++)
             {
                 var sibling = parent.GetChild(i);
                 if (sibling != null)
                 {
-                    _pathStack.Add(i);
-                    _current = sibling;
+                    pathStack.Add(i);
+                    current = sibling;
                     return true;
                 }
             }
-            
-            // Move up to try parent's siblings
-            _current = parent;
+
+            current = parent;
         }
-        
+
         return false;
     }
 }

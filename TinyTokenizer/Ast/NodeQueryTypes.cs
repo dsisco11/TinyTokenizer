@@ -7,16 +7,95 @@ namespace TinyTokenizer.Ast;
 /// </summary>
 internal static class SelectionModeHelper
 {
-    public static IEnumerable<QueryRegion> Apply(IEnumerable<QueryRegion> regions, SelectionMode mode, int modeArg) =>
-        mode switch
+    public static IEnumerable<T> Apply<T>(IEnumerable<T> source, SelectionMode mode, int modeArg)
+    {
+        return mode switch
         {
-            SelectionMode.First => regions.Take(1),
-            SelectionMode.Last => regions.TakeLast(1),
-            SelectionMode.Nth => regions.Skip(modeArg).Take(1),
-            SelectionMode.Skip => regions.Skip(modeArg),
-            SelectionMode.Take => regions.Take(modeArg),
-            _ => regions
+            SelectionMode.First => TakeFirst(source),
+            SelectionMode.Last => TakeLast(source),
+            SelectionMode.Nth => TakeNth(source, modeArg),
+            SelectionMode.Skip => Skip(source, modeArg),
+            SelectionMode.Take => Take(source, modeArg),
+            _ => source
         };
+    }
+
+    private static IEnumerable<T> TakeFirst<T>(IEnumerable<T> source)
+    {
+        foreach (var item in source)
+        {
+            yield return item;
+            yield break;
+        }
+    }
+
+    private static IEnumerable<T> TakeLast<T>(IEnumerable<T> source)
+    {
+        T? last = default;
+        var found = false;
+
+        foreach (var item in source)
+        {
+            last = item;
+            found = true;
+        }
+
+        if (found)
+            yield return last!;
+    }
+
+    private static IEnumerable<T> TakeNth<T>(IEnumerable<T> source, int n)
+    {
+        if (n < 0)
+            yield break;
+
+        var index = 0;
+        foreach (var item in source)
+        {
+            if (index == n)
+            {
+                yield return item;
+                yield break;
+            }
+            index++;
+        }
+    }
+
+    private static IEnumerable<T> Skip<T>(IEnumerable<T> source, int count)
+    {
+        if (count <= 0)
+        {
+            foreach (var item in source)
+                yield return item;
+            yield break;
+        }
+
+        var skipped = 0;
+        foreach (var item in source)
+        {
+            if (skipped < count)
+            {
+                skipped++;
+                continue;
+            }
+            yield return item;
+        }
+    }
+
+    private static IEnumerable<T> Take<T>(IEnumerable<T> source, int count)
+    {
+        if (count <= 0)
+            yield break;
+
+        var taken = 0;
+        foreach (var item in source)
+        {
+            yield return item;
+            taken++;
+            if (taken >= count)
+                yield break;
+        }
+    }
 }
 
 /// <summary>
@@ -67,18 +146,17 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node.Kind == Kind && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -119,35 +197,23 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <summary>
     /// Optimized region resolution: single-pass traversal that checks Kind directly
     /// and applies selection mode inline for efficient First()/Take() short-circuit.
-    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// Uses RegionTraversal to avoid per-visited-node allocations.
     /// </summary>
     internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        var regions = SelectRegionsFromWalker(walker);
+        var regions = RegionTraversal.SelectRegions(root, TryGetRegion);
         return ApplyRegionFilter(regions);
-    }
-    
-    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
-    {
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+
+        bool TryGetRegion(SyntaxNode node, out int consumedCount)
         {
-            // Inline match check - avoids virtual TryMatch call
             if (node.Kind == Kind && (_predicate == null || _predicate(node)))
             {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + 1, // KindNodeQuery always consumes 1
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
+                consumedCount = 1;
+                return true;
             }
+
+            consumedCount = 0;
+            return false;
         }
     }
     
@@ -189,18 +255,25 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node is not SyntaxBlock block)
+                continue;
+
+            if (_opener != null && block.Opener != _opener.Value)
+                continue;
+
+            if (_predicate != null && !_predicate(node))
+                continue;
+
+            yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -233,37 +306,25 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <summary>
     /// Optimized region resolution: single-pass traversal that checks block type directly
     /// and applies selection mode inline for efficient First()/Take() short-circuit.
-    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// Uses RegionTraversal to avoid per-visited-node allocations.
     /// </summary>
     internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        var regions = SelectRegionsFromWalker(walker);
+        var regions = RegionTraversal.SelectRegions(root, TryGetRegion);
         return ApplyRegionFilter(regions);
-    }
-    
-    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
-    {
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+
+        bool TryGetRegion(SyntaxNode node, out int consumedCount)
         {
-            // Inline match check - avoids virtual TryMatch call
             if (node is SyntaxBlock block &&
                 (_opener == null || block.Opener == _opener.Value) &&
                 (_predicate == null || _predicate(node)))
             {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + 1, // BlockNodeQuery always consumes 1
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
+                consumedCount = 1;
+                return true;
             }
+
+            consumedCount = 0;
+            return false;
         }
     }
     
@@ -303,9 +364,6 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <code>
     /// // Replace content between braces
     /// editor.Replace(Query.BraceBlock.Inner(), "new content")
-    /// 
-    /// // Works with empty blocks too
-    /// editor.Replace(Query.BraceBlock.Inner(), "inserted into empty")
     /// </code>
     /// </example>
     public InnerContentQuery Inner() => new InnerContentQuery(this);
@@ -327,12 +385,9 @@ public enum BoundarySide
 }
 
 /// <summary>
-/// A query that selects the boundary (start or end) of container nodes.
-/// For blocks, this returns the opener or closer token.
-/// For lists/containers without delimiters, this returns first/last child (or empty for empty containers).
+/// A query that selects the boundary node (start or end) of containers matched by an inner query.
 /// </summary>
 /// <remarks>
-/// This query carries metadata about which container and boundary is being targeted.
 /// <see cref="SyntaxEditor"/> uses this metadata to compute insertion positions,
 /// even for empty containers where <see cref="Select"/> returns no results.
 /// </remarks>
@@ -532,7 +587,12 @@ public sealed record InnerContentQuery : INodeQuery, IRegionQuery
             if (container is SyntaxBlock block)
             {
                 var innerCount = block.ChildCount;
-                var firstInner = block.InnerChildren.FirstOrDefault();
+                SyntaxNode? firstInner = null;
+                foreach (var child in block.InnerChildren)
+                {
+                    firstInner = child;
+                    break;
+                }
                 
                 yield return new QueryRegion(
                     parent: block,
@@ -574,19 +634,20 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var matches = new TreeWalker(root).DescendantsAndSelf();
-        if (_predicate != null)
-            matches = matches.Where(_predicate);
-        
-        return _mode switch
+        if (_predicate == null)
+            return SelectionModeHelper.Apply(new TreeWalker(root).DescendantsAndSelf(), _mode, _modeArg);
+
+        return SelectionModeHelper.Apply(EnumerateMatches(root, _predicate), _mode, _modeArg);
+    }
+
+    private static IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root, Func<SyntaxNode, bool> predicate)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (predicate(node))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -638,18 +699,17 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root, NodeFilter.Leaves);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node is SyntaxToken && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -679,13 +739,15 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 #region Newline Query
 
 /// <summary>
-/// Matches nodes that represent or are preceded by a newline.
-/// Checks:
-/// 1. The node itself is a whitespace token containing newline characters.
-/// 2. The node's leading trivia contains a newline.
-/// 3. The previous sibling's trailing trivia contains a newline.
+/// Matches nodes that occur after a newline.
+/// A node matches when either:
+/// 1) The node owns leading newline trivia, OR
+/// 2) The previous sibling owns trailing newline trivia.
 /// </summary>
 /// <remarks>
+/// Newline detection is token-centric: the newline boundary is owned by a token's
+/// leading/trailing trivia, not by container nodes.
+/// <para />
 /// This query is particularly useful for line-based pattern matching, such as
 /// matching directive lines that should consume tokens until a newline.
 /// </remarks>
@@ -717,18 +779,17 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (Matches(node))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -744,61 +805,56 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         bool hasNewline = HasGreenNewline(node);
         return _negated ? !hasNewline : hasNewline;
     }
+
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if ((uint)startIndex >= (uint)siblings.Count)
+        {
+            consumedCount = 0;
+            return false;
+        }
+
+        var node = siblings[startIndex];
+
+        // Token-centric newline semantics:
+        // - current node matches if it owns leading newline trivia
+        // - OR if previous sibling owns trailing newline trivia
+        bool hasNewline = HasGreenNewline(node);
+        if (!hasNewline && startIndex > 0)
+        {
+            hasNewline = HasGreenTrailingNewline(siblings[startIndex - 1]);
+        }
+
+        bool matched = _negated ? !hasNewline : hasNewline;
+        if (matched)
+        {
+            consumedCount = 1;
+            return true;
+        }
+
+        consumedCount = 0;
+        return false;
+    }
     
     private static bool HasGreenNewline(GreenNode node)
     {
-        // Check leading trivia for newline
-        var leadingTrivia = node switch
-        {
-            GreenLeaf gl => gl.LeadingTrivia,
-            GreenBlock gb => gb.LeadingTrivia,
-            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        foreach (var t in leadingTrivia)
-        {
-            if (t.Kind == TriviaKind.Newline)
-                return true;
-        }
-        
-        return false;
+        return (node.Flags & GreenNodeFlags.HasLeadingNewlineTrivia) != 0;
+    }
+
+    private static bool HasGreenTrailingNewline(GreenNode node)
+    {
+        return (node.Flags & GreenNodeFlags.HasTrailingNewlineTrivia) != 0;
     }
     
     private static bool HasNewline(SyntaxNode node)
     {
-        // Check 1: Does leading trivia contain newline?
-        var leadingTrivia = node.Green switch
-        {
-            GreenLeaf gl => gl.LeadingTrivia,
-            GreenBlock gb => gb.LeadingTrivia,
-            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        foreach (var t in leadingTrivia)
-        {
-            if (t.Kind == TriviaKind.Newline)
-                return true;
-        }
-        
-        // Check 2: Does previous sibling's trailing trivia contain newline?
+        // Check 1: does this node own leading newline trivia?
+        if ((node.Green.Flags & GreenNodeFlags.HasLeadingNewlineTrivia) != 0)
+            return true;
+
+        // Check 2: does previous sibling own trailing newline trivia?
         var prev = node.PreviousSibling();
-        if (prev != null)
-        {
-            var trailingTrivia = prev.Green switch
-            {
-                GreenLeaf gl => gl.TrailingTrivia,
-                GreenBlock gb => gb.TrailingTrivia,
-                _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-            };
-            
-            foreach (var t in trailingTrivia)
-            {
-                if (t.Kind == TriviaKind.Newline)
-                    return true;
-            }
-        }
-        
-        return false;
+        return prev != null && (prev.Green.Flags & GreenNodeFlags.HasTrailingNewlineTrivia) != 0;
     }
     
     protected override NewlineNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
@@ -955,10 +1011,26 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvable
     public AnyOfQuery(params INodeQuery[] queries) => _queries = queries;
     
     /// <summary>Creates a query that matches any of the specified queries.</summary>
-    public AnyOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    public AnyOfQuery(IEnumerable<INodeQuery> queries)
+    {
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = MaterializeQueries(queries);
+    }
     
     /// <inheritdoc/>
-    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    public bool IsResolved
+    {
+        get
+        {
+            foreach (var query in _queries)
+            {
+                if (query is ISchemaResolvableQuery r && !r.IsResolved)
+                    return false;
+            }
+
+            return true;
+        }
+    }
     
     /// <inheritdoc/>
     public void ResolveWithSchema(Schema schema)
@@ -1035,6 +1107,27 @@ public sealed record AnyOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvable
         consumedCount = 0;
         return false;
     }
+
+    private static INodeQuery[] MaterializeQueries(IEnumerable<INodeQuery> queries)
+    {
+        if (queries is INodeQuery[] arr)
+            return arr;
+
+        if (queries is ICollection<INodeQuery> col)
+        {
+            if (col.Count == 0)
+                return [];
+
+            var buffer = new INodeQuery[col.Count];
+            col.CopyTo(buffer, 0);
+            return buffer;
+        }
+
+        var list = new List<INodeQuery>();
+        foreach (var q in queries)
+            list.Add(q);
+        return list.ToArray();
+    }
 }
 
 #endregion
@@ -1053,10 +1146,26 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvabl
     public NoneOfQuery(params INodeQuery[] queries) => _queries = queries;
     
     /// <summary>Creates a query that matches when none of the specified queries match.</summary>
-    public NoneOfQuery(IEnumerable<INodeQuery> queries) => _queries = queries.ToArray();
+    public NoneOfQuery(IEnumerable<INodeQuery> queries)
+    {
+        ArgumentNullException.ThrowIfNull(queries);
+        _queries = MaterializeQueries(queries);
+    }
     
     /// <inheritdoc/>
-    public bool IsResolved => _queries.All(q => q is not ISchemaResolvableQuery r || r.IsResolved);
+    public bool IsResolved
+    {
+        get
+        {
+            foreach (var query in _queries)
+            {
+                if (query is ISchemaResolvableQuery r && !r.IsResolved)
+                    return false;
+            }
+
+            return true;
+        }
+    }
     
     /// <inheritdoc/>
     public void ResolveWithSchema(Schema schema)
@@ -1143,6 +1252,27 @@ public sealed record NoneOfQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvabl
         consumedCount = 1;
         return true;
     }
+
+    private static INodeQuery[] MaterializeQueries(IEnumerable<INodeQuery> queries)
+    {
+        if (queries is INodeQuery[] arr)
+            return arr;
+
+        if (queries is ICollection<INodeQuery> col)
+        {
+            if (col.Count == 0)
+                return [];
+
+            var buffer = new INodeQuery[col.Count];
+            col.CopyTo(buffer, 0);
+            return buffer;
+        }
+
+        var list = new List<INodeQuery>();
+        foreach (var q in queries)
+            list.Add(q);
+        return list.ToArray();
+    }
 }
 
 #endregion
@@ -1162,9 +1292,11 @@ public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
     public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // BOF only matches the first node in the file
-        var firstChild = root.Children.FirstOrDefault();
-        if (firstChild != null)
-            yield return firstChild;
+        foreach (var child in root.Children)
+        {
+            yield return child;
+            yield break;
+        }
     }
     
     /// <inheritdoc/>
@@ -1220,9 +1352,14 @@ public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
     public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // EOF only matches the last node in the file
-        var lastChild = root.Children.LastOrDefault();
-        if (lastChild != null)
-            yield return lastChild;
+        SyntaxNode? last = null;
+        foreach (var child in root.Children)
+        {
+            last = child;
+        }
+
+        if (last != null)
+            yield return last;
     }
     
     /// <inheritdoc/>
@@ -1566,18 +1703,17 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node.Kind.IsKeyword() && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -1681,20 +1817,18 @@ public sealed record SpecificKeywordQuery : NodeQuery<SpecificKeywordQuery>, ISc
         if (!_isResolved || _resolvedKind == null)
             return [];
         
-        var targetKind = _resolvedKind.Value;
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
+        var targetKind = _resolvedKind!.Value;
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => n.Kind == targetKind && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node.Kind == targetKind && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -1840,38 +1974,34 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
             return [];
         
         var kindSet = categoryKinds.ToHashSet();
-        var walker = new TreeWalker(tree.Root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => kindSet.Contains(n.Kind) && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
+        return SelectionModeHelper.Apply(EnumerateMatchesByKindSet(tree.Root, kindSet), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatchesByKindSet(SyntaxNode root, HashSet<NodeKind> kindSet)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (kindSet.Contains(node.Kind) && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // Without tree context, we can't resolve category - match any keyword
+        return SelectionModeHelper.Apply(EnumerateMatchesAnyKeyword(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatchesAnyKeyword(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => n.Kind.IsKeyword() && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
+        foreach (var node in walker.DescendantsAndSelf())
         {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            if (node.Kind.IsKeyword() && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>

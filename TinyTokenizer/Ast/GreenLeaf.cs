@@ -17,13 +17,9 @@ internal sealed record GreenLeaf : GreenNode
         $"{Kind}[{Width}] \"{Truncate(Text, 20)}\"";
 
     private readonly int _width;
-    private readonly GreenNodeFlags _flags;
     
     /// <inheritdoc/>
     public override NodeKind Kind { get; }
-
-    /// <inheritdoc/>
-    internal override GreenNodeFlags Flags => _flags;
     
     /// <summary>The text content of this token (excluding trivia).</summary>
     public string Text { get; }
@@ -60,36 +56,34 @@ internal sealed record GreenLeaf : GreenNode
         string text,
         ImmutableArray<GreenTrivia> leadingTrivia = default,
         ImmutableArray<GreenTrivia> trailingTrivia = default)
+        : this(
+            kind,
+            text,
+            leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia,
+            trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia,
+            Compute(kind,
+                text,
+                leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia,
+                trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia))
+    {
+    }
+
+    private GreenLeaf(
+        NodeKind kind,
+        string text,
+        ImmutableArray<GreenTrivia> leadingTrivia,
+        ImmutableArray<GreenTrivia> trailingTrivia,
+        LeafComputed computed)
+        : base(computed.Flags)
     {
         Kind = kind;
         Text = text;
-        LeadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
-        TrailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
+        LeadingTrivia = leadingTrivia;
+        TrailingTrivia = trailingTrivia;
 
-        LeadingTriviaWidth = ComputeTriviaWidthAndFlags(
-            LeadingTrivia,
-            isLeading: true,
-            out var leadingBoundaryFlags,
-            out var leadingContainsFlags);
-
-        TrailingTriviaWidth = ComputeTriviaWidthAndFlags(
-            TrailingTrivia,
-            isLeading: false,
-            out var trailingBoundaryFlags,
-            out var trailingContainsFlags);
-
-        _width = LeadingTriviaWidth + Text.Length + TrailingTriviaWidth;
-
-        // Subtree flags based on node kind
-        var kindFlags = GreenNodeFlags.None;
-        if (kind == NodeKind.Error)
-            kindFlags |= GreenNodeFlags.ContainsErrorNode;
-        if (kind == NodeKind.TaggedIdent)
-            kindFlags |= GreenNodeFlags.ContainsTaggedIdent;
-        if (kind.IsKeyword())
-            kindFlags |= GreenNodeFlags.ContainsKeyword;
-
-        _flags = leadingBoundaryFlags | trailingBoundaryFlags | leadingContainsFlags | trailingContainsFlags | kindFlags;
+        LeadingTriviaWidth = computed.LeadingTriviaWidth;
+        TrailingTriviaWidth = computed.TrailingTriviaWidth;
+        _width = computed.Width;
     }
     
     /// <inheritdoc/>
@@ -138,6 +132,45 @@ internal sealed record GreenLeaf : GreenNode
     /// </summary>
     public GreenLeaf WithText(string text)
         => new(Kind, text, LeadingTrivia, TrailingTrivia);
+
+    private static LeafComputed Compute(
+        NodeKind kind,
+        string text,
+        ImmutableArray<GreenTrivia> leadingTrivia,
+        ImmutableArray<GreenTrivia> trailingTrivia)
+    {
+        int leadingWidth = ComputeTriviaWidthAndFlags(
+            leadingTrivia,
+            isLeading: true,
+            out var leadingBoundaryFlags,
+            out var leadingContainsFlags);
+
+        int trailingWidth = ComputeTriviaWidthAndFlags(
+            trailingTrivia,
+            isLeading: false,
+            out var trailingBoundaryFlags,
+            out var trailingContainsFlags);
+
+        int width = leadingWidth + text.Length + trailingWidth;
+
+        // Subtree flags based on node kind
+        var kindFlags = GreenNodeFlags.None;
+        if (kind == NodeKind.Error)
+            kindFlags |= GreenNodeFlags.ContainsErrorNode;
+        if (kind == NodeKind.TaggedIdent)
+            kindFlags |= GreenNodeFlags.ContainsTaggedIdent;
+        if (kind.IsKeyword())
+            kindFlags |= GreenNodeFlags.ContainsKeyword;
+
+        var flags = leadingBoundaryFlags | trailingBoundaryFlags | leadingContainsFlags | trailingContainsFlags | kindFlags;
+        return new LeafComputed(leadingWidth, trailingWidth, width, flags);
+    }
+
+    private readonly record struct LeafComputed(
+        int LeadingTriviaWidth,
+        int TrailingTriviaWidth,
+        int Width,
+        GreenNodeFlags Flags);
     
     private static int ComputeTriviaWidthAndFlags(
         ImmutableArray<GreenTrivia> trivia,

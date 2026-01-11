@@ -24,14 +24,10 @@ internal sealed record GreenBlock : GreenContainer
 
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
-    private readonly GreenNodeFlags _flags;
     private readonly int[]? _childOffsets; // Pre-computed for ≥10 children (O(1) lookup)
     
     /// <inheritdoc/>
     public override NodeKind Kind { get; }
-
-    /// <inheritdoc/>
-    internal override GreenNodeFlags Flags => _flags;
     
     /// <summary>The opening delimiter node (e.g., '{', '[', '(') with its trivia.</summary>
     public GreenLeaf OpenerNode { get; }
@@ -67,44 +63,66 @@ internal sealed record GreenBlock : GreenContainer
         GreenLeaf openerNode,
         GreenLeaf closerNode,
         ImmutableArray<GreenNode> children)
+        : this(
+            openerNode,
+            closerNode,
+            children.IsDefault ? ImmutableArray<GreenNode>.Empty : children,
+            Compute(openerNode, closerNode, children.IsDefault ? ImmutableArray<GreenNode>.Empty : children))
+    {
+    }
+
+    private GreenBlock(
+        GreenLeaf openerNode,
+        GreenLeaf closerNode,
+        ImmutableArray<GreenNode> children,
+        BlockComputed computed)
+        : base(computed.Flags)
     {
         OpenerNode = openerNode;
         CloserNode = closerNode;
         Kind = GetBlockKind(Opener);
-        _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
-        
-        // Compute width: opener (with trivia) + children + closer (with trivia)
+        _children = children;
+        _width = computed.Width;
+        _childOffsets = computed.ChildOffsets;
+    }
+
+    private static BlockComputed Compute(GreenLeaf openerNode, GreenLeaf closerNode, ImmutableArray<GreenNode> children)
+    {
         int childrenWidth = 0;
-        foreach (var child in _children)
+
+        int[]? offsets = null;
+        if (children.Length >= 10)
+            offsets = new int[children.Length];
+
+        int offset = openerNode.Width;
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (offsets != null)
+                offsets[i] = offset;
+
+            var child = children[i];
             childrenWidth += child.Width;
-        
-        _width = OpenerNode.Width + childrenWidth + CloserNode.Width;
+            offset += child.Width;
+        }
+
+        int width = openerNode.Width + childrenWidth + closerNode.Width;
 
         // Flags
         // - Boundary comes only from the first/last leaf boundaries (opener leading, closer trailing).
         // - Subtree contains flags are ORed across opener/inner/closer (excluding boundary bits).
         var boundary =
-            (OpenerNode.Flags & GreenNodeFlagMasks.LeadingBoundary) |
-            (CloserNode.Flags & GreenNodeFlagMasks.TrailingBoundary);
+            (openerNode.Flags & GreenNodeFlagMasks.LeadingBoundary) |
+            (closerNode.Flags & GreenNodeFlagMasks.TrailingBoundary);
 
-        var contains = (OpenerNode.Flags | CloserNode.Flags) & GreenNodeFlagMasks.Contains;
-        foreach (var child in _children)
+        var contains = (openerNode.Flags | closerNode.Flags) & GreenNodeFlagMasks.Contains;
+        foreach (var child in children)
             contains |= child.Flags & GreenNodeFlagMasks.Contains;
 
-        _flags = boundary | contains;
-        
-        // Pre-compute child offsets for large blocks
-        if (_children.Length >= 10)
-        {
-            _childOffsets = new int[_children.Length];
-            int offset = OpenerNode.Width; // After opener (including its trivia)
-            for (int i = 0; i < _children.Length; i++)
-            {
-                _childOffsets[i] = offset;
-                offset += _children[i].Width;
-            }
-        }
+        var flags = boundary | contains;
+        return new BlockComputed(width, flags, offsets);
     }
+
+    private readonly record struct BlockComputed(int Width, GreenNodeFlags Flags, int[]? ChildOffsets);
     
     /// <summary>
     /// Creates a new block node with automatic opener/closer creation.

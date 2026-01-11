@@ -18,7 +18,6 @@ internal sealed record GreenList : GreenContainer
 
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
-    private readonly GreenNodeFlags _flags;
     private readonly int[]? _childOffsets;
     
     /// <inheritdoc/>
@@ -26,9 +25,6 @@ internal sealed record GreenList : GreenContainer
     
     /// <inheritdoc/>
     public override int Width => _width;
-
-    /// <inheritdoc/>
-    internal override GreenNodeFlags Flags => _flags;
     
     /// <inheritdoc/>
     public override ImmutableArray<GreenNode> Children => _children;
@@ -37,48 +33,50 @@ internal sealed record GreenList : GreenContainer
     /// Creates a new token list.
     /// </summary>
     public GreenList(ImmutableArray<GreenNode> children)
+        : this(
+            children.IsDefault ? ImmutableArray<GreenNode>.Empty : children,
+            Compute(children.IsDefault ? ImmutableArray<GreenNode>.Empty : children))
     {
-        _children = children.IsDefault ? ImmutableArray<GreenNode>.Empty : children;
-        
-        // Compute width
-        int width = 0;
-        foreach (var child in _children)
-            width += child.Width;
-        _width = width;
-
-        // Flags
-        if (_children.Length == 0)
-        {
-            _flags = GreenNodeFlags.None;
-        }
-        else
-        {
-            var first = _children[0];
-            var last = _children[^1];
-
-            var boundary =
-                (first.Flags & GreenNodeFlagMasks.LeadingBoundary) |
-                (last.Flags & GreenNodeFlagMasks.TrailingBoundary);
-
-            var contains = GreenNodeFlags.None;
-            foreach (var child in _children)
-                contains |= child.Flags & GreenNodeFlagMasks.Contains;
-
-            _flags = boundary | contains;
-        }
-        
-        // Pre-compute offsets for large lists
-        if (_children.Length >= 10)
-        {
-            _childOffsets = new int[_children.Length];
-            int offset = 0;
-            for (int i = 0; i < _children.Length; i++)
-            {
-                _childOffsets[i] = offset;
-                offset += _children[i].Width;
-            }
-        }
     }
+
+    private GreenList(ImmutableArray<GreenNode> children, ListComputed computed)
+        : base(computed.Flags)
+    {
+        _children = children;
+        _width = computed.Width;
+        _childOffsets = computed.ChildOffsets;
+    }
+
+    private static ListComputed Compute(ImmutableArray<GreenNode> children)
+    {
+        if (children.Length == 0)
+            return new ListComputed(Width: 0, Flags: GreenNodeFlags.None, ChildOffsets: null);
+
+        int width = 0;
+        var contains = GreenNodeFlags.None;
+
+        int[]? offsets = null;
+        if (children.Length >= 10)
+            offsets = new int[children.Length];
+
+        int offset = 0;
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (offsets != null)
+                offsets[i] = offset;
+
+            var child = children[i];
+            width += child.Width;
+            offset += child.Width;
+            contains |= child.Flags & GreenNodeFlagMasks.Contains;
+        }
+
+        // Token-centric boundary semantics: lists do not own boundary trivia.
+        var flags = contains;
+        return new ListComputed(width, flags, offsets);
+    }
+
+    private readonly record struct ListComputed(int Width, GreenNodeFlags Flags, int[]? ChildOffsets);
     
     /// <inheritdoc/>
     public override GreenNode? GetSlot(int index)
