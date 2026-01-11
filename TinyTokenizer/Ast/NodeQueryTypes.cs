@@ -146,10 +146,17 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind == Kind && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -260,10 +267,25 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node is not SyntaxBlock block)
+                continue;
+
+            if (_opener != null && block.Opener != _opener.Value)
+                continue;
+
+            if (_predicate != null && !_predicate(node))
+                continue;
+
+            yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -636,11 +658,20 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var matches = new TreeWalker(root).DescendantsAndSelf();
-        if (_predicate != null)
-            matches = matches.Where(_predicate);
-        
-            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+        if (_predicate == null)
+            return SelectionModeHelper.Apply(new TreeWalker(root).DescendantsAndSelf(), _mode, _modeArg);
+
+        return SelectionModeHelper.Apply(EnumerateMatches(root, _predicate), _mode, _modeArg);
+    }
+
+    private static IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root, Func<SyntaxNode, bool> predicate)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (predicate(node))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -692,10 +723,17 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root, NodeFilter.Leaves);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node is SyntaxToken && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -762,10 +800,17 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (Matches(node))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -1605,10 +1650,17 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind.IsKeyword() && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -1712,12 +1764,18 @@ public sealed record SpecificKeywordQuery : NodeQuery<SpecificKeywordQuery>, ISc
         if (!_isResolved || _resolvedKind == null)
             return [];
         
-        var targetKind = _resolvedKind.Value;
-        var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => n.Kind == targetKind && (_predicate == null || _predicate(n)));
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
+        var targetKind = _resolvedKind!.Value;
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind == targetKind && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
@@ -1863,22 +1921,34 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
             return [];
         
         var kindSet = categoryKinds.ToHashSet();
-        var walker = new TreeWalker(tree.Root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => kindSet.Contains(n.Kind) && (_predicate == null || _predicate(n)));
+        return SelectionModeHelper.Apply(EnumerateMatchesByKindSet(tree.Root, kindSet), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatchesByKindSet(SyntaxNode root, HashSet<NodeKind> kindSet)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (kindSet.Contains(node.Kind) && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // Without tree context, we can't resolve category - match any keyword
-        var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => n.Kind.IsKeyword() && (_predicate == null || _predicate(n)));
+        return SelectionModeHelper.Apply(EnumerateMatchesAnyKeyword(root), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatchesAnyKeyword(SyntaxNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind.IsKeyword() && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     /// <inheritdoc/>

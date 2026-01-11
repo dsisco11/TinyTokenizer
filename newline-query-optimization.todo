@@ -98,14 +98,14 @@ Acceptance criteria:
 
 ## Phase 3 — Replace LINQ in the Hottest `Select(...)` Implementations (Small Scope)
 
-- [ ] Identify top `Select` hot paths
-	- [ ] Common kind queries (e.g., `KindNodeQuery.Select(...)`)
-	- [ ] Block queries and leaf queries used heavily by editor/regions
+- [x] Identify top `Select` hot paths
+	- [x] Common kind queries (e.g., `KindNodeQuery.Select(...)`)
+	- [x] Block queries and leaf queries used heavily by editor/regions
 
-- [ ] Replace common LINQ patterns with tight loops
-	- [ ] Replace `.Where(...)`, `.SelectMany(...)`, `.LastOrDefault()` in hot paths
-	- [ ] Preserve document order and short-circuiting behavior
-	- [ ] Avoid iterator/closure allocations where possible
+- [x] Replace common LINQ patterns with tight loops
+	- [x] Replace `.Where(...)`, `.SelectMany(...)`, `.LastOrDefault()` in hot paths
+	- [x] Preserve document order and short-circuiting behavior
+	- [x] Avoid iterator/closure allocations where possible
 
 Acceptance criteria:
 - Query results are byte-for-byte identical in ordering and content; allocations reduced in benchmarks.

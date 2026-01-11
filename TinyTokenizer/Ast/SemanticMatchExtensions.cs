@@ -135,10 +135,17 @@ public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
     
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
-        var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
+        return SelectionModeHelper.Apply(EnumerateMatches(root), _mode, _modeArg);
+    }
 
-        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
+    private IEnumerable<SyntaxNode> EnumerateMatches(SyntaxNode root)
+    {
+        var walker = new TreeWalker(root);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind == _kind && (_predicate == null || _predicate(node)))
+                yield return node;
+        }
     }
     
     public override bool Matches(SyntaxNode node) => 
@@ -199,20 +206,41 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     
     private IEnumerable<SyntaxNode> SelectWithKind(SyntaxNode root, NodeKind kind)
     {
+        return ApplyMode(EnumerateMatchesByKind(root, kind));
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatchesByKind(SyntaxNode root, NodeKind kind)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf()
-            .Where(n => n.Kind == kind && (_predicate == null || _predicate((T)n)));
-        
-        return ApplyMode(matches);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node.Kind != kind)
+                continue;
+
+            if (node is not T typed)
+                continue;
+
+            if (_predicate != null && !_predicate(typed))
+                continue;
+
+            yield return node;
+        }
     }
     
     public override IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // Match by C# type (no schema available)
+        return ApplyMode(EnumerateMatchesByType(root));
+    }
+
+    private IEnumerable<SyntaxNode> EnumerateMatchesByType(SyntaxNode root)
+    {
         var walker = new TreeWalker(root);
-        var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return ApplyMode(matches);
+        foreach (var node in walker.DescendantsAndSelf())
+        {
+            if (node is T typed && (_predicate == null || _predicate(typed)))
+                yield return node;
+        }
     }
     
     private IEnumerable<SyntaxNode> ApplyMode(IEnumerable<SyntaxNode> matches)
@@ -223,12 +251,26 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     /// <summary>
     /// Selects and casts to the strongly-typed syntax node.
     /// </summary>
-    public IEnumerable<T> SelectTyped(SyntaxTree tree) => Select(tree).Cast<T>();
+    public IEnumerable<T> SelectTyped(SyntaxTree tree)
+    {
+        foreach (var node in Select(tree))
+        {
+            if (node is T typed)
+                yield return typed;
+        }
+    }
     
     /// <summary>
     /// Selects and casts to the strongly-typed syntax node.
     /// </summary>
-    public IEnumerable<T> SelectTyped(SyntaxNode root) => Select(root).Cast<T>();
+    public IEnumerable<T> SelectTyped(SyntaxNode root)
+    {
+        foreach (var node in Select(root))
+        {
+            if (node is T typed)
+                yield return typed;
+        }
+    }
     
     public override bool Matches(SyntaxNode node) => 
         node is T typed && (_predicate == null || _predicate(typed));
