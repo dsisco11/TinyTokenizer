@@ -137,16 +137,8 @@ public sealed record SyntaxNodeQuery : NodeQuery<SyntaxNodeQuery>
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     public override bool Matches(SyntaxNode node) => 
@@ -225,15 +217,7 @@ public sealed record SyntaxNodeQuery<T> : NodeQuery<SyntaxNodeQuery<T>> where T 
     
     private IEnumerable<SyntaxNode> ApplyMode(IEnumerable<SyntaxNode> matches)
     {
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <summary>

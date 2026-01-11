@@ -82,14 +82,14 @@ Acceptance criteria:
 
 ## Phase 2 — Remove LINQ from Selection Modes (Start with `SelectModes.Last`)
 
-- [ ] Rewrite selection-mode handling without LINQ
-	- [ ] Replace `LastOrDefault()` usage with a simple scan that tracks the last match
-	- [ ] Ensure ordering/behavior matches existing semantics
-	- [ ] Avoid buffering unless semantics strictly require it
+- [x] Rewrite selection-mode handling without LINQ
+	- [x] Replace `LastOrDefault()` usage with a simple scan that tracks the last match
+	- [x] Ensure ordering/behavior matches existing semantics
+	- [x] Avoid buffering unless semantics strictly require it
 
-- [ ] Expand to other modes only if they are on the hot path
-	- [ ] Audit remaining modes for LINQ/buffering
-	- [ ] Rewrite only those that show up in profiles/benchmarks
+- [x] Expand to other modes only if they are on the hot path
+	- [x] Audit remaining modes for LINQ/buffering
+	- [x] Rewrite only those that show up in profiles/benchmarks
 
 Acceptance criteria:
 - `SelectModes.Last` returns the same result as before, with fewer allocations.

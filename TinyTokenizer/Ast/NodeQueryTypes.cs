@@ -7,16 +7,95 @@ namespace TinyTokenizer.Ast;
 /// </summary>
 internal static class SelectionModeHelper
 {
-    public static IEnumerable<QueryRegion> Apply(IEnumerable<QueryRegion> regions, SelectionMode mode, int modeArg) =>
-        mode switch
+    public static IEnumerable<T> Apply<T>(IEnumerable<T> source, SelectionMode mode, int modeArg)
+    {
+        return mode switch
         {
-            SelectionMode.First => regions.Take(1),
-            SelectionMode.Last => regions.TakeLast(1),
-            SelectionMode.Nth => regions.Skip(modeArg).Take(1),
-            SelectionMode.Skip => regions.Skip(modeArg),
-            SelectionMode.Take => regions.Take(modeArg),
-            _ => regions
+            SelectionMode.First => TakeFirst(source),
+            SelectionMode.Last => TakeLast(source),
+            SelectionMode.Nth => TakeNth(source, modeArg),
+            SelectionMode.Skip => Skip(source, modeArg),
+            SelectionMode.Take => Take(source, modeArg),
+            _ => source
         };
+    }
+
+    private static IEnumerable<T> TakeFirst<T>(IEnumerable<T> source)
+    {
+        foreach (var item in source)
+        {
+            yield return item;
+            yield break;
+        }
+    }
+
+    private static IEnumerable<T> TakeLast<T>(IEnumerable<T> source)
+    {
+        T? last = default;
+        var found = false;
+
+        foreach (var item in source)
+        {
+            last = item;
+            found = true;
+        }
+
+        if (found)
+            yield return last!;
+    }
+
+    private static IEnumerable<T> TakeNth<T>(IEnumerable<T> source, int n)
+    {
+        if (n < 0)
+            yield break;
+
+        var index = 0;
+        foreach (var item in source)
+        {
+            if (index == n)
+            {
+                yield return item;
+                yield break;
+            }
+            index++;
+        }
+    }
+
+    private static IEnumerable<T> Skip<T>(IEnumerable<T> source, int count)
+    {
+        if (count <= 0)
+        {
+            foreach (var item in source)
+                yield return item;
+            yield break;
+        }
+
+        var skipped = 0;
+        foreach (var item in source)
+        {
+            if (skipped < count)
+            {
+                skipped++;
+                continue;
+            }
+            yield return item;
+        }
+    }
+
+    private static IEnumerable<T> Take<T>(IEnumerable<T> source, int count)
+    {
+        if (count <= 0)
+            yield break;
+
+        var taken = 0;
+        foreach (var item in source)
+        {
+            yield return item;
+            taken++;
+            if (taken >= count)
+                yield break;
+        }
+    }
 }
 
 /// <summary>
@@ -69,16 +148,8 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -191,16 +262,8 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     {
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -303,9 +366,6 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <code>
     /// // Replace content between braces
     /// editor.Replace(Query.BraceBlock.Inner(), "new content")
-    /// 
-    /// // Works with empty blocks too
-    /// editor.Replace(Query.BraceBlock.Inner(), "inserted into empty")
     /// </code>
     /// </example>
     public InnerContentQuery Inner() => new InnerContentQuery(this);
@@ -327,12 +387,9 @@ public enum BoundarySide
 }
 
 /// <summary>
-/// A query that selects the boundary (start or end) of container nodes.
-/// For blocks, this returns the opener or closer token.
-/// For lists/containers without delimiters, this returns first/last child (or empty for empty containers).
+/// A query that selects the boundary node (start or end) of containers matched by an inner query.
 /// </summary>
 /// <remarks>
-/// This query carries metadata about which container and boundary is being targeted.
 /// <see cref="SyntaxEditor"/> uses this metadata to compute insertion positions,
 /// even for empty containers where <see cref="Select"/> returns no results.
 /// </remarks>
@@ -532,7 +589,12 @@ public sealed record InnerContentQuery : INodeQuery, IRegionQuery
             if (container is SyntaxBlock block)
             {
                 var innerCount = block.ChildCount;
-                var firstInner = block.InnerChildren.FirstOrDefault();
+                SyntaxNode? firstInner = null;
+                foreach (var child in block.InnerChildren)
+                {
+                    firstInner = child;
+                    break;
+                }
                 
                 yield return new QueryRegion(
                     parent: block,
@@ -578,15 +640,7 @@ public sealed record AnyNodeQuery : NodeQuery<AnyNodeQuery>
         if (_predicate != null)
             matches = matches.Where(_predicate);
         
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -641,15 +695,7 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
         var walker = new TreeWalker(root, NodeFilter.Leaves);
         var matches = walker.DescendantsAndSelf().Where(Matches);
         
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -719,15 +765,7 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
         
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -1156,9 +1194,11 @@ public sealed record BeginningOfFileQuery : INodeQuery, IGreenNodeQuery
     public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // BOF only matches the first node in the file
-        var firstChild = root.Children.FirstOrDefault();
-        if (firstChild != null)
-            yield return firstChild;
+        foreach (var child in root.Children)
+        {
+            yield return child;
+            yield break;
+        }
     }
     
     /// <inheritdoc/>
@@ -1214,9 +1254,14 @@ public sealed record EndOfFileQuery : INodeQuery, IGreenNodeQuery
     public IEnumerable<SyntaxNode> Select(SyntaxNode root)
     {
         // EOF only matches the last node in the file
-        var lastChild = root.Children.LastOrDefault();
-        if (lastChild != null)
-            yield return lastChild;
+        SyntaxNode? last = null;
+        foreach (var child in root.Children)
+        {
+            last = child;
+        }
+
+        if (last != null)
+            yield return last;
     }
     
     /// <inheritdoc/>
@@ -1563,15 +1608,7 @@ public sealed record AnyKeywordQuery : NodeQuery<AnyKeywordQuery>
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf().Where(Matches);
         
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+            return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -1679,16 +1716,8 @@ public sealed record SpecificKeywordQuery : NodeQuery<SpecificKeywordQuery>, ISc
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf()
             .Where(n => n.Kind == targetKind && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -1837,16 +1866,8 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
         var walker = new TreeWalker(tree.Root);
         var matches = walker.DescendantsAndSelf()
             .Where(n => kindSet.Contains(n.Kind) && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
@@ -1856,16 +1877,8 @@ public sealed record KeywordCategoryQuery : NodeQuery<KeywordCategoryQuery>
         var walker = new TreeWalker(root);
         var matches = walker.DescendantsAndSelf()
             .Where(n => n.Kind.IsKeyword() && (_predicate == null || _predicate(n)));
-        
-        return _mode switch
-        {
-            SelectionMode.First => matches.Take(1),
-            SelectionMode.Last => matches.TakeLast(1),
-            SelectionMode.Nth => matches.Skip(_modeArg).Take(1),
-            SelectionMode.Skip => matches.Skip(_modeArg),
-            SelectionMode.Take => matches.Take(_modeArg),
-            _ => matches
-        };
+
+        return SelectionModeHelper.Apply(matches, _mode, _modeArg);
     }
     
     /// <inheritdoc/>
