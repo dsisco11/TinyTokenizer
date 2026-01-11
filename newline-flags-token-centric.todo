@@ -98,9 +98,9 @@ Acceptance criteria:
 - [x] Run full tests
 	- [x] `dotnet test TinyTokenizer.Tests`
 
-- [ ] Add/update a targeted micro-benchmark (optional, if needed)
-	- [ ] Benchmark `SyntaxTree.Select(Query.Newline)` on newline-heavy source
-	- [ ] Benchmark green-path matching (`IGreenNodeQuery.TryMatchGreen`) for newline scanning
+- [x] Add/update a targeted micro-benchmark (optional, if needed)
+	- [x] Benchmark `SyntaxTree.Select(Query.Newline)` on newline-heavy source
+	- [x] Benchmark green-path matching (`IGreenNodeQuery.TryMatchGreen`) for newline scanning
 
 Acceptance criteria:
 - Tests pass.
