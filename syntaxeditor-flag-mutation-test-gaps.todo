@@ -130,13 +130,13 @@ Acceptance criteria:
 
 ## Phase 6 — Schema/Rebind Interaction (Syntax Binding)
 
-- [ ] Ensure edits with schema + syntax definitions do not violate token-centric boundary semantics
-	- [ ] Parse with a schema that includes syntax definitions (so `Commit()` triggers `RebindAt`)
-	- [ ] Perform insert/replace/remove inside or around bound syntax nodes
-	- [ ] Assert:
-		- [ ] leaf boundary flags are correct
-		- [ ] syntax containers do NOT have `GreenNodeFlagMasks.Boundary`
-		- [ ] contains flags reflect subtree
+- [x] Ensure edits with schema + syntax definitions do not violate token-centric boundary semantics
+	- [x] Parse with a schema that includes syntax definitions (so `Commit()` triggers `RebindAt`)
+	- [x] Perform insert/replace/remove inside or around bound syntax nodes
+	- [x] Assert:
+		- [x] leaf boundary flags are correct
+		- [x] syntax containers do NOT have `GreenNodeFlagMasks.Boundary`
+		- [x] contains flags reflect subtree
 
 Acceptance criteria:
 - Rebinding does not break boundary/contains invariants.

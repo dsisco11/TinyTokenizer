@@ -1955,6 +1955,104 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void SchemaRebind_ReplaceInsideSyntaxNode_PreservesLeafBoundaryFlags_AndKeepsSyntaxContainersBoundaryFree()
+    {
+        const GreenNodeFlags boundaryMask =
+            GreenNodeFlags.HasLeadingNewlineTrivia |
+            GreenNodeFlags.HasTrailingNewlineTrivia |
+            GreenNodeFlags.HasLeadingWhitespaceTrivia |
+            GreenNodeFlags.HasTrailingWhitespaceTrivia |
+            GreenNodeFlags.HasLeadingCommentTrivia |
+            GreenNodeFlags.HasTrailingCommentTrivia;
+
+        var schema = Schema.Create()
+            .WithCommentStyles(CommentStyle.CStyleSingleLine)
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\" // c\nnext", schema);
+
+        var syntaxBefore = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxBefore.Green.Flags, boundaryMask);
+
+        var tagBefore = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var valueBefore = FindToken(tree, NodeKind.String, "\"value\"");
+        var nextBefore = FindToken(tree, NodeKind.Ident, "next");
+
+        // Indentation is leading whitespace on the first token inside the syntax node.
+        AssertHasFlags(tagBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        // The string token owns same-line comment + newline.
+        AssertHasFlags(valueBefore.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(nextBefore.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.String("\"value\""), "\"X\"")
+            .Commit();
+
+        var syntaxAfter = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxAfter.Green.Flags, boundaryMask);
+
+        var tagAfter = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var xAfter = FindToken(tree, NodeKind.String, "\"X\"");
+        var nextAfter = FindToken(tree, NodeKind.Ident, "next");
+
+        AssertHasFlags(tagAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingCommentTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(nextAfter.Green.Flags, GreenNodeFlags.HasLeadingCommentTrivia | GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsCommentTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void SchemaRebind_InsertBeforeSyntaxNode_DoesNotStealLeadingWhitespace_AndKeepsSyntaxContainersBoundaryFree()
+    {
+        const GreenNodeFlags boundaryMask =
+            GreenNodeFlags.HasLeadingNewlineTrivia |
+            GreenNodeFlags.HasTrailingNewlineTrivia |
+            GreenNodeFlags.HasLeadingWhitespaceTrivia |
+            GreenNodeFlags.HasTrailingWhitespaceTrivia |
+            GreenNodeFlags.HasLeadingCommentTrivia |
+            GreenNodeFlags.HasTrailingCommentTrivia;
+
+        var schema = Schema.Create()
+            .WithTagPrefixes('@')
+            .DefineSyntax(Syntax.Define<TestTaggedNode>("testTagged")
+                .Match(Q.AnyTaggedIdent, Q.AnyString)
+                .Build())
+            .Build();
+
+        var tree = SyntaxTree.Parse("before\n  @tag \"value\"\nafter", schema);
+
+        var syntaxBefore = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxBefore.Green.Flags, boundaryMask);
+
+        var tagBefore = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        AssertHasFlags(tagBefore.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+
+        tree.CreateEditor()
+            .InsertBefore(Q.Syntax<TestTaggedNode>(), "X\n")
+            .Commit();
+
+        var syntaxAfter = Assert.Single(tree.Select(Q.Syntax<TestTaggedNode>()).OfType<TestTaggedNode>());
+        AssertNotHasFlags(syntaxAfter.Green.Flags, boundaryMask);
+
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var tagAfter = FindToken(tree, NodeKind.TaggedIdent, "@tag");
+        var afterAfter = FindToken(tree, NodeKind.Ident, "after");
+
+        // Inserted token owns its trailing newline; syntax node's first token keeps its indentation.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(tagAfter.Green.Flags, GreenNodeFlags.HasLeadingWhitespaceTrivia);
+        AssertNotHasFlags(afterAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsWhitespaceTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
     public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
     {
         var tree = SyntaxTree.Parse("{a}");
