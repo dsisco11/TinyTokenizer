@@ -36,6 +36,12 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
 
     /// <summary>The kind of this node.</summary>
     public abstract NodeKind Kind { get; }
+
+    /// <summary>
+    /// Cached flags describing trivia/content properties for fast queries.
+    /// Concrete green node types override this once flags are computed.
+    /// </summary>
+    internal virtual GreenNodeFlags Flags => GreenNodeFlags.None;
     
     /// <summary>
     /// Total character width of this node, including any trivia.

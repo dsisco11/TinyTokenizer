@@ -68,17 +68,22 @@ Acceptance criteria:
 
 ## Phase 1 — Add Flags Infrastructure
 
-- [ ] Add `GreenNodeFlags` enum (bitmask)
-	- [ ] Pick underlying type (`ushort` vs `uint`), reserve room for future bits
-	- [ ] Keep naming consistent: `HasLeadingX` / `HasTrailingX` / `ContainsX`
+- [x] Add `GreenNodeFlags` enum (bitmask)
+	- [x] Pick underlying type (`ushort` vs `uint`), reserve room for future bits
+		- Decision: use `uint` for headroom (we already need ~12 bits; `uint` keeps growth cheap).
+	- [x] Keep naming consistent: `HasLeadingX` / `HasTrailingX` / `ContainsX`
 
-- [ ] Add `Flags` to `GreenNode`
-	- [ ] Add `internal GreenNodeFlags Flags { get; }`
+- [x] Add `Flags` to `GreenNode`
+	- [x] Add `internal GreenNodeFlags Flags { get; }`
+		- Implemented as `internal virtual GreenNodeFlags Flags => GreenNodeFlags.None;` initially.
+		- Phase 2/3 will override in concrete node types after computing flags.
 	- [ ] Add lightweight convenience bools (optional)
 
-- [ ] Confirm record/equality impact approach
-	- [ ] Ensure `Flags` is deterministically derived from other fields
-	- [ ] Decide whether `Flags` should participate in record equality (default) or be excluded (custom)
+- [x] Confirm record/equality impact approach
+	- [x] Ensure `Flags` is deterministically derived from other fields
+		- Decision: flags must be computed solely from trivia/kind/children (no external state).
+	- [x] Decide whether `Flags` should participate in record equality (default) or be excluded (custom)
+		- Decision: keep default record equality; rely on deterministic computation + Phase 5 tests.
 
 Acceptance criteria:
 - Green nodes compile with a flags field/property available from the base type.
