@@ -17,7 +17,14 @@ Constraints:
 
 ## Phase 0 — Decide Flag Semantics (one-time)
 
-- [ ] Confirm high-ROI flag set (v1)
+
+Decisions (grounded in current AST model):
+- Trivia kinds are exactly: `Whitespace` (spaces/tabs), `Newline` (\n / \r\n), `SingleLineComment`, `MultiLineComment`.
+- Keywords are represented as nodes with `NodeKind` in the keyword range (`NodeKindExtensions.IsKeyword()`).
+- Tagged identifiers are leaf nodes with `NodeKind.TaggedIdent`.
+- Errors are leaf nodes with `NodeKind.Error`.
+
+- [x] Confirm high-ROI flag set (v1)
 	- [ ] Boundary trivia flags
 		- [ ] `HasLeadingNewlineTrivia` / `HasTrailingNewlineTrivia`
 		- [ ] `HasLeadingCommentTrivia` / `HasTrailingCommentTrivia`
@@ -30,10 +37,29 @@ Constraints:
 		- [ ] `ContainsKeyword`
 		- [ ] `ContainsTaggedIdent`
 
-- [ ] Confirm boundary meaning for containers
-	- [ ] “Leading” refers to the left boundary of the node’s text span
-	- [ ] “Trailing” refers to the right boundary of the node’s text span
-	- [ ] For containers, boundary flags derive from first/last leaf boundaries (not necessarily immediate delimiter leaves for all container types)
+- [x] Confirm boundary meaning for containers
+	- [x] “Leading” refers to the left boundary of the node’s text span
+	- [x] “Trailing” refers to the right boundary of the node’s text span
+	- [x] For containers, boundary flags derive from first/last leaf boundaries (not necessarily immediate delimiter leaves for all container types)
+
+Flag semantics (implementation-ready):
+- Boundary flags:
+	- `HasLeadingNewlineTrivia`: node’s left boundary has trivia of kind `Newline`.
+	- `HasTrailingNewlineTrivia`: node’s right boundary has trivia of kind `Newline`.
+	- `HasLeadingWhitespaceTrivia`: left boundary has trivia kind `Whitespace` (explicitly excludes `Newline`).
+	- `HasTrailingWhitespaceTrivia`: right boundary has trivia kind `Whitespace`.
+	- `HasLeadingCommentTrivia`: left boundary has trivia kind `SingleLineComment` OR `MultiLineComment`.
+	- `HasTrailingCommentTrivia`: right boundary has trivia kind `SingleLineComment` OR `MultiLineComment`.
+	- Leaf rule: boundary flags are computed by scanning `GreenLeaf.LeadingTrivia` / `GreenLeaf.TrailingTrivia`.
+	- Container rule: boundary flags are derived from the first/last leaf descendant boundaries (fast once flags exist). For `GreenBlock`, this effectively comes from opener/closer delimiter leaves.
+
+- Subtree flags:
+	- `ContainsNewlineTrivia`: any leaf in the subtree has newline trivia (leading or trailing).
+	- `ContainsWhitespaceTrivia`: any leaf in subtree has whitespace trivia.
+	- `ContainsCommentTrivia`: any leaf in subtree has comment trivia.
+	- `ContainsErrorNode`: any node in subtree has `Kind == NodeKind.Error`.
+	- `ContainsKeyword`: any node in subtree has `Kind.IsKeyword()`.
+	- `ContainsTaggedIdent`: any node in subtree has `Kind == NodeKind.TaggedIdent`.
 
 Acceptance criteria:
 - Flag list and boundary semantics are written down and stable.
