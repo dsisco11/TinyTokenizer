@@ -81,11 +81,11 @@ Acceptance criteria:
 
 ## Phase 4 — Update Newline Query to Use Flags First (No Type Checks)
 
-- [ ] Update `NewlineNodeQuery` to rely on strict flags
-	- [ ] `HasGreenNewline(node)` becomes: `(node.Flags & HasLeadingNewlineTrivia) != 0`
-	- [ ] `HasPreviousSiblingTrailingNewline(...)` becomes: `(prev.Flags & HasTrailingNewlineTrivia) != 0`
-	- [ ] Keep sibling-context logic in `TryMatchGreen` (can’t be encoded as single-node flag)
-	- [ ] Confirm no container nodes accidentally match due to flag propagation fixes (Phase 2)
+- [x] Update `NewlineNodeQuery` to rely on strict flags
+	- [x] `HasGreenNewline(node)` becomes: `(node.Flags & HasLeadingNewlineTrivia) != 0`
+	- [x] `HasPreviousSiblingTrailingNewline(...)` becomes: `(prev.Flags & HasTrailingNewlineTrivia) != 0`
+	- [x] Keep sibling-context logic in `TryMatchGreen` (can’t be encoded as single-node flag)
+	- [x] Confirm no container nodes accidentally match due to flag propagation fixes (Phase 2)
 
 Acceptance criteria:
 - `Query.Newline` behavior remains identical for tokens/blocks.

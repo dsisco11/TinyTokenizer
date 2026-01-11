@@ -681,9 +681,8 @@ public sealed record LeafNodeQuery : NodeQuery<LeafNodeQuery>
 /// <summary>
 /// Matches nodes that represent or are preceded by a newline.
 /// Checks:
-/// 1. The node itself is a whitespace token containing newline characters.
-/// 2. The node's leading trivia contains a newline.
-/// 3. The previous sibling's trailing trivia contains a newline.
+/// 1. The node's leading boundary trivia contains a newline.
+/// 2. The previous sibling's trailing boundary trivia contains a newline.
 /// </summary>
 /// <remarks>
 /// This query is particularly useful for line-based pattern matching, such as
@@ -744,61 +743,56 @@ public sealed record NewlineNodeQuery : NodeQuery<NewlineNodeQuery>
         bool hasNewline = HasGreenNewline(node);
         return _negated ? !hasNewline : hasNewline;
     }
+
+    internal override bool TryMatchGreen(IReadOnlyList<GreenNode> siblings, int startIndex, out int consumedCount)
+    {
+        if ((uint)startIndex >= (uint)siblings.Count)
+        {
+            consumedCount = 0;
+            return false;
+        }
+
+        var node = siblings[startIndex];
+
+        // Token-centric newline semantics:
+        // - current node matches if it owns leading newline trivia
+        // - OR if previous sibling owns trailing newline trivia
+        bool hasNewline = HasGreenNewline(node);
+        if (!hasNewline && startIndex > 0)
+        {
+            hasNewline = HasGreenTrailingNewline(siblings[startIndex - 1]);
+        }
+
+        bool matched = _negated ? !hasNewline : hasNewline;
+        if (matched)
+        {
+            consumedCount = 1;
+            return true;
+        }
+
+        consumedCount = 0;
+        return false;
+    }
     
     private static bool HasGreenNewline(GreenNode node)
     {
-        // Check leading trivia for newline
-        var leadingTrivia = node switch
-        {
-            GreenLeaf gl => gl.LeadingTrivia,
-            GreenBlock gb => gb.LeadingTrivia,
-            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        foreach (var t in leadingTrivia)
-        {
-            if (t.Kind == TriviaKind.Newline)
-                return true;
-        }
-        
-        return false;
+        return (node.Flags & GreenNodeFlags.HasLeadingNewlineTrivia) != 0;
+    }
+
+    private static bool HasGreenTrailingNewline(GreenNode node)
+    {
+        return (node.Flags & GreenNodeFlags.HasTrailingNewlineTrivia) != 0;
     }
     
     private static bool HasNewline(SyntaxNode node)
     {
-        // Check 1: Does leading trivia contain newline?
-        var leadingTrivia = node.Green switch
-        {
-            GreenLeaf gl => gl.LeadingTrivia,
-            GreenBlock gb => gb.LeadingTrivia,
-            _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-        };
-        
-        foreach (var t in leadingTrivia)
-        {
-            if (t.Kind == TriviaKind.Newline)
-                return true;
-        }
-        
-        // Check 2: Does previous sibling's trailing trivia contain newline?
+        // Check 1: does this node own leading newline trivia?
+        if ((node.Green.Flags & GreenNodeFlags.HasLeadingNewlineTrivia) != 0)
+            return true;
+
+        // Check 2: does previous sibling own trailing newline trivia?
         var prev = node.PreviousSibling();
-        if (prev != null)
-        {
-            var trailingTrivia = prev.Green switch
-            {
-                GreenLeaf gl => gl.TrailingTrivia,
-                GreenBlock gb => gb.TrailingTrivia,
-                _ => System.Collections.Immutable.ImmutableArray<GreenTrivia>.Empty
-            };
-            
-            foreach (var t in trailingTrivia)
-            {
-                if (t.Kind == TriviaKind.Newline)
-                    return true;
-            }
-        }
-        
-        return false;
+        return prev != null && (prev.Green.Flags & GreenNodeFlags.HasTrailingNewlineTrivia) != 0;
     }
     
     protected override NewlineNodeQuery CreateFiltered(Func<SyntaxNode, bool> predicate) =>
