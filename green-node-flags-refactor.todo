@@ -1,0 +1,154 @@
+todo
+
+# Green Node Flags Refactor (Precursor)
+
+Goal: add a compact flags bitmask to green nodes so newline/comment/whitespace/error/keyword/tagged-ident checks are O(1) and enable subtree pruning.
+
+Scope:
+- Precursor to the Query newline optimization plan.
+- Green layer only (TinyTokenizer/TinyTokenizer/Ast/Green*). No query changes in this work item.
+
+Constraints:
+- Green nodes remain immutable + structurally shareable.
+- Flags must be deterministically derived from immutable content (trivia + children), never mutated.
+- Preserve semantics: newline flags reflect `TriviaKind.Newline` only.
+
+------------------------------------------------------------------------
+
+## Phase 0 — Decide Flag Semantics (one-time)
+
+- [ ] Confirm high-ROI flag set (v1)
+	- [ ] Boundary trivia flags
+		- [ ] `HasLeadingNewlineTrivia` / `HasTrailingNewlineTrivia`
+		- [ ] `HasLeadingCommentTrivia` / `HasTrailingCommentTrivia`
+		- [ ] `HasLeadingWhitespaceTrivia` / `HasTrailingWhitespaceTrivia`
+	- [ ] Subtree flags
+		- [ ] `ContainsNewlineTrivia`
+		- [ ] `ContainsCommentTrivia`
+		- [ ] `ContainsWhitespaceTrivia`
+		- [ ] `ContainsErrorNode`
+		- [ ] `ContainsKeyword`
+		- [ ] `ContainsTaggedIdent`
+
+- [ ] Confirm boundary meaning for containers
+	- [ ] “Leading” refers to the left boundary of the node’s text span
+	- [ ] “Trailing” refers to the right boundary of the node’s text span
+	- [ ] For containers, boundary flags derive from first/last leaf boundaries (not necessarily immediate delimiter leaves for all container types)
+
+Acceptance criteria:
+- Flag list and boundary semantics are written down and stable.
+
+------------------------------------------------------------------------
+
+## Phase 1 — Add Flags Infrastructure
+
+- [ ] Add `GreenNodeFlags` enum (bitmask)
+	- [ ] Pick underlying type (`ushort` vs `uint`), reserve room for future bits
+	- [ ] Keep naming consistent: `HasLeadingX` / `HasTrailingX` / `ContainsX`
+
+- [ ] Add `Flags` to `GreenNode`
+	- [ ] Add `internal GreenNodeFlags Flags { get; }`
+	- [ ] Add lightweight convenience bools (optional)
+
+- [ ] Confirm record/equality impact approach
+	- [ ] Ensure `Flags` is deterministically derived from other fields
+	- [ ] Decide whether `Flags` should participate in record equality (default) or be excluded (custom)
+
+Acceptance criteria:
+- Green nodes compile with a flags field/property available from the base type.
+
+------------------------------------------------------------------------
+
+## Phase 2 — Compute Flags in Leaves
+
+- [ ] Update `GreenLeaf` constructor
+	- [ ] Scan `LeadingTrivia` once to set boundary flags
+	- [ ] Scan `TrailingTrivia` once to set boundary flags
+	- [ ] Set subtree flags based on boundary results
+	- [ ] Ensure no extra passes beyond existing trivia width computation (piggyback loops)
+
+- [ ] Verify `GreenNodeCache` behavior is still correct
+	- [ ] Cached leaves with no trivia have stable flags (`None`)
+	- [ ] Cached “trailing space” leaves have whitespace flags but no newline/comment
+	- [ ] Leaves with trivia remain non-cached (unchanged behavior)
+
+Acceptance criteria:
+- Leaf flags are correct for leading/trailing trivia kinds and don’t add noticeable allocations.
+
+------------------------------------------------------------------------
+
+## Phase 3 — Aggregate Flags in Containers
+
+- [ ] Update `GreenBlock`
+	- [ ] OR flags from opener leaf + all inner children + closer leaf
+	- [ ] Ensure boundary flags reflect the block’s actual left/right boundaries
+
+- [ ] Update `GreenList`
+	- [ ] OR flags from all children
+	- [ ] Derive boundary flags from first/last child when present
+
+- [ ] Update `GreenSyntaxNode`
+	- [ ] OR flags from all children
+	- [ ] Derive boundary flags from first/last child when present
+
+- [ ] Validate structural sharing invariants
+	- [ ] `WithSlot`/`WithInsert`/`WithReplace` cause flags to recompute via constructors (no ad-hoc flag mutation)
+	- [ ] `WithLeadingTrivia`/`WithTrailingTrivia`/`WithText` on leaves continue to work
+
+Acceptance criteria:
+- Container flags correctly reflect subtree + boundary properties and remain deterministic.
+
+------------------------------------------------------------------------
+
+## Phase 4 — Tests: Flag Correctness
+
+- [ ] Add/extend unit tests for flag correctness
+	- [ ] Leaf boundary flags
+		- [ ] Newline trivia in leading/trailing
+		- [ ] Comment trivia in leading/trailing
+		- [ ] Whitespace trivia in leading/trailing
+	- [ ] Aggregation
+		- [ ] Block contains newline/comment/whitespace when present in delimiters or inner children
+		- [ ] List/syntax node aggregation
+	- [ ] “Newline ownership” sanity (existing lexer trivia semantics)
+		- [ ] Newline appears as trailing trivia of previous token in common cases
+
+Acceptance criteria:
+- Tests reliably catch flag computation regressions.
+
+------------------------------------------------------------------------
+
+## Phase 5 — Tests: Record Equality / Hash Stability (extra safety)
+
+- [ ] Equality invariants (structural equality)
+	- [ ] Construct equivalent green nodes via different construction paths and assert `Equals` is true
+	- [ ] Assert `GetHashCode` matches for structurally equal nodes
+
+- [ ] Cache interaction
+	- [ ] Cached leaf instances behave consistently (equal nodes produce equal hashes)
+	- [ ] Non-cached leaves with identical trivia sequences still compare equal
+
+- [ ] Structural sharing sanity
+	- [ ] `With*` methods do not mutate originals
+	- [ ] Only content changes cause inequality
+
+Acceptance criteria:
+- We have strong confidence that adding `Flags` doesn’t introduce equality/hash surprises.
+
+------------------------------------------------------------------------
+
+## Phase 6 — Validation / Perf Smoke
+
+- [ ] Run `dotnet test TinyTokenizer.Tests`
+- [ ] Run `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *AstBenchmarks*`
+- [ ] Run `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxEditorBenchmarks*`
+
+Acceptance criteria:
+- All tests pass; no obvious performance regressions.
+
+------------------------------------------------------------------------
+
+## Follow-up (out of scope for this .todo)
+
+- [ ] Update Query newline matching to use flags (separate plan/work item)
+- [ ] Optional: add targeted benchmarks for `SyntaxTree.Select(Query.Newline)` once newline query changes land
