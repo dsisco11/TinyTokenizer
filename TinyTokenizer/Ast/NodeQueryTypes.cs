@@ -197,35 +197,23 @@ public sealed record KindNodeQuery : NodeQuery<KindNodeQuery>
     /// <summary>
     /// Optimized region resolution: single-pass traversal that checks Kind directly
     /// and applies selection mode inline for efficient First()/Take() short-circuit.
-    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// Uses RegionTraversal to avoid per-visited-node allocations.
     /// </summary>
     internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        var regions = SelectRegionsFromWalker(walker);
+        var regions = RegionTraversal.SelectRegions(root, TryGetRegion);
         return ApplyRegionFilter(regions);
-    }
-    
-    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
-    {
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+
+        bool TryGetRegion(SyntaxNode node, out int consumedCount)
         {
-            // Inline match check - avoids virtual TryMatch call
             if (node.Kind == Kind && (_predicate == null || _predicate(node)))
             {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + 1, // KindNodeQuery always consumes 1
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
+                consumedCount = 1;
+                return true;
             }
+
+            consumedCount = 0;
+            return false;
         }
     }
     
@@ -318,37 +306,25 @@ public record BlockNodeQuery : NodeQuery<BlockNodeQuery>
     /// <summary>
     /// Optimized region resolution: single-pass traversal that checks block type directly
     /// and applies selection mode inline for efficient First()/Take() short-circuit.
-    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// Uses RegionTraversal to avoid per-visited-node allocations.
     /// </summary>
     internal override IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        var regions = SelectRegionsFromWalker(walker);
+        var regions = RegionTraversal.SelectRegions(root, TryGetRegion);
         return ApplyRegionFilter(regions);
-    }
-    
-    private IEnumerable<QueryRegion> SelectRegionsFromWalker(PathTrackingWalker walker)
-    {
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+
+        bool TryGetRegion(SyntaxNode node, out int consumedCount)
         {
-            // Inline match check - avoids virtual TryMatch call
             if (node is SyntaxBlock block &&
                 (_opener == null || block.Opener == _opener.Value) &&
                 (_predicate == null || _predicate(node)))
             {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + 1, // BlockNodeQuery always consumes 1
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
+                consumedCount = 1;
+                return true;
             }
+
+            consumedCount = 0;
+            return false;
         }
     }
     

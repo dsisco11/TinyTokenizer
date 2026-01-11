@@ -130,14 +130,14 @@ Acceptance criteria:
 
 ## Phase 5 — Optimize Region Resolution (Materialize-on-Match)
 
-- [ ] Refactor region traversal to avoid per-visited-node allocations
-	- [ ] Maintain an incremental slot-index stack while walking the tree
-	- [ ] Construct `NodePath` only when a match is found (snapshot stack)
-	- [ ] Avoid `NodePath.FromNode(...)` and repeated `.ToArray()` allocations in scans
+- [x] Refactor region traversal to avoid per-visited-node allocations
+	- [x] Maintain an incremental slot-index stack while walking the tree
+	- [x] Construct `NodePath` only when a match is found (snapshot stack)
+	- [x] Avoid `NodePath.FromNode(...)` and repeated `.ToArray()` allocations in scans
 
-- [ ] Validate correctness
-	- [ ] Query regions (`IRegionQuery` + match-based fallback) return identical regions
-	- [ ] Editor operations that depend on regions remain stable
+- [x] Validate correctness
+	- [x] Query regions (`IRegionQuery` + match-based fallback) return identical regions
+	- [x] Editor operations that depend on regions remain stable
 
 Acceptance criteria:
 - Region-heavy operations allocate less and remain semantically identical.

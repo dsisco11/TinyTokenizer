@@ -124,9 +124,9 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery, IRegionQu
         => SelectRegionsCore(root);
     
     /// <summary>
-    /// Default region resolution: traverses tree with PathTrackingWalker, calls TryMatch once per node,
+    /// Default region resolution: traverses tree with a stack-based walker, calls TryMatch once per node,
     /// then applies selection filtering (First/Last/Nth via ApplyRegionFilter).
-    /// Uses incremental path tracking for O(1) per node instead of O(depth).
+    /// Snapshots a NodePath only when a match is found.
     /// </summary>
     internal virtual IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
     {
@@ -135,29 +135,11 @@ public abstract record NodeQuery<TSelf> : INodeQuery, IGreenNodeQuery, IRegionQu
     
     /// <summary>
     /// Traverses tree and yields a region for each matching node.
-    /// Uses PathTrackingWalker for O(1) path computation per node.
+    /// Uses RegionTraversal to avoid per-visited-node allocations.
     /// </summary>
     private IEnumerable<QueryRegion> SelectAllRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
-        {
-            if (TryMatch(node, out var consumedCount))
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
-        }
+        return RegionTraversal.SelectRegions(root, TryMatch);
     }
     
     /// <summary>

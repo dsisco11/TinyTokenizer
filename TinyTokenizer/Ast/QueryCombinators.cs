@@ -215,25 +215,7 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
-        {
-            if (TryMatch(node, out var consumedCount))
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
-        }
+        return RegionTraversal.SelectRegions(root, TryMatch);
     }
 }
 
@@ -393,25 +375,7 @@ public sealed record SequenceQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, 
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
-        {
-            if (TryMatch(node, out var consumedCount))
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
-        }
+        return RegionTraversal.SelectRegions(root, TryMatch);
     }
 }
 
@@ -478,25 +442,16 @@ public sealed record OptionalQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, 
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        // Optional delegates to inner query - traverse and match inner directly
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        // Optional delegates to inner query - only yield when inner consumes > 0
+        return RegionTraversal.SelectRegions(root, TryGetInnerRegion);
+
+        bool TryGetInnerRegion(SyntaxNode node, out int consumedCount)
         {
-            if (_inner.TryMatch(node, out var consumedCount) && consumedCount > 0)
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
+            if (_inner.TryMatch(node, out consumedCount) && consumedCount > 0)
+                return true;
+
+            consumedCount = 0;
+            return false;
         }
     }
 }
@@ -625,24 +580,15 @@ public sealed record RepeatQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, IS
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
+        return RegionTraversal.SelectRegions(root, TryGetNonEmptyRegion);
+
+        bool TryGetNonEmptyRegion(SyntaxNode node, out int consumedCount)
         {
-            if (TryMatch(node, out var consumedCount) && consumedCount > 0)
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
+            if (TryMatch(node, out consumedCount) && consumedCount > 0)
+                return true;
+
+            consumedCount = 0;
+            return false;
         }
     }
 }
@@ -846,25 +792,7 @@ public sealed record RepeatUntilQuery : INodeQuery, IGreenNodeQuery, IRegionQuer
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
-        {
-            if (TryMatch(node, out var consumedCount))
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
-        }
+        return RegionTraversal.SelectRegions(root, TryMatch);
     }
 }
 
@@ -1002,25 +930,7 @@ public sealed record LookaheadQuery : INodeQuery, IGreenNodeQuery, IRegionQuery,
     /// <inheritdoc/>
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new PathTrackingWalker(root);
-        foreach (var (node, parentPath) in walker.DescendantsAndSelfWithPath())
-        {
-            if (TryMatch(node, out var consumedCount))
-            {
-                var parent = node.Parent;
-                if (parent != null)
-                {
-                    yield return new QueryRegion(
-                        parentPath: parentPath,
-                        parent: parent,
-                        startSlot: node.SiblingIndex,
-                        endSlot: node.SiblingIndex + consumedCount,
-                        firstNode: node,
-                        position: node.Position
-                    );
-                }
-            }
-        }
+        return RegionTraversal.SelectRegions(root, TryMatch);
     }
 }
 
