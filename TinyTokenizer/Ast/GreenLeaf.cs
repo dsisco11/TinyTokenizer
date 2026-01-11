@@ -17,9 +17,13 @@ internal sealed record GreenLeaf : GreenNode
         $"{Kind}[{Width}] \"{Truncate(Text, 20)}\"";
 
     private readonly int _width;
+    private readonly GreenNodeFlags _flags;
     
     /// <inheritdoc/>
     public override NodeKind Kind { get; }
+
+    /// <inheritdoc/>
+    internal override GreenNodeFlags Flags => _flags;
     
     /// <summary>The text content of this token (excluding trivia).</summary>
     public string Text { get; }
@@ -61,10 +65,31 @@ internal sealed record GreenLeaf : GreenNode
         Text = text;
         LeadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         TrailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
-        
-        LeadingTriviaWidth = ComputeTriviaWidth(LeadingTrivia);
-        TrailingTriviaWidth = ComputeTriviaWidth(TrailingTrivia);
+
+        LeadingTriviaWidth = ComputeTriviaWidthAndFlags(
+            LeadingTrivia,
+            isLeading: true,
+            out var leadingBoundaryFlags,
+            out var leadingContainsFlags);
+
+        TrailingTriviaWidth = ComputeTriviaWidthAndFlags(
+            TrailingTrivia,
+            isLeading: false,
+            out var trailingBoundaryFlags,
+            out var trailingContainsFlags);
+
         _width = LeadingTriviaWidth + Text.Length + TrailingTriviaWidth;
+
+        // Subtree flags based on node kind
+        var kindFlags = GreenNodeFlags.None;
+        if (kind == NodeKind.Error)
+            kindFlags |= GreenNodeFlags.ContainsErrorNode;
+        if (kind == NodeKind.TaggedIdent)
+            kindFlags |= GreenNodeFlags.ContainsTaggedIdent;
+        if (kind.IsKeyword())
+            kindFlags |= GreenNodeFlags.ContainsKeyword;
+
+        _flags = leadingBoundaryFlags | trailingBoundaryFlags | leadingContainsFlags | trailingContainsFlags | kindFlags;
     }
     
     /// <inheritdoc/>
@@ -114,11 +139,56 @@ internal sealed record GreenLeaf : GreenNode
     public GreenLeaf WithText(string text)
         => new(Kind, text, LeadingTrivia, TrailingTrivia);
     
-    private static int ComputeTriviaWidth(ImmutableArray<GreenTrivia> trivia)
+    private static int ComputeTriviaWidthAndFlags(
+        ImmutableArray<GreenTrivia> trivia,
+        bool isLeading,
+        out GreenNodeFlags boundaryFlags,
+        out GreenNodeFlags containsFlags)
     {
+        boundaryFlags = GreenNodeFlags.None;
+        containsFlags = GreenNodeFlags.None;
+
         int width = 0;
+        bool hasNewline = false;
+        bool hasWhitespace = false;
+        bool hasComment = false;
+
         foreach (var t in trivia)
+        {
             width += t.Width;
+            switch (t.Kind)
+            {
+                case TriviaKind.Newline:
+                    hasNewline = true;
+                    break;
+                case TriviaKind.Whitespace:
+                    hasWhitespace = true;
+                    break;
+                case TriviaKind.SingleLineComment:
+                case TriviaKind.MultiLineComment:
+                    hasComment = true;
+                    break;
+            }
+        }
+
+        if (hasNewline)
+        {
+            boundaryFlags |= isLeading ? GreenNodeFlags.HasLeadingNewlineTrivia : GreenNodeFlags.HasTrailingNewlineTrivia;
+            containsFlags |= GreenNodeFlags.ContainsNewlineTrivia;
+        }
+
+        if (hasWhitespace)
+        {
+            boundaryFlags |= isLeading ? GreenNodeFlags.HasLeadingWhitespaceTrivia : GreenNodeFlags.HasTrailingWhitespaceTrivia;
+            containsFlags |= GreenNodeFlags.ContainsWhitespaceTrivia;
+        }
+
+        if (hasComment)
+        {
+            boundaryFlags |= isLeading ? GreenNodeFlags.HasLeadingCommentTrivia : GreenNodeFlags.HasTrailingCommentTrivia;
+            containsFlags |= GreenNodeFlags.ContainsCommentTrivia;
+        }
+
         return width;
     }
 }

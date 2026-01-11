@@ -18,6 +18,7 @@ internal sealed record GreenList : GreenContainer
 
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
+    private readonly GreenNodeFlags _flags;
     private readonly int[]? _childOffsets;
     
     /// <inheritdoc/>
@@ -25,6 +26,9 @@ internal sealed record GreenList : GreenContainer
     
     /// <inheritdoc/>
     public override int Width => _width;
+
+    /// <inheritdoc/>
+    internal override GreenNodeFlags Flags => _flags;
     
     /// <inheritdoc/>
     public override ImmutableArray<GreenNode> Children => _children;
@@ -41,6 +45,27 @@ internal sealed record GreenList : GreenContainer
         foreach (var child in _children)
             width += child.Width;
         _width = width;
+
+        // Flags
+        if (_children.Length == 0)
+        {
+            _flags = GreenNodeFlags.None;
+        }
+        else
+        {
+            var first = _children[0];
+            var last = _children[^1];
+
+            var boundary =
+                (first.Flags & GreenNodeFlagMasks.LeadingBoundary) |
+                (last.Flags & GreenNodeFlagMasks.TrailingBoundary);
+
+            var contains = GreenNodeFlags.None;
+            foreach (var child in _children)
+                contains |= child.Flags & GreenNodeFlagMasks.Contains;
+
+            _flags = boundary | contains;
+        }
         
         // Pre-compute offsets for large lists
         if (_children.Length >= 10)

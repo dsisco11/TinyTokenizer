@@ -24,6 +24,7 @@ internal sealed record GreenSyntaxNode : GreenContainer
     private readonly ImmutableArray<GreenNode> _children;
     private readonly NodeKind _kind;
     private readonly int _width;
+    private readonly GreenNodeFlags _flags;
     
     /// <summary>
     /// Creates a green syntax node wrapping the specified children.
@@ -42,6 +43,27 @@ internal sealed record GreenSyntaxNode : GreenContainer
             width += child.Width;
         }
         _width = width;
+
+        // Flags
+        if (_children.Length == 0)
+        {
+            _flags = GreenNodeFlags.None;
+        }
+        else
+        {
+            var first = _children[0];
+            var last = _children[^1];
+
+            var boundary =
+                (first.Flags & GreenNodeFlagMasks.LeadingBoundary) |
+                (last.Flags & GreenNodeFlagMasks.TrailingBoundary);
+
+            var contains = GreenNodeFlags.None;
+            foreach (var child in _children)
+                contains |= child.Flags & GreenNodeFlagMasks.Contains;
+
+            _flags = boundary | contains;
+        }
     }
     
     /// <summary>
@@ -57,6 +79,9 @@ internal sealed record GreenSyntaxNode : GreenContainer
     
     /// <inheritdoc/>
     public override int Width => _width;
+
+    /// <inheritdoc/>
+    internal override GreenNodeFlags Flags => _flags;
     
     /// <inheritdoc/>
     public override ImmutableArray<GreenNode> Children => _children;
