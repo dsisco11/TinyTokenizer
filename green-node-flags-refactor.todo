@@ -141,16 +141,16 @@ Acceptance criteria:
 
 ## Phase 4 — Tests: Flag Correctness
 
-- [ ] Add/extend unit tests for flag correctness
-	- [ ] Leaf boundary flags
-		- [ ] Newline trivia in leading/trailing
-		- [ ] Comment trivia in leading/trailing
-		- [ ] Whitespace trivia in leading/trailing
-	- [ ] Aggregation
-		- [ ] Block contains newline/comment/whitespace when present in delimiters or inner children
-		- [ ] List/syntax node aggregation
-	- [ ] “Newline ownership” sanity (existing lexer trivia semantics)
-		- [ ] Newline appears as trailing trivia of previous token in common cases
+- [x] Add/extend unit tests for flag correctness
+	- [x] Leaf boundary flags
+		- [x] Newline trivia in leading/trailing
+		- [x] Comment trivia in leading/trailing
+		- [x] Whitespace trivia in leading/trailing
+	- [x] Aggregation
+		- [x] Block contains newline/comment/whitespace when present in delimiters or inner children
+		- [x] List/syntax node aggregation
+	- [x] “Newline ownership” sanity (existing lexer trivia semantics)
+		- [x] Newline appears as trailing trivia of previous token in common cases
 
 Acceptance criteria:
 - Tests reliably catch flag computation regressions.
