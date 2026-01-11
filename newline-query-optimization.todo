@@ -17,17 +17,17 @@ Constraints:
 
 ## Phase 0 — Baseline + Safety Nets
 
-- [ ] Identify current implementation + hotspots
-	- [ ] Locate `NewlineNodeQuery` and its `TryMatchGreen(...)` implementation
-	- [ ] Find the selection-mode code path (`SelectModes.Last` / `ApplyMode`)
-	- [ ] Identify the hottest `Select(...)` implementations/combinators currently using LINQ
+- [x] Identify current implementation + hotspots
+	- [x] Locate `NewlineNodeQuery` and its `TryMatchGreen(...)` implementation
+	- [x] Find the selection-mode code path (`SelectModes.Last` / `ApplyMode`)
+	- [x] Identify the hottest `Select(...)` implementations/combinators currently using LINQ
 
-- [ ] Add/confirm semantic tests for newline behavior
-	- [ ] Leading trivia newline qualifies as `Query.Newline`
-	- [ ] Previous sibling trailing trivia newline qualifies as `Query.Newline`
-	- [ ] Both cases work at top-level and inside blocks
-	- [ ] `Query.NotNewline` is the exact negation of `Query.Newline` for the same contexts
-	- [ ] Edge cases: first sibling (no previous sibling), empty blocks/regions
+- [x] Add/confirm semantic tests for newline behavior
+	- [x] Leading trivia newline qualifies as `Query.Newline`
+	- [x] Previous sibling trailing trivia newline qualifies as `Query.Newline`
+	- [x] Both cases work at top-level and inside blocks
+	- [x] `Query.NotNewline` is the exact negation of `Query.Newline` for the same contexts
+	- [x] Edge cases: first sibling (no previous sibling), empty blocks/regions
 
 Acceptance criteria:
 - Existing behavior is captured in tests so perf refactors don’t change semantics.
