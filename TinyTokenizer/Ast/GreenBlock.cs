@@ -24,10 +24,14 @@ internal sealed record GreenBlock : GreenContainer
 
     private readonly ImmutableArray<GreenNode> _children;
     private readonly int _width;
+    private readonly GreenNodeFlags _flags;
     private readonly int[]? _childOffsets; // Pre-computed for ≥10 children (O(1) lookup)
     
     /// <inheritdoc/>
     public override NodeKind Kind { get; }
+
+    /// <inheritdoc/>
+    internal override GreenNodeFlags Flags => _flags;
     
     /// <summary>The opening delimiter node (e.g., '{', '[', '(') with its trivia.</summary>
     public GreenLeaf OpenerNode { get; }
@@ -75,6 +79,19 @@ internal sealed record GreenBlock : GreenContainer
             childrenWidth += child.Width;
         
         _width = OpenerNode.Width + childrenWidth + CloserNode.Width;
+
+        // Flags
+        // - Boundary comes only from the first/last leaf boundaries (opener leading, closer trailing).
+        // - Subtree contains flags are ORed across opener/inner/closer (excluding boundary bits).
+        var boundary =
+            (OpenerNode.Flags & GreenNodeFlagMasks.LeadingBoundary) |
+            (CloserNode.Flags & GreenNodeFlagMasks.TrailingBoundary);
+
+        var contains = (OpenerNode.Flags | CloserNode.Flags) & GreenNodeFlagMasks.Contains;
+        foreach (var child in _children)
+            contains |= child.Flags & GreenNodeFlagMasks.Contains;
+
+        _flags = boundary | contains;
         
         // Pre-compute child offsets for large blocks
         if (_children.Length >= 10)

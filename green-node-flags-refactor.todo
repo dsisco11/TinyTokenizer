@@ -114,21 +114,25 @@ Acceptance criteria:
 
 ## Phase 3 — Aggregate Flags in Containers
 
-- [ ] Update `GreenBlock`
-	- [ ] OR flags from opener leaf + all inner children + closer leaf
-	- [ ] Ensure boundary flags reflect the block’s actual left/right boundaries
+- [x] Update `GreenBlock`
+	- [x] OR flags from opener leaf + all inner children + closer leaf
+	- [x] Ensure boundary flags reflect the block’s actual left/right boundaries
+		- Boundary: opener *leading* + closer *trailing*.
+		- Subtree: OR of `Contains*` bits across opener/inner/closer.
 
-- [ ] Update `GreenList`
-	- [ ] OR flags from all children
-	- [ ] Derive boundary flags from first/last child when present
+- [x] Update `GreenList`
+	- [x] OR flags from all children
+	- [x] Derive boundary flags from first/last child when present
 
-- [ ] Update `GreenSyntaxNode`
-	- [ ] OR flags from all children
-	- [ ] Derive boundary flags from first/last child when present
+- [x] Update `GreenSyntaxNode`
+	- [x] OR flags from all children
+	- [x] Derive boundary flags from first/last child when present
 
-- [ ] Validate structural sharing invariants
-	- [ ] `WithSlot`/`WithInsert`/`WithReplace` cause flags to recompute via constructors (no ad-hoc flag mutation)
-	- [ ] `WithLeadingTrivia`/`WithTrailingTrivia`/`WithText` on leaves continue to work
+- [x] Validate structural sharing invariants
+	- [x] `WithSlot`/`WithInsert`/`WithReplace` cause flags to recompute via constructors (no ad-hoc flag mutation)
+		- All container mutation methods return `new Green*` instances.
+	- [x] `WithLeadingTrivia`/`WithTrailingTrivia`/`WithText` on leaves continue to work
+		- Leaves create a new `GreenLeaf`, which recomputes widths + flags.
 
 Acceptance criteria:
 - Container flags correctly reflect subtree + boundary properties and remain deterministic.

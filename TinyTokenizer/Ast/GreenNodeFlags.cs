@@ -30,3 +30,26 @@ internal enum GreenNodeFlags : uint
     ContainsKeyword = 1u << 12,
     ContainsTaggedIdent = 1u << 13,
 }
+
+internal static class GreenNodeFlagMasks
+{
+    public const GreenNodeFlags LeadingBoundary =
+        GreenNodeFlags.HasLeadingNewlineTrivia |
+        GreenNodeFlags.HasLeadingWhitespaceTrivia |
+        GreenNodeFlags.HasLeadingCommentTrivia;
+
+    public const GreenNodeFlags TrailingBoundary =
+        GreenNodeFlags.HasTrailingNewlineTrivia |
+        GreenNodeFlags.HasTrailingWhitespaceTrivia |
+        GreenNodeFlags.HasTrailingCommentTrivia;
+
+    public const GreenNodeFlags Boundary = LeadingBoundary | TrailingBoundary;
+
+    public const GreenNodeFlags Contains =
+        GreenNodeFlags.ContainsNewlineTrivia |
+        GreenNodeFlags.ContainsWhitespaceTrivia |
+        GreenNodeFlags.ContainsCommentTrivia |
+        GreenNodeFlags.ContainsErrorNode |
+        GreenNodeFlags.ContainsKeyword |
+        GreenNodeFlags.ContainsTaggedIdent;
+}
