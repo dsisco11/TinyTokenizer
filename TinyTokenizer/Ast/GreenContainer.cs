@@ -18,6 +18,11 @@ namespace TinyTokenizer.Ast;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal abstract record GreenContainer : GreenNode
 {
+    protected GreenContainer(GreenNodeFlags flags)
+        : base(flags)
+    {
+    }
+
     /// <inheritdoc/>
     protected override string DebuggerDisplay =>
         $"{Kind}[{Width}] ({SlotCount} children)";

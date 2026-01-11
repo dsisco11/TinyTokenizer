@@ -62,16 +62,16 @@ Acceptance criteria:
 
 ## Phase 3 — Make Flags a Field (Remove Virtual Property Overhead)
 
-- [ ] Refactor `GreenNode.Flags` from virtual property to base field storage
-	- [ ] Introduce an `internal readonly GreenNodeFlags Flags;` field in `GreenNode`
-	- [ ] Ensure it is set during construction of every concrete green node
-	- [ ] Remove `internal virtual GreenNodeFlags Flags => ...` and all overrides
-	- [ ] Update constructors:
-		- [ ] `GreenLeaf` sets boundary/contains flags based on trivia/kind
-		- [ ] `GreenBlock` sets boundary flags based on delimiter trivia, and contains flags across opener/children/closer
-		- [ ] `GreenList` and `GreenSyntaxNode` set contains flags (no boundary propagation)
-		- [ ] Any other green node types set flags consistently
-	- [ ] Ensure any green-node caches/factories still work (e.g., delimiter cache)
+- [x] Refactor `GreenNode.Flags` from virtual property to base field storage
+	- [x] Introduce an `internal readonly GreenNodeFlags Flags;` field in `GreenNode`
+	- [x] Ensure it is set during construction of every concrete green node
+	- [x] Remove `internal virtual GreenNodeFlags Flags => ...` and all overrides
+	- [x] Update constructors:
+		- [x] `GreenLeaf` sets boundary/contains flags based on trivia/kind
+		- [x] `GreenBlock` sets boundary flags based on delimiter trivia, and contains flags across opener/children/closer
+		- [x] `GreenList` and `GreenSyntaxNode` set contains flags (no boundary propagation)
+		- [x] Any other green node types set flags consistently
+	- [x] Ensure any green-node caches/factories still work (e.g., delimiter cache)
 
 Acceptance criteria:
 - Flags reads are non-virtual and O(1) field access.

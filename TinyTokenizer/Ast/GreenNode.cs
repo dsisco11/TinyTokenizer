@@ -14,6 +14,11 @@ namespace TinyTokenizer.Ast;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal abstract record GreenNode : IFormattable, ITextSerializable
 {
+    protected GreenNode(GreenNodeFlags flags)
+    {
+        Flags = flags;
+    }
+
     /// <summary>
     /// Gets the debugger display string for this node.
     /// Override in derived classes for specialized display.
@@ -39,9 +44,9 @@ internal abstract record GreenNode : IFormattable, ITextSerializable
 
     /// <summary>
     /// Cached flags describing trivia/content properties for fast queries.
-    /// Concrete green node types override this once flags are computed.
+    /// Stored directly on the green node for O(1) access.
     /// </summary>
-    internal virtual GreenNodeFlags Flags => GreenNodeFlags.None;
+    internal readonly GreenNodeFlags Flags;
     
     /// <summary>
     /// Total character width of this node, including any trivia.
