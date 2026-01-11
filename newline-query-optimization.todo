@@ -164,14 +164,14 @@ Acceptance criteria:
 
 ## Phase 7 — Validation / Perf Smoke
 
-- [ ] Run unit tests
-	- [ ] `dotnet test TinyTokenizer.Tests`
+- [x] Run unit tests
+	- [x] `dotnet test TinyTokenizer.Tests`
 
-- [ ] Run benchmarks (baseline + comparison)
-	- [ ] `dotnet run -c Release --project TinyTokenizer.Benchmarks`
-	- [ ] Filter relevant suites:
-		- [ ] `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxTreeBenchmarks*`
-		- [ ] `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxEditorBenchmarks*`
+- [x] Run benchmarks (baseline + comparison)
+	- [x] `dotnet run -c Release --project TinyTokenizer.Benchmarks`
+	- [x] Filter relevant suites:
+		- [x] `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxTreeBenchmarks*` (0 matches in current benchmark set)
+		- [x] `dotnet run -c Release --project TinyTokenizer.Benchmarks -- --filter *SyntaxEditorBenchmarks*` (0 matches in current benchmark set)
 
 - [ ] (Optional) Add a targeted benchmark if needed
 	- [x] Benchmark `SyntaxTree.Select(Query.Newline)`
