@@ -7,6 +7,15 @@ namespace TinyTokenizer.Tests;
 [Trait("Category", "Query")]
 public sealed class NewlineQueryTests
 {
+    private static Schema CreateSyntaxBindingSchema()
+    {
+        return Schema.Create()
+            .DefineSyntax(Syntax.Define<FunctionCallSyntax>("FunctionCall")
+                .Match(Query.AnyIdent, Query.ParenBlock)
+                .Build())
+            .Build();
+    }
+
     [Fact]
     public void Newline_MatchesNodeWithLeadingTriviaNewline_TopLevelFirstSibling()
     {
@@ -83,5 +92,30 @@ public sealed class NewlineQueryTests
 
         Assert.True(Query.Newline.Matches(block.CloserNode));
         Assert.False(Query.Newline.Matches(block.OpenerNode));
+    }
+
+    [Fact]
+    public void Newline_DoesNotMatchRootContainerNode()
+    {
+        var tree = SyntaxTree.Parse("\nfoo");
+
+        Assert.False(Query.Newline.Matches(tree.Root));
+        Assert.DoesNotContain(tree.Root, tree.Select(Query.Newline));
+    }
+
+    [Fact]
+    public void Newline_DoesNotMatchBoundSyntaxContainerNode()
+    {
+        var schema = CreateSyntaxBindingSchema();
+        var tree = SyntaxTree.Parse("\nfoo()", schema);
+
+        var funcCall = tree.Root.Children.OfType<FunctionCallSyntax>().First();
+
+        // Token-centric newline: matches tokens, not the bound syntax container.
+        Assert.False(Query.Newline.Matches(funcCall));
+        Assert.DoesNotContain(funcCall, tree.Select(Query.Newline));
+
+        // Still matches the first token after newline.
+        Assert.True(Query.Newline.Matches(funcCall.NameNode));
     }
 }

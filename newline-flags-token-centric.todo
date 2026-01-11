@@ -15,11 +15,11 @@ Primary drivers:
 
 ## Phase 0 — Baseline + Guardrails
 
-- [ ] Confirm intended semantics in tests
-	- [ ] Add explicit tests proving `Query.Newline` does NOT match container nodes (root list / syntax containers)
-		- [ ] Example: on "\nfoo", `Query.Newline` matches `foo` token, but NOT `tree.Root`
-		- [ ] Example (schema/binding): on "\nfoo()" with syntax binding enabled, `Query.Newline` matches the first token after newline, but NOT the bound syntax node container unless it is itself a token/block boundary
-	- [ ] Add/confirm tests for existing newline cases remain unchanged (top-level + inside blocks)
+- [x] Confirm intended semantics in tests
+	- [x] Add explicit tests proving `Query.Newline` does NOT match container nodes (root list / syntax containers)
+		- [x] Example: on "\nfoo", `Query.Newline` matches `foo` token, but NOT `tree.Root`
+		- [x] Example (schema/binding): on "\nfoo()" with syntax binding enabled, `Query.Newline` matches the first token after newline, but NOT the bound syntax node container unless it is itself a token/block boundary
+	- [x] Add/confirm tests for existing newline cases remain unchanged (top-level + inside blocks)
 
 Acceptance criteria:
 - Tests explicitly lock in token-centric behavior (no container matches).
