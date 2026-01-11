@@ -116,12 +116,12 @@ Acceptance criteria:
 
 ## Phase 5 — Undo/Redo Leaf-Level Flag Restoration
 
-- [ ] Undo/Redo restores *leaf* boundary flags, not just root flags
-	- [ ] Start with a tree where a target leaf’s flags are known
-	- [ ] Commit an edit that changes boundary/contains flags (e.g., insert `X\n`)
-	- [ ] Capture the leaf flags before/after
-	- [ ] Undo and assert leaf flags are restored
-	- [ ] Redo and assert leaf flags match the mutated state
+- [x] Undo/Redo restores *leaf* boundary flags, not just root flags
+	- [x] Start with a tree where a target leaf’s flags are known
+	- [x] Commit an edit that changes boundary/contains flags (e.g., insert `X\n`)
+	- [x] Capture the leaf flags before/after
+	- [x] Undo and assert leaf flags are restored
+	- [x] Redo and assert leaf flags match the mutated state
 
 Acceptance criteria:
 - Undo/Redo correctness is verified at the leaf level.

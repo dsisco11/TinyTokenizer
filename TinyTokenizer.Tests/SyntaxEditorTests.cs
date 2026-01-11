@@ -1908,6 +1908,53 @@ public class SyntaxEditorTests
     }
 
     [Fact]
+    public void UndoRedo_RestoresLeafBoundaryFlags_NotJustRootFlags()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aBefore = FindToken(tree, NodeKind.Ident, "a");
+        var bBefore = FindToken(tree, NodeKind.Ident, "b");
+
+        var aFlagsBefore = aBefore.Green.Flags;
+        var bFlagsBefore = bBefore.Green.Flags;
+        var rootFlagsBefore = tree.GreenRoot.Flags;
+
+        tree.CreateEditor()
+            .InsertAfter(aBefore, " X\n")
+            .Commit();
+
+        var aAfter = FindToken(tree, NodeKind.Ident, "a");
+        var xAfter = FindToken(tree, NodeKind.Ident, "X");
+        var bAfter = FindToken(tree, NodeKind.Ident, "b");
+
+        var aFlagsAfter = aAfter.Green.Flags;
+        var xFlagsAfter = xAfter.Green.Flags;
+        var bFlagsAfter = bAfter.Green.Flags;
+        var rootFlagsAfter = tree.GreenRoot.Flags;
+
+        // Sanity: mutation should introduce a newline owner.
+        AssertHasFlags(xFlagsAfter, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(rootFlagsAfter, GreenNodeFlags.ContainsNewlineTrivia);
+
+        Assert.True(tree.Undo());
+
+        var aUndo = FindToken(tree, NodeKind.Ident, "a");
+        var bUndo = FindToken(tree, NodeKind.Ident, "b");
+        Assert.Equal(aFlagsBefore, aUndo.Green.Flags);
+        Assert.Equal(bFlagsBefore, bUndo.Green.Flags);
+        Assert.Equal(rootFlagsBefore, tree.GreenRoot.Flags);
+
+        Assert.True(tree.Redo());
+
+        var aRedo = FindToken(tree, NodeKind.Ident, "a");
+        var xRedo = FindToken(tree, NodeKind.Ident, "X");
+        var bRedo = FindToken(tree, NodeKind.Ident, "b");
+        Assert.Equal(aFlagsAfter, aRedo.Green.Flags);
+        Assert.Equal(xFlagsAfter, xRedo.Green.Flags);
+        Assert.Equal(bFlagsAfter, bRedo.Green.Flags);
+        Assert.Equal(rootFlagsAfter, tree.GreenRoot.Flags);
+    }
+
+    [Fact]
     public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
     {
         var tree = SyntaxTree.Parse("{a}");
