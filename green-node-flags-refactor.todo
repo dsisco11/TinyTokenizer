@@ -159,17 +159,17 @@ Acceptance criteria:
 
 ## Phase 5 — Tests: Record Equality / Hash Stability (extra safety)
 
-- [ ] Equality invariants (structural equality)
-	- [ ] Construct equivalent green nodes via different construction paths and assert `Equals` is true
-	- [ ] Assert `GetHashCode` matches for structurally equal nodes
+- [x] Equality invariants (structural equality)
+	- [x] Construct equivalent green nodes via different construction paths and assert `Equals` is true
+	- [x] Assert `GetHashCode` matches for structurally equal nodes
 
-- [ ] Cache interaction
-	- [ ] Cached leaf instances behave consistently (equal nodes produce equal hashes)
-	- [ ] Non-cached leaves with identical trivia sequences still compare equal
+- [x] Cache interaction
+	- [x] Cached leaf instances behave consistently (equal nodes produce equal hashes)
+	- [x] Non-cached leaves with identical trivia sequences still compare equal
 
-- [ ] Structural sharing sanity
-	- [ ] `With*` methods do not mutate originals
-	- [ ] Only content changes cause inequality
+- [x] Structural sharing sanity
+	- [x] `With*` methods do not mutate originals
+	- [x] Only content changes cause inequality
 
 Acceptance criteria:
 - We have strong confidence that adding `Flags` doesn’t introduce equality/hash surprises.
