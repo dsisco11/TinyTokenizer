@@ -61,18 +61,18 @@ Acceptance criteria:
 
 Goal: ensure green-node flags remain correct after `SyntaxEditor` mutations and undo/redo.
 
-- [ ] Add SyntaxEditor tests that assert *green* flag values after mutations
-	- [ ] Assert boundary flags (token-centric ownership)
-		- [ ] `Replace(...)` preserves `HasLeadingNewline` on the replaced token when leading newline trivia is preserved
-		- [ ] `InsertAfter(...)` with a trailing newline causes the next sibling to match newline semantics via previous sibling `HasTrailingNewline`
-		- [ ] `Remove(...)` of a token that owns trailing newline removes the `HasTrailingNewline` boundary from the tree
-	- [ ] Assert subtree "contains" flags remain correct
-		- [ ] `ContainsNewline` propagates correctly through blocks/lists after insert/replace/remove
-	- [ ] Undo/Redo restores flag state
-		- [ ] After `Commit()`, `Undo()` restores the original green flags
-		- [ ] After `Undo()`, `Redo()` restores the mutated green flags
-	- [ ] Prefer stable selection + direct assertions
-		- [ ] Select the target node via `Query`/positions, then assert `node.Green` flags (`GreenNodeFlags`)
+- [x] Add SyntaxEditor tests that assert *green* flag values after mutations
+	- [x] Assert boundary flags (token-centric ownership)
+		- [x] `Replace(...)` preserves `HasLeadingNewline` on the replaced token when leading newline trivia is preserved
+		- [x] `InsertAfter(...)` with a trailing newline causes the next sibling to match newline semantics via previous sibling `HasTrailingNewline`
+		- [x] `Remove(...)` of a token that owns trailing newline removes the `HasTrailingNewline` boundary from the tree
+	- [x] Assert subtree "contains" flags remain correct
+		- [x] `ContainsNewline` propagates correctly through blocks/lists after insert/replace/remove
+	- [x] Undo/Redo restores flag state
+		- [x] After `Commit()`, `Undo()` restores the original green flags
+		- [x] After `Undo()`, `Redo()` restores the mutated green flags
+	- [x] Prefer stable selection + direct assertions
+		- [x] Select the target node via `Query`/positions, then assert `node.Green` flags (`GreenNodeFlags`)
 		- [ ] (Optional) also assert `Query.Newline` results as a behavioral cross-check
 
 Acceptance criteria:

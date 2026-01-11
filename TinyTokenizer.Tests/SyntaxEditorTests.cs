@@ -1614,6 +1614,118 @@ public class SyntaxEditorTests
         Assert.Equal(2, bAfter.LeadingTriviaWidth);    // b retains its "  " leading trivia
     }
 
+    #region Green Flag Mutation Tests
+
+    private static void AssertHasFlags(GreenNodeFlags actual, GreenNodeFlags expected)
+    {
+        Assert.True((actual & expected) == expected, $"Expected flags to include {expected} but was {actual}");
+    }
+
+    private static void AssertNotHasFlags(GreenNodeFlags actual, GreenNodeFlags unexpected)
+    {
+        Assert.True((actual & unexpected) == 0, $"Expected flags to NOT include {unexpected} but was {actual}");
+    }
+
+    [Fact]
+    public void Replace_OwnLineCommentLeadingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
+    {
+        var options = TokenizerOptions.Default.WithCommentStyles(CommentStyle.CStyleSingleLine);
+        var tree = SyntaxTree.Parse("a\n// c\nb", options);
+
+        var bBefore = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+        AssertHasFlags(bBefore.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasLeadingCommentTrivia);
+
+        tree.CreateEditor()
+            .Replace(Q.Ident("b"), "X")
+            .Commit();
+
+        var xAfter = Assert.Single(tree.Select(Q.Ident("X")).OfType<SyntaxToken>());
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasLeadingCommentTrivia);
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia | GreenNodeFlags.ContainsCommentTrivia);
+    }
+
+    [Fact]
+    public void InsertAfter_InsertedTextWithTrailingNewline_SetsGreenFlags_OnInsertedAndFollowingTokens()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+
+        tree.CreateEditor()
+            .InsertAfter(aNode, " X\n")
+            .Commit();
+
+        var xAfter = Assert.Single(tree.Select(Q.Ident("X")).OfType<SyntaxToken>());
+        var bAfter = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+
+        // Inserted token owns the trailing newline; following token should NOT gain leading newline ownership.
+        AssertHasFlags(xAfter.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia | GreenNodeFlags.ContainsNewlineTrivia);
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia);
+
+        // Root list should reflect subtree contains.
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void Remove_TokenOwningTrailingNewline_RemovesNewlineBoundaryAndContainsFlags()
+    {
+        var tree = SyntaxTree.Parse("a\nb");
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+
+        // Sanity: 'a' owns the trailing newline in the token-centric trivia model.
+        AssertHasFlags(aNode.Green.Flags, GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        tree.CreateEditor()
+            .Remove(Q.Ident("a"))
+            .Commit();
+
+        Assert.Equal("b", tree.ToText());
+        var bAfter = Assert.Single(tree.Select(Q.Ident("b")).OfType<SyntaxToken>());
+        AssertNotHasFlags(bAfter.Green.Flags, GreenNodeFlags.HasLeadingNewlineTrivia | GreenNodeFlags.HasTrailingNewlineTrivia);
+        AssertNotHasFlags(tree.GreenRoot.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void InsertAfter_BlockContainsNewlineFlag_UpdatesAfterMutation()
+    {
+        var tree = SyntaxTree.Parse("{a}");
+        var blockBefore = (SyntaxBlock)Assert.Single(tree.Select(Q.BraceBlock));
+
+        AssertNotHasFlags(blockBefore.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X\n")
+            .Commit();
+
+        var blockAfter = (SyntaxBlock)Assert.Single(tree.Select(Q.BraceBlock));
+        AssertHasFlags(blockAfter.Green.Flags, GreenNodeFlags.ContainsNewlineTrivia);
+    }
+
+    [Fact]
+    public void GreenFlags_UndoRedo_RestoreFlagState_AfterMutation()
+    {
+        var tree = SyntaxTree.Parse("a b");
+        var before = tree.GreenRoot.Flags;
+        AssertNotHasFlags(before, GreenNodeFlags.ContainsNewlineTrivia);
+
+        var aNode = Assert.Single(tree.Select(Q.Ident("a")).OfType<SyntaxToken>());
+        tree.CreateEditor()
+            .InsertAfter(aNode, "X\n")
+            .Commit();
+
+        var after = tree.GreenRoot.Flags;
+        AssertHasFlags(after, GreenNodeFlags.ContainsNewlineTrivia);
+
+        Assert.True(tree.Undo());
+        Assert.Equal(before, tree.GreenRoot.Flags);
+
+        Assert.True(tree.Redo());
+        Assert.Equal(after, tree.GreenRoot.Flags);
+    }
+
+    #endregion
+
     /// <summary>
     /// Tests that block opener trivia follows the correct trivia model:
     ///   - Trailing trivia: up to AND INCLUDING the newline
