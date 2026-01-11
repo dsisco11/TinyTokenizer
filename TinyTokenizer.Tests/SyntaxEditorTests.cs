@@ -1626,6 +1626,25 @@ public class SyntaxEditorTests
         Assert.True((actual & unexpected) == 0, $"Expected flags to NOT include {unexpected} but was {actual}");
     }
 
+    private static SyntaxToken FindToken(SyntaxTree tree, NodeKind kind, string text, int occurrence = 0)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(text);
+
+        var matches = tree
+            .Select(Query.Kind(kind).WithText(text))
+            .OfType<SyntaxToken>()
+            .ToList();
+
+        Assert.True(matches.Count > 0, $"Expected to find at least 1 token of kind '{kind}' with text '{text}', but found none.");
+        Assert.True(
+            occurrence >= 0 && occurrence < matches.Count,
+            $"Expected occurrence {occurrence} for token kind '{kind}' text '{text}', but only found {matches.Count} match(es)."
+        );
+
+        return matches[occurrence];
+    }
+
     [Fact]
     public void Replace_OwnLineCommentLeadingTrivia_PreservesGreenBoundaryFlags_OnReplacement()
     {

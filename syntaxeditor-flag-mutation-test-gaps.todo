@@ -13,13 +13,13 @@ Context:
 
 ## Phase 0 — Inventory + Harness
 
-- [ ] Decide location for new tests
-	- [ ] Keep under `#region Green Flag Mutation Tests` in `TinyTokenizer.Tests/SyntaxEditorTests.cs`, OR
+- [x] Decide location for new tests
+	- [x] Keep under `#region Green Flag Mutation Tests` in `TinyTokenizer.Tests/SyntaxEditorTests.cs`, OR
 	- [ ] Create a dedicated test class file (e.g., `TinyTokenizer.Tests/SyntaxEditorGreenFlagsTests.cs`) for clarity
 
-- [ ] Add a small helper to find leaves consistently after edits
-	- [ ] Helper: `FindToken(tree, kind, text)` (or `Query.Ident("...")` + `.OfType<SyntaxToken>()`)
-	- [ ] Avoid relying on indexes when trivia can shift; prefer `Query` + text predicates
+- [x] Add a small helper to find leaves consistently after edits
+	- [x] Helper: `FindToken(tree, kind, text)` (or `Query.Ident("...")` + `.OfType<SyntaxToken>()`)
+	- [x] Avoid relying on indexes when trivia can shift; prefer `Query` + text predicates
 
 Acceptance criteria:
 - Tests are easy to read and robust to trivia shape.
