@@ -95,8 +95,8 @@ Acceptance criteria:
 
 ## Phase 5 — Validate + Perf Smoke
 
-- [ ] Run full tests
-	- [ ] `dotnet test TinyTokenizer.Tests`
+- [x] Run full tests
+	- [x] `dotnet test TinyTokenizer.Tests`
 
 - [ ] Add/update a targeted micro-benchmark (optional, if needed)
 	- [ ] Benchmark `SyntaxTree.Select(Query.Newline)` on newline-heavy source
