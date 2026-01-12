@@ -877,6 +877,64 @@ public class SyntaxEditorTests
         
         Assert.Equal("{short} {X}", tree.ToText());
     }
+
+    #endregion
+
+    #region NamedBlockQuery.Inner() Tests
+
+    private static Schema CreateBlockContainerTestSchema()
+    {
+        return Schema.Create()
+            .DefineSyntax(Syntax.Define<TestBlockContainerSyntax>("testBlockContainer")
+                .Match(Query.AnyIdent, Query.BraceBlock)
+                .Build())
+            .Build();
+    }
+
+    private sealed class TestBlockContainerSyntax : SyntaxNode, IBlockContainerNode
+    {
+        internal TestBlockContainerSyntax(CreationContext context)
+            : base(context)
+        {
+        }
+
+        public SyntaxToken NameNode => GetTypedChild<SyntaxToken>(0);
+        public SyntaxBlock Body => GetTypedChild<SyntaxBlock>(1);
+
+        public IReadOnlyList<string> BlockNames => ["body"];
+
+        public SyntaxBlock GetBlock(string? name = null) => name switch
+        {
+            null or "body" => Body,
+            _ => throw new ArgumentException($"Unknown block: {name}")
+        };
+    }
+
+    [Fact]
+    public void NamedBlockInner_Replace_ReplacesContentPreservingDelimiters()
+    {
+        var schema = CreateBlockContainerTestSchema();
+        var tree = SyntaxTree.Parse("f{old}", schema);
+
+        tree.CreateEditor()
+            .Replace(Query.Syntax<TestBlockContainerSyntax>().Block("body").Inner(), "new")
+            .Commit();
+
+        Assert.Equal("f{new}", tree.ToText());
+    }
+
+    [Fact]
+    public void NamedBlockInner_Replace_EmptyBlock_InsertsContent()
+    {
+        var schema = CreateBlockContainerTestSchema();
+        var tree = SyntaxTree.Parse("f{}", schema);
+
+        tree.CreateEditor()
+            .Replace(Query.Syntax<TestBlockContainerSyntax>().Block("body").Inner(), "inserted")
+            .Commit();
+
+        Assert.Equal("f{inserted}", tree.ToText());
+    }
     
     #endregion
 

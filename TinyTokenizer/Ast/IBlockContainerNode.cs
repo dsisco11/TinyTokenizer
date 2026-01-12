@@ -165,6 +165,109 @@ public sealed record NamedBlockQuery : INodeQuery
     /// Use with <c>InsertBefore</c> to insert at the end of block content.
     /// </summary>
     public BoundaryQuery End() => new BoundaryQuery(this, BoundarySide.End);
+
+    /// <summary>
+    /// Returns a query that selects all inner children of the named block as a single range.
+    /// Use with Replace/Edit/Remove to modify block content while preserving delimiters.
+    /// Empty blocks yield an empty region at the inner position, enabling insertion via Replace.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Replace the inside of the function body block
+    /// editor.Replace(Query.Syntax&lt;FunctionSyntax&gt;().Block("body").Inner(), "new content")
+    /// </code>
+    /// </example>
+    public NamedBlockInnerContentQuery Inner() => new(this);
+}
+
+/// <summary>
+/// A query that selects all inner children of blocks selected by <see cref="NamedBlockQuery"/> as a single range.
+/// Returns a region spanning slots 1 through SlotCount-2 (excluding opener/closer).
+/// Empty blocks yield an empty region at slot 1, enabling insertion.
+/// </summary>
+public sealed record NamedBlockInnerContentQuery : INodeQuery, IRegionQuery
+{
+    /// <summary>The query that selects the target block.</summary>
+    public NamedBlockQuery BlockQuery { get; }
+
+    internal NamedBlockInnerContentQuery(NamedBlockQuery blockQuery)
+    {
+        BlockQuery = blockQuery;
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxTree tree) => Select(tree.Root);
+
+    /// <inheritdoc/>
+    public IEnumerable<SyntaxNode> Select(SyntaxNode root)
+    {
+        foreach (var region in SelectRegionsCore(root))
+        {
+            foreach (var node in region.Nodes)
+                yield return node;
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool Matches(SyntaxNode node)
+    {
+        // Check if node is an inner child of a matching block
+        var parent = node.Parent;
+        if (parent is SyntaxBlock block && BlockQuery.Matches(block))
+        {
+            var index = node.SiblingIndex;
+            return index >= 1 && index < block.SlotCount - 1;
+        }
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public bool TryMatch(SyntaxNode startNode, out int consumedCount)
+    {
+        var parent = startNode.Parent;
+        if (parent is SyntaxBlock block &&
+            BlockQuery.Matches(block) &&
+            startNode.SiblingIndex == 1)
+        {
+            consumedCount = block.ChildCount;
+            return true;
+        }
+        consumedCount = 0;
+        return false;
+    }
+
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree)
+        => SelectRegionsCore(tree.Root);
+
+    /// <inheritdoc/>
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
+        => SelectRegionsCore(root);
+
+    private IEnumerable<QueryRegion> SelectRegionsCore(SyntaxNode root)
+    {
+        foreach (var container in BlockQuery.Select(root))
+        {
+            if (container is not SyntaxBlock block)
+                continue;
+
+            var innerCount = block.ChildCount;
+            SyntaxNode? firstInner = null;
+            foreach (var child in block.InnerChildren)
+            {
+                firstInner = child;
+                break;
+            }
+
+            yield return new QueryRegion(
+                parent: block,
+                startSlot: 1,
+                endSlot: 1 + innerCount,
+                firstNode: firstInner,
+                position: block.InnerStartPosition
+            );
+        }
+    }
 }
 
 /// <summary>
