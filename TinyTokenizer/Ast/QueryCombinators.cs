@@ -80,7 +80,8 @@ public sealed record NotQuery : INodeQuery, IGreenNodeQuery, ISchemaResolvableQu
 
 /// <summary>
 /// Matches and captures content between a start and end query/delimiter.
-/// Consumes all nodes from start through end (inclusive of delimiters).
+/// Matches a contiguous region between a start and end pattern.
+/// By default, the matched region excludes the start/end delimiters.
 /// </summary>
 /// <remarks>
 /// Useful for extracting content between matching patterns:
@@ -95,8 +96,8 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
     /// <summary>Creates a query matching content between start and end.</summary>
     /// <param name="start">The starting delimiter/pattern.</param>
     /// <param name="end">The ending delimiter/pattern.</param>
-    /// <param name="inclusive">If true, includes start/end in consumed count; if false, only content between.</param>
-    public BetweenQuery(INodeQuery start, INodeQuery end, bool inclusive = true)
+    /// <param name="inclusive">If true, includes the start/end delimiters in the matched region.</param>
+    public BetweenQuery(INodeQuery start, INodeQuery end, bool inclusive = false)
     {
         _start = start;
         _end = end;
@@ -156,7 +157,11 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
             if (_end.TryMatch(current, out var endConsumed))
             {
                 totalConsumed += endConsumed;
-                consumedCount = _inclusive ? totalConsumed : totalConsumed - startConsumed - endConsumed;
+                // Always report the full span consumed (start..end, inclusive) so this query
+                // is safe to use in sequences and other sibling-consuming contexts.
+                // The inclusive/exclusive behavior is applied when translating this query
+                // into edit regions via IRegionQuery.
+                consumedCount = totalConsumed;
                 return true;
             }
             
@@ -196,7 +201,9 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
             if (endGreen.TryMatchGreen(siblings, currentIndex, out var endConsumed))
             {
                 totalConsumed += endConsumed;
-                consumedCount = _inclusive ? totalConsumed : totalConsumed - startConsumed - endConsumed;
+                // Always report the full span consumed (start..end, inclusive).
+                // Inclusive/exclusive is handled at the region-translation layer.
+                consumedCount = totalConsumed;
                 return true;
             }
             
@@ -209,13 +216,69 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
     }
     
     /// <inheritdoc/>
-    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree) 
+    IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxTree tree)
         => ((IRegionQuery)this).SelectRegions(tree.Root);
-    
-    /// <inheritdoc/>
+
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        return RegionTraversal.SelectRegions(root, TryMatch);
+        return RegionTraversal.SelectRegions(root, TryGetBetweenRegion);
+
+        bool TryGetBetweenRegion(
+            SyntaxNode startNode,
+            out int startSlotOffset,
+            out int slotCount,
+            out SyntaxNode? firstNode,
+            out int position)
+        {
+            startSlotOffset = 0;
+            slotCount = 0;
+            firstNode = null;
+            position = 0;
+
+            if (!_start.TryMatch(startNode, out var startConsumed))
+                return false;
+
+            // Navigate to the first node AFTER the start match.
+            var afterStart = startNode;
+            for (int i = 0; i < startConsumed && afterStart != null; i++)
+                afterStart = afterStart.NextSibling();
+
+            if (afterStart == null)
+                return false;
+
+            // Scan for end starting at afterStart.
+            var current = afterStart;
+            int totalConsumed = startConsumed;
+
+            while (current != null)
+            {
+                if (_end.TryMatch(current, out var endConsumed))
+                {
+                    totalConsumed += endConsumed;
+
+                    if (_inclusive)
+                    {
+                        startSlotOffset = 0;
+                        slotCount = totalConsumed;
+                        firstNode = startNode;
+                        position = startNode.Position;
+                        return true;
+                    }
+
+                    // Exclusive: region starts after the start match and ends before the end delimiter.
+                    startSlotOffset = startConsumed;
+                    slotCount = totalConsumed - startConsumed - endConsumed;
+                    position = afterStart.Position;
+                    firstNode = slotCount > 0 ? afterStart : null;
+                    return true;
+                }
+
+                totalConsumed++;
+                current = current.NextSibling();
+            }
+
+            return false;
+        }
     }
 }
 

@@ -189,11 +189,11 @@ public static class Query
     
     /// <summary>
     /// Creates a query that matches content between a start and end pattern.
-    /// Consumes all nodes from start through end (inclusive).
+    /// By default, the matched region excludes the start/end delimiters.
     /// </summary>
     /// <param name="start">The starting delimiter/pattern.</param>
     /// <param name="end">The ending delimiter/pattern.</param>
-    /// <param name="inclusive">If true (default), includes start/end in consumed count.</param>
+    /// <param name="inclusive">If true, includes start/end delimiters in the matched region.</param>
     /// <returns>A query matching the content between start and end.</returns>
     /// <example>
     /// <code>
@@ -201,7 +201,7 @@ public static class Query
     /// Query.Between(Query.Symbol("("), Query.Symbol(")"))
     /// </code>
     /// </example>
-    public static BetweenQuery Between(INodeQuery start, INodeQuery end, bool inclusive = true) => 
+    public static BetweenQuery Between(INodeQuery start, INodeQuery end, bool inclusive = false) => 
         new BetweenQuery(start, end, inclusive);
     
     #endregion
@@ -309,6 +309,51 @@ public static class Query
     /// </example>
     public static ExactNodeQuery Exact(SyntaxNode node) => new ExactNodeQuery(node);
     
+    #endregion
+
+    #region Wrap / Inner (Node-based)
+
+    /// <summary>
+    /// Wraps an existing <see cref="SyntaxBlock"/> instance as a <see cref="BlockNodeQuery"/>.
+    /// This is useful when you already have a block node and want to use block-specific query helpers
+    /// like <see cref="BlockNodeQuery.Inner"/>, <see cref="BlockNodeQuery.Start"/>, and <see cref="BlockNodeQuery.End"/>.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Exact"/>, this query is intended for immediate use within the current tree state.
+    /// Red nodes are recreated on tree mutations.
+    /// </remarks>
+    public static BlockNodeQuery Wrap(SyntaxBlock block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+
+        // Match the block by red-node equality (same green node + position).
+        // Also constrain by opener for fast rejection.
+        return new BlockNodeQuery(block.Opener).Where(n => n == block);
+    }
+
+    /// <summary>
+    /// Wraps an existing node instance as a query.
+    /// If the node is a <see cref="SyntaxBlock"/>, returns a <see cref="BlockNodeQuery"/>;
+    /// otherwise returns an <see cref="ExactNodeQuery"/>.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Exact"/>, this matches the specific node instance and is intended for immediate use.
+    /// </remarks>
+    public static INodeQuery Wrap(SyntaxNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return node is SyntaxBlock block ? Wrap(block) : Exact(node);
+    }
+
+    /// <summary>
+    /// Creates a query selecting the inner content region of an existing block node.
+    /// Equivalent to <c>Query.Wrap(block).Inner()</c>.
+    /// </summary>
+    /// <remarks>
+    /// This query matches the current node instance and is intended for immediate use.
+    /// </remarks>
+    public static InnerContentQuery Inner(SyntaxBlock block) => Wrap(block).Inner();
+
     #endregion
     
     #region Keyword Queries

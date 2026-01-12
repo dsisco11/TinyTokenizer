@@ -1294,21 +1294,34 @@ public class QueryCombinatorTests
     #region Edge Case Tests - Between
     
     [Fact]
-    public void Between_Exclusive_DoesNotCountDelimiters()
+    public void Between_Default_IsExclusive_ForEditorRegions()
     {
-        var tree = Parse("< a b c >");
-        var root = tree.Root;
-        var children = root.Children.ToList();
-        var openAngle = children.First(c => c.ToText().Trim() == "<");
-        
-        var queryInclusive = Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: true);
-        var queryExclusive = Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: false);
-        
-        Assert.True(queryInclusive.TryMatch(openAngle, out var consumedInclusive));
-        Assert.True(queryExclusive.TryMatch(openAngle, out var consumedExclusive));
-        
-        // Exclusive should report fewer consumed (just the content, not delimiters)
-        Assert.True(consumedExclusive < consumedInclusive);
+        var tree = Parse("before < a b c > after");
+
+        // Default Between should replace ONLY the content between delimiters.
+        tree.CreateEditor()
+            .Replace(Query.Between(Query.Operator("<"), Query.Operator(">")), " CONTENT ")
+            .Commit();
+
+        var text = tree.ToText();
+        Assert.Contains("<", text);
+        Assert.Contains(">", text);
+        Assert.Matches(@"<\s*CONTENT\s*>", text);
+    }
+
+    [Fact]
+    public void Between_Inclusive_ReplacesDelimitersToo()
+    {
+        var tree = Parse("before < a b c > after");
+
+        tree.CreateEditor()
+            .Replace(Query.Between(Query.Operator("<"), Query.Operator(">"), inclusive: true), " CONTENT ")
+            .Commit();
+
+        var text = tree.ToText();
+        Assert.DoesNotContain("<", text);
+        Assert.DoesNotContain(">", text);
+        Assert.Contains("CONTENT", text);
     }
     
     [Fact]
