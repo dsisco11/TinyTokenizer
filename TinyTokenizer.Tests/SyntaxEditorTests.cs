@@ -3130,4 +3130,37 @@ public class SyntaxEditorTests
     }
     
     #endregion
+
+    #region Query.Wrap / Query.Inner (BlockNode)
+
+    [Fact]
+    public void Replace_QueryWrapBlock_Inner_ReplacesOnlyThatBlock()
+    {
+        var tree = SyntaxTree.Parse("{a}{b}");
+        var blocks = tree.Select(Query.BraceBlock).OfType<SyntaxBlock>().ToList();
+        Assert.Equal(2, blocks.Count);
+
+        var second = blocks[1];
+
+        tree.CreateEditor()
+            .Replace(Query.Wrap(second).Inner(), "c")
+            .Commit();
+
+        Assert.Equal("{a}{c}", tree.ToText());
+    }
+
+    [Fact]
+    public void Replace_QueryInnerBlock_ReplacesOnlyThatBlock()
+    {
+        var tree = SyntaxTree.Parse("{a}{b}");
+        var second = tree.Select(Query.BraceBlock).OfType<SyntaxBlock>().Skip(1).First();
+
+        tree.CreateEditor()
+            .Replace(Query.Inner(second), "c")
+            .Commit();
+
+        Assert.Equal("{a}{c}", tree.ToText());
+    }
+
+    #endregion
 }

@@ -310,6 +310,51 @@ public static class Query
     public static ExactNodeQuery Exact(SyntaxNode node) => new ExactNodeQuery(node);
     
     #endregion
+
+    #region Wrap / Inner (Node-based)
+
+    /// <summary>
+    /// Wraps an existing <see cref="SyntaxBlock"/> instance as a <see cref="BlockNodeQuery"/>.
+    /// This is useful when you already have a block node and want to use block-specific query helpers
+    /// like <see cref="BlockNodeQuery.Inner"/>, <see cref="BlockNodeQuery.Start"/>, and <see cref="BlockNodeQuery.End"/>.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Exact"/>, this query is intended for immediate use within the current tree state.
+    /// Red nodes are recreated on tree mutations.
+    /// </remarks>
+    public static BlockNodeQuery Wrap(SyntaxBlock block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+
+        // Match the block by red-node equality (same green node + position).
+        // Also constrain by opener for fast rejection.
+        return new BlockNodeQuery(block.Opener).Where(n => n == block);
+    }
+
+    /// <summary>
+    /// Wraps an existing node instance as a query.
+    /// If the node is a <see cref="SyntaxBlock"/>, returns a <see cref="BlockNodeQuery"/>;
+    /// otherwise returns an <see cref="ExactNodeQuery"/>.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Exact"/>, this matches the specific node instance and is intended for immediate use.
+    /// </remarks>
+    public static INodeQuery Wrap(SyntaxNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return node is SyntaxBlock block ? Wrap(block) : Exact(node);
+    }
+
+    /// <summary>
+    /// Creates a query selecting the inner content region of an existing block node.
+    /// Equivalent to <c>Query.Wrap(block).Inner()</c>.
+    /// </summary>
+    /// <remarks>
+    /// This query matches the current node instance and is intended for immediate use.
+    /// </remarks>
+    public static InnerContentQuery Inner(SyntaxBlock block) => Wrap(block).Inner();
+
+    #endregion
     
     #region Keyword Queries
     
