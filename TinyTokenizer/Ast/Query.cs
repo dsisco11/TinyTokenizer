@@ -189,11 +189,11 @@ public static class Query
     
     /// <summary>
     /// Creates a query that matches content between a start and end pattern.
-    /// Consumes all nodes from start through end (inclusive).
+    /// By default, the matched region excludes the start/end delimiters.
     /// </summary>
     /// <param name="start">The starting delimiter/pattern.</param>
     /// <param name="end">The ending delimiter/pattern.</param>
-    /// <param name="inclusive">If true (default), includes start/end in consumed count.</param>
+    /// <param name="inclusive">If true, includes start/end delimiters in the matched region.</param>
     /// <returns>A query matching the content between start and end.</returns>
     /// <example>
     /// <code>
@@ -201,7 +201,7 @@ public static class Query
     /// Query.Between(Query.Symbol("("), Query.Symbol(")"))
     /// </code>
     /// </example>
-    public static BetweenQuery Between(INodeQuery start, INodeQuery end, bool inclusive = true) => 
+    public static BetweenQuery Between(INodeQuery start, INodeQuery end, bool inclusive = false) => 
         new BetweenQuery(start, end, inclusive);
     
     #endregion

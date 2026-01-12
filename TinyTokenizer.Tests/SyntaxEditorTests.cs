@@ -3006,7 +3006,7 @@ public class SyntaxEditorTests
         
         // Act: replace everything from 'a' to 'c' (inclusive)
         tree.CreateEditor()
-            .Replace(Q.Between(Q.Ident("a"), Q.Ident("c")), "REPLACED")
+            .Replace(Q.Between(Q.Ident("a"), Q.Ident("c"), inclusive: true), "REPLACED")
             .Commit();
         
         // Assert: the range [a, b, c] should be replaced with REPLACED
@@ -3022,7 +3022,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("start a b c end");
         
         tree.CreateEditor()
-            .Remove(Q.Between(Q.Ident("a"), Q.Ident("c")))
+            .Remove(Q.Between(Q.Ident("a"), Q.Ident("c"), inclusive: true))
             .Commit();
         
         // Trivia handling: leading trivia of 'a' (space) is removed with 'a',
@@ -3039,7 +3039,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("x a b c y");
         
         tree.CreateEditor()
-            .InsertBefore(Q.Between(Q.Ident("a"), Q.Ident("c")), "BEFORE ")
+            .InsertBefore(Q.Between(Q.Ident("a"), Q.Ident("c"), inclusive: true), "BEFORE ")
             .Commit();
         
         Assert.Equal("x BEFORE a b c y", tree.ToText());
@@ -3061,7 +3061,7 @@ public class SyntaxEditorTests
         // - Insert "AFTER " (with trailing space for separation from y)
         // - y has no trivia -> "y"
         tree.CreateEditor()
-            .InsertAfter(Q.Between(Q.Ident("a"), Q.Ident("c")), "AFTER ")
+            .InsertAfter(Q.Between(Q.Ident("a"), Q.Ident("c"), inclusive: true), "AFTER ")
             .Commit();
         
         Assert.Equal("x a b c AFTER y", tree.ToText());
@@ -3105,7 +3105,7 @@ public class SyntaxEditorTests
         var tree = SyntaxTree.Parse("x abc def ghi y");
         
         tree.CreateEditor()
-            .Edit(Q.Between(Q.Ident("abc"), Q.Ident("ghi")), content => content.ToUpper())
+            .Edit(Q.Between(Q.Ident("abc"), Q.Ident("ghi"), inclusive: true), content => content.ToUpper())
             .Commit();
         
         // The content between abc and ghi (inclusive) should be uppercased

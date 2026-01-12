@@ -119,9 +119,9 @@ public static class QueryExtensions
     
     /// <summary>
     /// Creates a query matching content between this query (start) and the end query.
-    /// Consumes all nodes from start through end (inclusive).
+    /// By default, the matched region excludes the start/end delimiters.
     /// </summary>
-    public static BetweenQuery Between(this INodeQuery start, INodeQuery end, bool inclusive = true) =>
+    public static BetweenQuery Between(this INodeQuery start, INodeQuery end, bool inclusive = false) =>
         new(start, end, inclusive);
     
     #endregion
