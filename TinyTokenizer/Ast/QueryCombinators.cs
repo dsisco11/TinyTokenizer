@@ -221,85 +221,63 @@ public sealed record BetweenQuery : INodeQuery, IGreenNodeQuery, IRegionQuery, I
 
     IEnumerable<QueryRegion> IRegionQuery.SelectRegions(SyntaxNode root)
     {
-        var walker = new TreeWalker(root);
+        return RegionTraversal.SelectRegions(root, TryGetBetweenRegion);
 
-        foreach (var node in walker.DescendantsAndSelf())
+        bool TryGetBetweenRegion(
+            SyntaxNode startNode,
+            out int startSlotOffset,
+            out int slotCount,
+            out SyntaxNode? firstNode,
+            out int position)
         {
-            var parent = node.Parent;
-            if (parent == null)
-                continue;
+            startSlotOffset = 0;
+            slotCount = 0;
+            firstNode = null;
+            position = 0;
 
-            if (!_start.TryMatch(node, out var startConsumed))
-                continue;
+            if (!_start.TryMatch(startNode, out var startConsumed))
+                return false;
 
-            // Advance to first node after the start match.
-            var afterStart = node;
+            // Navigate to the first node AFTER the start match.
+            var afterStart = startNode;
             for (int i = 0; i < startConsumed && afterStart != null; i++)
-            {
                 afterStart = afterStart.NextSibling();
-            }
 
             if (afterStart == null)
-                continue;
+                return false;
 
-            // Scan for end starting at the first node after start.
+            // Scan for end starting at afterStart.
             var current = afterStart;
+            int totalConsumed = startConsumed;
+
             while (current != null)
             {
                 if (_end.TryMatch(current, out var endConsumed))
                 {
-                    var startSlot = node.SiblingIndex;
-                    var endStartSlot = current.SiblingIndex;
-
-                    if (startSlot < 0 || endStartSlot < 0)
-                        break;
+                    totalConsumed += endConsumed;
 
                     if (_inclusive)
                     {
-                        yield return new QueryRegion(
-                            parent: parent,
-                            startSlot: startSlot,
-                            endSlot: endStartSlot + endConsumed,
-                            firstNode: node,
-                            position: node.Position);
-                    }
-                    else
-                    {
-                        var regionStart = startSlot + startConsumed;
-                        var regionEnd = endStartSlot;
-
-                        if (regionStart < 0)
-                            regionStart = 0;
-                        if (regionEnd < regionStart)
-                            regionEnd = regionStart;
-
-                        SyntaxNode? firstNode = null;
-                        int position = current.Position;
-
-                        for (int i = regionStart; i < regionEnd; i++)
-                        {
-                            var child = parent.GetChild(i);
-                            if (child != null)
-                            {
-                                firstNode = child;
-                                position = child.Position;
-                                break;
-                            }
-                        }
-
-                        yield return new QueryRegion(
-                            parent: parent,
-                            startSlot: regionStart,
-                            endSlot: regionEnd,
-                            firstNode: firstNode,
-                            position: position);
+                        startSlotOffset = 0;
+                        slotCount = totalConsumed;
+                        firstNode = startNode;
+                        position = startNode.Position;
+                        return true;
                     }
 
-                    break;
+                    // Exclusive: region starts after the start match and ends before the end delimiter.
+                    startSlotOffset = startConsumed;
+                    slotCount = totalConsumed - startConsumed - endConsumed;
+                    position = afterStart.Position;
+                    firstNode = slotCount > 0 ? afterStart : null;
+                    return true;
                 }
 
+                totalConsumed++;
                 current = current.NextSibling();
             }
+
+            return false;
         }
     }
 }

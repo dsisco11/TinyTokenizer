@@ -141,6 +141,13 @@ internal static class RegionTraversal
 {
     internal delegate bool TryGetRegionDelegate(SyntaxNode node, out int consumedCount);
 
+    internal delegate bool TryGetOffsetRegionDelegate(
+        SyntaxNode node,
+        out int startSlotOffset,
+        out int slotCount,
+        out SyntaxNode? firstNode,
+        out int position);
+
     internal static IEnumerable<QueryRegion> SelectRegions(SyntaxNode root, TryGetRegionDelegate tryGetRegion)
     {
         ArgumentNullException.ThrowIfNull(tryGetRegion);
@@ -162,6 +169,49 @@ internal static class RegionTraversal
                     firstNode: current,
                     position: current.Position
                 );
+            }
+
+            if (TryMoveToFirstChild(ref current, pathStack))
+                continue;
+
+            if (!TryMoveToNextSiblingOrAncestor(ref current, pathStack))
+                break;
+        }
+    }
+
+    internal static IEnumerable<QueryRegion> SelectRegions(SyntaxNode root, TryGetOffsetRegionDelegate tryGetRegion)
+    {
+        ArgumentNullException.ThrowIfNull(tryGetRegion);
+
+        var pathStack = new List<int>(8);
+        var current = root;
+
+        while (true)
+        {
+            if (current.Parent != null &&
+                tryGetRegion(current, out var startSlotOffset, out var slotCount, out var firstNode, out var position))
+            {
+                var parent = current.Parent;
+                var startSlot = current.SiblingIndex;
+
+                if (startSlot >= 0)
+                {
+                    var regionStart = startSlot + startSlotOffset;
+                    if (regionStart < 0)
+                        regionStart = 0;
+
+                    if (slotCount < 0)
+                        slotCount = 0;
+
+                    yield return new QueryRegion(
+                        parentPath: CreateParentPath(pathStack),
+                        parent: parent,
+                        startSlot: regionStart,
+                        endSlot: regionStart + slotCount,
+                        firstNode: firstNode,
+                        position: position
+                    );
+                }
             }
 
             if (TryMoveToFirstChild(ref current, pathStack))
