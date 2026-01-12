@@ -193,6 +193,23 @@ void main() {
         _output.WriteLine(dump);
         Assert.NotNull(dump);
     }
+
+    [Fact]
+    public void Editor_Between_MethodBodyStartEnd_Replace_WithNonDelimitedText()
+    {
+        var schema = CreateGlslSchema();
+        var tree = SyntaxTree.Parse("void main() { return 0.0; }", schema);
+
+        var editor = tree.CreateEditor();
+
+        var functionName = "main";
+        var methodBody = Query.Syntax<GlFunctionNode>().Named(functionName).Block("body");
+        var bodyContents = Query.Between(methodBody.Start(), methodBody.End());
+
+        editor.Replace(bodyContents, "\nreturn 1.0;");
+
+        editor.Commit();
+    }
     
     [Fact]
     public void Parse_RecognizesGlslFunctions()

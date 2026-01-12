@@ -935,7 +935,7 @@ public class SyntaxEditorTests
 
         Assert.Equal("f{inserted}", tree.ToText());
     }
-    
+
     #endregion
 
     #region Function-Like Block Insertion Scenarios
