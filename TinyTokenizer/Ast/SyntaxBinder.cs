@@ -125,7 +125,7 @@ public sealed class SyntaxBinder
             var boundChildren = BindChildren(syntaxNode);
             if (!ChildrenEqual(GetOriginalChildren(syntaxNode), boundChildren))
             {
-                return new GreenSyntaxNode(syntaxNode.Kind, boundChildren);
+                return RebuildNode(syntaxNode, boundChildren);
             }
             return node;
         }
@@ -138,8 +138,8 @@ public sealed class SyntaxBinder
         {
             var processedChildren = ProcessChildSequence(boundChildren2);
             
-            // Rebuild node with processed children if any changed
-            if (!ChildrenEqual(boundChildren2, processedChildren))
+            // Rebuild if recursive binding or direct pattern matching changed any child.
+            if (!ChildrenEqual(GetOriginalChildren(node), processedChildren))
             {
                 return RebuildNode(node, processedChildren);
             }
@@ -301,14 +301,9 @@ public sealed class SyntaxBinder
     /// </summary>
     private static GreenNode RebuildNode(GreenNode original, ImmutableArray<GreenNode> newChildren)
     {
-        // Handle different node types
-        return original switch
-        {
-            GreenBlock block => new GreenBlock(block.OpenerNode, block.CloserNode, newChildren),
-            GreenList => new GreenList(newChildren),
-            GreenSyntaxNode syntax => new GreenSyntaxNode(syntax.Kind, newChildren),
-            _ => original // Leaves don't have children to rebuild
-        };
+        return original is GreenContainer container
+            ? container.WithChildren(newChildren)
+            : original;
     }
     
     /// <summary>
