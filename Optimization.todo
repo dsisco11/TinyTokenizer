@@ -1,0 +1,228 @@
+# TinyTokenizer optimization task list
+
+Goal: reduce binding, editing, query, and parsing costs while preserving public APIs,
+tree ownership, matching semantics, trivia, and source roundtripping.
+
+Status: proposed work. Source inspection identified the opportunities below; no
+optimization or fresh performance validation is represented as complete here.
+The ordering prioritizes contained changes before larger algorithmic changes.
+
+## Evidence and completion rules
+
+- [ ] Record the baseline commit, runtime, build configuration, hardware, benchmark
+      command, input sizes, and workload counts for each experiment.
+- [ ] Capture fresh Release baselines before modifying each affected subsystem.
+      Treat existing BenchmarkDotNet.Artifacts reports as historical evidence only.
+- [ ] Measure elapsed time, allocated bytes, and GC activity using matched workloads.
+      Use repeated baseline/candidate comparisons; investigate noisy results before
+      accepting a performance claim.
+- [ ] Keep candidates separately reviewable and reversible. Preserve public APIs
+      and established owning algorithms unless an explicitly justified change is needed.
+- [ ] Run builds and tests through subagents, following the workspace instructions.
+- [ ] For each item below, require focused correctness validation, a second review,
+      and an independent audit before marking it complete. Audit expected intermediate
+      behavior against the entire contract before reporting a defect.
+- [ ] Store commands, results, limitations, and adoption decisions under
+      docs/performance/, linking each report from this document.
+
+## 1. Eliminate unnecessary allocation during syntax binding
+
+Sources: TinyTokenizer/Ast/SyntaxBinder.cs;
+TinyTokenizer/Ast/GreenContainer.cs; TinyTokenizer/Ast/GreenBlock.cs.
+
+Observation: BindChildren creates storage before knowing whether children change;
+GetOriginalChildren repeatedly copies slots; ProcessChildSequence materializes output
+even without a match. Successful matches use LINQ to extract child ranges.
+
+- [ ] Add baseline cases for initial binding, unchanged full/local rebinding,
+      no-match schemas, empty definitions, and actual changed subtrees.
+- [ ] Delay replacement-child storage until the first recursively changed child.
+- [ ] Delay sequence-output storage until the first successful pattern match.
+- [ ] Compare directly with original slots or carry explicit change information,
+      avoiding arrays created solely to test reference equality.
+- [ ] Reuse existing immutable storage where available without assuming all
+      GreenContainer.Children implementations are allocation-free.
+- [ ] Preserve GreenBlock's opener/inner-children/closer slot model; avoid repeated
+      delimiter-inclusive array assembly and redundant reconstruction copies.
+- [ ] Replace Skip/Take match extraction with a direct range copy. Transfer builder
+      storage only where ownership and exact capacity requirements permit it.
+- [ ] Preserve reference identity on unchanged trees, nested binding, definition
+      priority, already-bound node handling, delimiter trivia, and error nodes.
+- [ ] Run binder reconstruction, syntax tree, green-node, roundtrip, and affected
+      query tests; compare binding shapes as well as serialized text.
+- [ ] Measure allocation and time separately for changed and unchanged cases.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: unchanged traversal avoids replacement arrays where possible; changed
+binding preserves behavior; measured results justify adoption without claiming that
+unchanged local rebinding measures the cost of editing.
+
+## 2. Batch edits that share containers and ancestors
+
+Sources: TinyTokenizer/Ast/SyntaxEditor.cs; TinyTokenizer/Ast/GreenTreeBuilder.cs;
+TinyTokenizer/Ast/GreenList.cs; TinyTokenizer/Ast/GreenBlock.cs.
+
+Observation: Commit applies edits individually, reconstructing shared ancestors and
+their child storage and metadata repeatedly. E edits in a wide N-child container can
+approach O(E * N) reconstruction work.
+
+- [ ] Establish real-edit benchmarks varying edit count, container width, depth,
+      replacement size, and distribution across containers independently.
+- [ ] Include successful edits that change the green root, with and without syntax
+      definitions, rather than only rebinding an unchanged tree.
+- [ ] Document existing ordering for same-position, overlapping, and ancestor/child
+      edits, including trivia transfer, undo, and atomic commit behavior.
+- [ ] Design batching within the owning editing/builder modules, initially for
+      compatible non-overlapping edits to one parent.
+- [ ] Apply compatible child edits in one reconstruction per affected container.
+- [ ] Extend reconstruction to shared ancestors once the local batching contract
+      is validated; preserve structural sharing for untouched subtrees.
+- [ ] Preserve existing handling for incompatible edits until an equivalent grouped
+      implementation is demonstrated. Do not silently reorder them.
+- [ ] Verify rebinding targets remain valid after insertions/removals and cover
+      mixed root-level and nested edits, without narrowing required binding scope.
+- [ ] Validate replacement/insertion/removal, same-position ordering, delimiter
+      boundaries, trivia, undo/redo, and error behavior against the existing path.
+- [ ] Measure reconstruction cost separately from parsing, selection, and rebinding,
+      alongside end-to-end Commit cost.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: compatible batches rebuild shared structure fewer times, preserve edit
+semantics, and show measured benefits across edit-count/container-width scaling.
+
+## 3. Bound streaming parser storage and reduce dispatch allocation
+
+Sources: TinyTokenizer/SimpleTokenReader.cs; TinyTokenizer/TokenParser.cs.
+
+Observation: SimpleTokenReader retains consumed tokens in its list until parsing
+ends. ParseToken also uses an iterator for each dispatch.
+
+- [ ] Measure large streaming inputs with bounded consumer retention; distinguish
+      parser lookahead memory from output tokens and retained source text.
+- [ ] Inventory lookahead requirements and any rewind assumptions across parser
+      call sites before changing reader storage.
+- [ ] Replace unbounded consumed-prefix retention with compaction or a ring buffer
+      that preserves all outstanding lookahead and EOF behavior.
+- [ ] Validate long inputs, large lookahead, nested blocks, unterminated constructs,
+      early enumeration termination, and enumerator disposal.
+- [ ] Benchmark reader throughput and peak retained memory in addition to total
+      allocations; verify storage scales with lookahead demand rather than total input.
+- [ ] Separately identify single-result versus multi-result ParseToken branches.
+- [ ] Introduce a direct result path for common single-result dispatch where it
+      removes iterator allocation without duplicating parsing control flow.
+- [ ] Preserve lazy enumeration, token order, multi-result branches, errors, and
+      source positions; compare token streams with the baseline implementation.
+- [ ] Measure dispatch changes separately from reader-storage changes.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: consumed-token retention is bounded by reader needs and any dispatch
+optimization demonstrates a separate measured benefit with equivalent token streams.
+
+## 4. Match supported queries before constructing red nodes
+
+Sources: TinyTokenizer/Ast/TreeWalker.cs; TinyTokenizer/Ast/NodeQuery.cs;
+TinyTokenizer/Ast/NodeQueryTypes.cs; TinyTokenizer/Ast/QueryCombinators.cs;
+TinyTokenizer/Ast/QueryRegion.cs; TinyTokenizer/Ast/SyntaxNode.cs.
+
+Observation: traversal and sibling matching construct red wrappers before knowing
+whether nodes match. Sparse-result queries may allocate for many rejected nodes.
+
+- [ ] Baseline sparse, dense, absent, and early-exit queries over wide/deep trees;
+      include sequences, regions, repeated queries, and newline queries.
+- [ ] Define which built-in queries can evaluate entirely against green nodes,
+      and which predicates require red-node context or observable callback ordering.
+- [ ] Add green traversal/matching within the owning query infrastructure, reusing
+      existing matching semantics instead of reimplementing query control flow.
+- [ ] Materialize red results and required parent chains only when needed.
+- [ ] Retain the established path for unsupported/custom predicates and combinations.
+- [ ] Preserve result order, parent/tree links, positions, sibling indices, equality,
+      selection modes, region boundaries, and schema-dependent behavior.
+- [ ] Check newline/trivia and zero-width region semantics explicitly; do not assume
+      every query result is a directly corresponding green child.
+- [ ] Compare result identities/locations and callback behavior against the current
+      path, including First/Last/Nth/Skip/Take and mixed query compositions.
+- [ ] Measure allocation savings and time for both sparse and dense matches;
+      assess parent-chain materialization costs before adopting caching.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: supported queries avoid unnecessary red wrappers with equivalent public
+results and a safe, validated path for queries requiring red context.
+
+## 5. Reduce temporary allocation during green-tree construction
+
+Sources: TinyTokenizer/Ast/GreenLexer.cs; TinyTokenizer/Ast/GreenNodeCache.cs;
+TinyTokenizer/Lexer.cs; TinyTokenizer/OperatorTrie.cs; TinyTokenizer/TokenizerOptions.cs.
+
+Observation: GreenLexer materializes simple tokens, eagerly creates trivia builders,
+and can replace freshly created nodes to attach trailing trivia. Each lexer instance
+also constructs an operator trie.
+
+- [ ] Baseline full parsing and small edit-fragment parsing with varying trivia,
+      comment, operator, string, nesting, and source-size distributions.
+- [ ] Delay trivia-builder allocation until the first trivia item is encountered.
+- [ ] Where practical, construct leaves with final leading/trailing trivia once,
+      preserving existing ownership rules and recursive block behavior.
+- [ ] Evaluate existing common-token/trivia caches before adding new caches; avoid
+      retaining arbitrary source strings globally.
+- [ ] Determine whether operator lookup data can be safely prepared once per stable
+      configuration and reused across parses; verify option mutability and concurrency.
+- [ ] Benchmark the contained changes independently before larger reader changes.
+- [ ] Evaluate bounded simple-token lookahead as a separate candidate to replace
+      full-array materialization, preserving the existing green parser's control flow.
+- [ ] Assess source lifetime, lookahead requirements, and error recovery before
+      adopting the reader candidate; share compatible infrastructure with item 3
+      only where the reader contracts actually align.
+- [ ] Validate exact roundtripping for whitespace-only input, comments, strings,
+      delimiters, malformed input, Unicode, and EOF trivia; run concurrency checks
+      for any newly shared lookup data.
+- [ ] Measure end-to-end parse time, allocated bytes, and peak retained memory,
+      including small fragments where setup costs matter most.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: adopt only candidates with demonstrated gains and unchanged source/trivia
+semantics; document the decision for full-array versus bounded-lookahead parsing.
+
+## 6. Prepare binding patterns and reduce failed match attempts
+
+Sources: TinyTokenizer/Ast/SyntaxBinder.cs; TinyTokenizer/Ast/Schema.cs;
+TinyTokenizer/Ast/NodeQuery.cs; TinyTokenizer/Ast/QueryCombinators.cs;
+TinyTokenizer/Ast/SyntaxTree.cs.
+
+Observation: every child position tries definitions in priority order, repeatedly
+checks schema resolution, and passes an ImmutableArray through an IReadOnlyList
+matching interface. The current binding benchmark contains only three definitions.
+
+- [ ] Extend binding benchmarks across definition counts, alternatives per definition,
+      match density, shared prefixes, and long failing sequences.
+- [ ] Measure binder construction separately from reused-binder matching and actual
+      SyntaxTree binding/rebinding, which creates binders at call sites.
+- [ ] Prepare schema-specific matching data once at an appropriate owner/lifetime.
+      Preserve resolution behavior when query objects are reused across schemas.
+- [ ] Verify and measure boxing at the ImmutableArray-to-IReadOnlyList boundary;
+      evaluate one reusable sequence adapter per child sequence or a suitable
+      internal matching representation without changing the public query API.
+- [ ] Derive conservative possible starting kind/text constraints for supported
+      patterns and use them to avoid impossible definition attempts.
+- [ ] Preserve global priority and alternative order within candidate filtering.
+- [ ] Retain unrestricted candidates for optional prefixes, negation, lookahead,
+      custom queries, and other patterns without a proven starting constraint.
+- [ ] Validate identical winners and consumed ranges for ambiguous matches,
+      equal priorities, schema references, and zero-consumption combinations.
+- [ ] Measure preparation overhead and retained memory against matching savings,
+      including small schemas and one-shot parses.
+- [ ] Complete second review and independent audit; link the evidence and decision.
+
+Completion: prepared matching preserves exact selection semantics and demonstrates
+benefits at relevant schema sizes without unacceptable small-workload regressions.
+
+## Final verification and reporting
+
+- [ ] Run the complete relevant test suites through a subagent after adopted changes
+      are combined, including end-to-end editing coverage where supported.
+- [ ] Re-run representative combined workloads to detect interactions between binding,
+      editing, parsing, and query changes.
+- [ ] Publish an evidence table with baseline/candidate timing, allocation, workload
+      counts, uncertainty, and any peak-memory measurements.
+- [ ] Distinguish implemented/validated improvements, rejected experiments, and
+      deferred work; do not mark deferred opportunities as implemented.
+- [ ] Link all evidence reports and record remaining risks or unmeasured workloads.
