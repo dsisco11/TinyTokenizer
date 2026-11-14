@@ -856,11 +856,12 @@ public sealed class SyntaxEditor
             .ToList();
         
         // Sort edits by document position descending (process from end to start).
-        // For same position, use sequence number descending (later queued edits first for same position).
-        // This ensures that edits at later positions are applied first, so their
-        // paths remain valid as earlier edits don't shift their positions.
+        // At equal positions, consume original slots before insertions can shift their saved indices.
+        // Reverse sequence order among insertions preserves their final queue order;
+        // later document positions still execute before earlier ones.
         var sortedEdits = _edits
             .OrderByDescending(e => e.Position)
+            .ThenByDescending(e => e.ConsumesOriginalNodes)
             .ThenByDescending(e => e.SequenceNumber)
             .ToList();
         
@@ -921,6 +922,11 @@ internal abstract class PendingEdit
     /// The document position of this edit, used for sorting edits in reverse order.
     /// </summary>
     public abstract int Position { get; }
+
+    /// <summary>
+    /// Whether this edit consumes original slots rather than only inserting at a boundary.
+    /// </summary>
+    public virtual bool ConsumesOriginalNodes => false;
     
     /// <summary>
     /// The path to the parent node affected by this edit.
@@ -998,6 +1004,9 @@ internal sealed class RemoveEdit : PendingEdit
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override bool ConsumesOriginalNodes => _count > 0;
     
     public override NodePath AffectedPath => _path.Parent();
     
@@ -1032,6 +1041,9 @@ internal sealed class ReplaceEdit : PendingEdit
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override bool ConsumesOriginalNodes => _count > 0;
     
     public override NodePath AffectedPath => _path.Parent();
     
@@ -1132,6 +1144,9 @@ internal sealed class ReplaceNodesEdit : PendingEdit
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override bool ConsumesOriginalNodes => _count > 0;
     
     public override NodePath AffectedPath => _path.Parent();
     
@@ -1254,6 +1269,9 @@ internal sealed class ReplaceRegionEdit : PendingEdit
     }
     
     public override int Position => _region.Position;
+
+    /// <inheritdoc/>
+    public override bool ConsumesOriginalNodes => !_region.IsEmpty;
     
     public override NodePath AffectedPath => _region.ParentPath;
     
@@ -1345,6 +1363,9 @@ internal sealed class ReplaceNodesRegionEdit : PendingEdit
     }
     
     public override int Position => _region.Position;
+
+    /// <inheritdoc/>
+    public override bool ConsumesOriginalNodes => !_region.IsEmpty;
     
     public override NodePath AffectedPath => _region.ParentPath;
     
