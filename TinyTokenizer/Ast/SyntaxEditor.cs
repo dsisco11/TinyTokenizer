@@ -339,7 +339,7 @@ public sealed class SyntaxEditor
                 var path = region.FirstNode != null 
                     ? NodePath.FromNode(region.FirstNode) 
                     : region.ParentPath.Child(region.StartSlot);
-                _edits.Add(new RemoveEdit(path, region.Position, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
+                _edits.Add(new RemoveEdit(path, region.Position, region.EndPosition, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
             }
             // Empty regions: nothing to remove, silently skip
         }
@@ -369,7 +369,7 @@ public sealed class SyntaxEditor
     public SyntaxEditor Remove(SyntaxNode node)
     {
         var path = NodePath.FromNode(node);
-        _edits.Add(new RemoveEdit(path, node.Position) { SequenceNumber = _sequenceNumber++ });
+        _edits.Add(new RemoveEdit(path, node.Position, node.EndPosition) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
     
@@ -496,7 +496,7 @@ public sealed class SyntaxEditor
     {
         var path = NodePath.FromNode(node);
         var (leading, trailing) = GetTrivia(node);
-        _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        _edits.Add(new ReplaceEdit(path, text, node.Position, node.EndPosition, leading, trailing) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
     
@@ -522,7 +522,7 @@ public sealed class SyntaxEditor
         var text = replacer(node);
         var path = NodePath.FromNode(node);
         var (leading, trailing) = GetTrivia(node);
-        _edits.Add(new ReplaceEdit(path, text, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        _edits.Add(new ReplaceEdit(path, text, node.Position, node.EndPosition, leading, trailing) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
     
@@ -572,7 +572,7 @@ public sealed class SyntaxEditor
         var greenNodes = replacements.ToImmutableArray();
         var path = NodePath.FromNode(node);
         var (leading, trailing) = GetTrivia(node);
-        _edits.Add(new ReplaceNodesEdit(path, greenNodes, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        _edits.Add(new ReplaceNodesEdit(path, greenNodes, node.Position, node.EndPosition, leading, trailing) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
     
@@ -600,7 +600,7 @@ public sealed class SyntaxEditor
             var (leading, trailing) = GetTriviaForRegion(region);
             var contentWithoutTrivia = GetContentWithoutTriviaForRegion(region);
             var newText = transformer(contentWithoutTrivia);
-            _edits.Add(new ReplaceEdit(path, newText, region.Position, leading, trailing, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
+            _edits.Add(new ReplaceEdit(path, newText, region.Position, region.EndPosition, leading, trailing, region.SlotCount) { SequenceNumber = _sequenceNumber++ });
         }
         
         return this;
@@ -635,7 +635,7 @@ public sealed class SyntaxEditor
         var (leading, trailing) = GetTrivia(node);
         var contentWithoutTrivia = GetContentWithoutTrivia(node);
         var newText = transformer(contentWithoutTrivia);
-        _edits.Add(new ReplaceEdit(path, newText, node.Position, leading, trailing) { SequenceNumber = _sequenceNumber++ });
+        _edits.Add(new ReplaceEdit(path, newText, node.Position, node.EndPosition, leading, trailing) { SequenceNumber = _sequenceNumber++ });
         return this;
     }
     
@@ -840,6 +840,8 @@ public sealed class SyntaxEditor
     
     /// <summary>
     /// Applies all pending edits atomically.
+    /// Earlier edits fully contained by a later replacement are discarded before execution.
+    /// Insertions are discarded only strictly inside the replacement's original character interval.
     /// The tree's undo stack is updated, allowing Undo() to revert.
     /// Automatically performs incremental syntax rebinding at the lowest common ancestor
     /// of all affected paths if the tree has a schema with syntax definitions.
@@ -849,8 +851,12 @@ public sealed class SyntaxEditor
         if (_edits.Count == 0)
             return;
         
-        // Collect affected paths before sorting (for incremental rebinding)
-        var affectedPaths = _edits
+        // Cancel superseded commands against original intervals before any slot indices can shift.
+        // Keep the queue intact until application succeeds, as with the existing commit path.
+        var retainedEdits = EditCancellation.Filter(_edits);
+
+        // Only retained commands contribute paths to incremental rebinding.
+        var affectedPaths = retainedEdits
             .Select(e => e.AffectedPath)
             .Where(p => !p.IsRoot)
             .ToList();
@@ -859,7 +865,7 @@ public sealed class SyntaxEditor
         // At equal positions, consume original slots before insertions can shift their saved indices.
         // Reverse sequence order among insertions preserves their final queue order;
         // later document positions still execute before earlier ones.
-        var sortedEdits = _edits
+        var sortedEdits = retainedEdits
             .OrderByDescending(e => e.Position)
             .ThenByDescending(e => e.ConsumesOriginalNodes)
             .ThenByDescending(e => e.SequenceNumber)
@@ -916,12 +922,27 @@ public sealed class SyntaxEditor
 
 #region Pending Edit Types
 
+/// <summary>
+/// A queued mutation anchored to the original tree before commit.
+/// </summary>
 internal abstract class PendingEdit
 {
     /// <summary>
     /// The document position of this edit, used for sorting edits in reverse order.
     /// </summary>
     public abstract int Position { get; }
+
+    /// <summary>
+    /// Exclusive end of the original character interval, including trivia.
+    /// Insertions occupy only their boundary position.
+    /// </summary>
+    public virtual int EndPosition => Position;
+
+    /// <summary>
+    /// Whether this command can supersede earlier commands within its original interval.
+    /// Empty-region replacements behave as insertions and cannot supersede commands.
+    /// </summary>
+    public virtual bool IsReplacement => false;
 
     /// <summary>
     /// Whether this edit consumes original slots rather than only inserting at a boundary.
@@ -990,20 +1011,30 @@ internal sealed class InsertNodesEdit : PendingEdit
     }
 }
 
+/// <summary>
+/// Removes original sibling slots without superseding earlier queued commands.
+/// </summary>
 internal sealed class RemoveEdit : PendingEdit
 {
     private readonly NodePath _path;
     private readonly int _position;
     private readonly int _count;
     
-    public RemoveEdit(NodePath path, int position, int count = 1)
+    /// <summary>
+    /// Captures the original target interval and slots to remove.
+    /// </summary>
+    public RemoveEdit(NodePath path, int position, int endPosition, int count = 1)
     {
         _path = path;
         _position = position;
+        EndPosition = endPosition;
         _count = count;
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override int EndPosition { get; }
 
     /// <inheritdoc/>
     public override bool ConsumesOriginalNodes => _count > 0;
@@ -1018,6 +1049,9 @@ internal sealed class RemoveEdit : PendingEdit
     }
 }
 
+/// <summary>
+/// Replaces original sibling slots with parsed text while preserving their boundary trivia.
+/// </summary>
 internal sealed class ReplaceEdit : PendingEdit
 {
     private readonly NodePath _path;
@@ -1027,7 +1061,10 @@ internal sealed class ReplaceEdit : PendingEdit
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
-    public ReplaceEdit(NodePath path, string text, int position, 
+    /// <summary>
+    /// Captures replacement text and the original target interval, slots, and trivia.
+    /// </summary>
+    public ReplaceEdit(NodePath path, string text, int position, int endPosition,
         ImmutableArray<GreenTrivia> leadingTrivia = default,
         ImmutableArray<GreenTrivia> trailingTrivia = default,
         int count = 1)
@@ -1035,12 +1072,19 @@ internal sealed class ReplaceEdit : PendingEdit
         _path = path;
         _text = text;
         _position = position;
+        EndPosition = endPosition;
         _count = count;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override int EndPosition { get; }
+
+    /// <inheritdoc/>
+    public override bool IsReplacement => ConsumesOriginalNodes;
 
     /// <inheritdoc/>
     public override bool ConsumesOriginalNodes => _count > 0;
@@ -1121,6 +1165,9 @@ internal sealed class ReplaceEdit : PendingEdit
     }
 }
 
+/// <summary>
+/// Replaces original sibling slots with prebuilt nodes and transferred boundary trivia.
+/// </summary>
 internal sealed class ReplaceNodesEdit : PendingEdit
 {
     private readonly NodePath _path;
@@ -1130,7 +1177,10 @@ internal sealed class ReplaceNodesEdit : PendingEdit
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
-    public ReplaceNodesEdit(NodePath path, ImmutableArray<GreenNode> nodes, int position,
+    /// <summary>
+    /// Captures replacement nodes and the original target interval, slots, and trivia.
+    /// </summary>
+    public ReplaceNodesEdit(NodePath path, ImmutableArray<GreenNode> nodes, int position, int endPosition,
         ImmutableArray<GreenTrivia> leadingTrivia = default,
         ImmutableArray<GreenTrivia> trailingTrivia = default,
         int count = 1)
@@ -1138,12 +1188,19 @@ internal sealed class ReplaceNodesEdit : PendingEdit
         _path = path;
         _nodes = nodes;
         _position = position;
+        EndPosition = endPosition;
         _count = count;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
     
     public override int Position => _position;
+
+    /// <inheritdoc/>
+    public override int EndPosition { get; }
+
+    /// <inheritdoc/>
+    public override bool IsReplacement => ConsumesOriginalNodes;
 
     /// <inheritdoc/>
     public override bool ConsumesOriginalNodes => _count > 0;
@@ -1251,6 +1308,9 @@ internal sealed class InsertAtSlotEdit : PendingEdit
     }
 }
 
+/// <summary>
+/// Replaces an original query region with parsed text, or inserts when the region is empty.
+/// </summary>
 internal sealed class ReplaceRegionEdit : PendingEdit
 {
     private readonly QueryRegion _region;
@@ -1258,17 +1318,27 @@ internal sealed class ReplaceRegionEdit : PendingEdit
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
+    /// <summary>
+    /// Captures replacement text and the original region's character interval and trivia.
+    /// </summary>
     public ReplaceRegionEdit(QueryRegion region, string text,
         ImmutableArray<GreenTrivia> leadingTrivia,
         ImmutableArray<GreenTrivia> trailingTrivia)
     {
         _region = region;
+        EndPosition = region.EndPosition;
         _text = text;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
     
     public override int Position => _region.Position;
+
+    /// <inheritdoc/>
+    public override int EndPosition { get; }
+
+    /// <inheritdoc/>
+    public override bool IsReplacement => ConsumesOriginalNodes;
 
     /// <inheritdoc/>
     public override bool ConsumesOriginalNodes => !_region.IsEmpty;
@@ -1345,6 +1415,9 @@ internal sealed class ReplaceRegionEdit : PendingEdit
     }
 }
 
+/// <summary>
+/// Replaces an original query region with prebuilt nodes, or inserts when the region is empty.
+/// </summary>
 internal sealed class ReplaceNodesRegionEdit : PendingEdit
 {
     private readonly QueryRegion _region;
@@ -1352,17 +1425,27 @@ internal sealed class ReplaceNodesRegionEdit : PendingEdit
     private readonly ImmutableArray<GreenTrivia> _leadingTrivia;
     private readonly ImmutableArray<GreenTrivia> _trailingTrivia;
     
+    /// <summary>
+    /// Captures replacement nodes and the original region's character interval and trivia.
+    /// </summary>
     public ReplaceNodesRegionEdit(QueryRegion region, ImmutableArray<GreenNode> nodes,
         ImmutableArray<GreenTrivia> leadingTrivia,
         ImmutableArray<GreenTrivia> trailingTrivia)
     {
         _region = region;
+        EndPosition = region.EndPosition;
         _nodes = nodes;
         _leadingTrivia = leadingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : leadingTrivia;
         _trailingTrivia = trailingTrivia.IsDefault ? ImmutableArray<GreenTrivia>.Empty : trailingTrivia;
     }
     
     public override int Position => _region.Position;
+
+    /// <inheritdoc/>
+    public override int EndPosition { get; }
+
+    /// <inheritdoc/>
+    public override bool IsReplacement => ConsumesOriginalNodes;
 
     /// <inheritdoc/>
     public override bool ConsumesOriginalNodes => !_region.IsEmpty;

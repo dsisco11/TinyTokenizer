@@ -60,6 +60,30 @@ public sealed class SyntaxEditorCancellationTests
     }
 
     /// <summary>
+    /// Verifies that replacing a node with prebuilt nodes is canceled by a later enclosing replacement.
+    /// </summary>
+    [Fact]
+    public void ReplaceNodeWithPrebuiltNodesThenEnclosingBlock_LeavesOnlyBlockReplacement()
+    {
+        // Arrange: prebuilt replacement nodes come from a separate syntax tree.
+        var tree = SyntaxTree.Parse("{alpha}");
+        var alpha = Assert.Single(tree.Select(Query.Ident("alpha")));
+        var replacementTree = SyntaxTree.Parse("first,second,third");
+        var replacements = replacementTree.Root.Children.ToArray();
+        var block = Assert.IsType<SyntaxBlock>(Assert.Single(tree.Select(Query.BraceBlock)));
+
+        // Act: replace alpha with green nodes, then replace its original enclosing block.
+        tree.CreateEditor()
+            .Replace(alpha, replacements)
+            .Replace(block, "{final}")
+            .Commit();
+
+        // Assert: none of the prebuilt nodes leak into the enclosing replacement.
+        Assert.Equal("{final}", tree.ToText());
+        AssertSingleBlockContent(tree, "final");
+    }
+
+    /// <summary>
     /// Verifies that replacing a block cancels an earlier removal of one of its descendants.
     /// </summary>
     [Fact]
@@ -77,6 +101,49 @@ public sealed class SyntaxEditorCancellationTests
             .Commit();
 
         // Assert: the block replacement restores only its explicitly supplied contents.
+        Assert.Equal("{final}", tree.ToText());
+        AssertSingleBlockContent(tree, "final");
+    }
+
+    /// <summary>
+    /// Verifies that a query-based range removal is canceled by a later replacement enclosing its range.
+    /// </summary>
+    [Fact]
+    public void RemoveQueryRangeThenEnclosingBlock_LeavesOnlyBlockReplacement()
+    {
+        // Arrange: the query resolves to multiple original child slots within the enclosing block.
+        var tree = SyntaxTree.Parse("{start,one,two,end}");
+        var block = Assert.IsType<SyntaxBlock>(Assert.Single(tree.Select(Query.BraceBlock)));
+        var range = Query.Between(Query.Ident("one"), Query.Ident("two"), inclusive: true);
+
+        // Act: remove the original range, then replace the containing original block.
+        tree.CreateEditor()
+            .Remove(range)
+            .Replace(block, "{final}")
+            .Commit();
+
+        // Assert: the query-based range removal contributes no text or structure to the result.
+        Assert.Equal("{final}", tree.ToText());
+        AssertSingleBlockContent(tree, "final");
+    }
+
+    /// <summary>
+    /// Verifies that a query-based content edit is canceled by a later replacement enclosing its target.
+    /// </summary>
+    [Fact]
+    public void EditQueryTargetThenEnclosingBlock_LeavesOnlyBlockReplacement()
+    {
+        // Arrange: the content edit and the enclosing block replacement both target the original tree.
+        var tree = SyntaxTree.Parse("{alpha}");
+        var block = Assert.IsType<SyntaxBlock>(Assert.Single(tree.Select(Query.BraceBlock)));
+
+        // Act: queue the query-based edit before replacing its containing block.
+        tree.CreateEditor()
+            .Edit(Query.Ident("alpha"), _ => "changed")
+            .Replace(block, "{final}")
+            .Commit();
+
+        // Assert: only the explicitly supplied contents of the enclosing block remain.
         Assert.Equal("{final}", tree.ToText());
         AssertSingleBlockContent(tree, "final");
     }
@@ -102,6 +169,87 @@ public sealed class SyntaxEditorCancellationTests
         Assert.Equal("head final tail", tree.ToText());
         Assert.Equal(new[] { "head", "final", "tail" },
             tree.Root.Children.Select(node => Assert.IsType<SyntaxToken>(node).Text));
+    }
+
+    /// <summary>
+    /// Verifies that insertions exactly at either replacement boundary survive cancellation.
+    /// </summary>
+    [Fact]
+    public void InsertAtRangeBoundariesThenReplaceRange_PreservesBothInsertions()
+    {
+        // Arrange: the insertion points match the start and end of the original selected range.
+        var tree = SyntaxTree.Parse("head one two tail");
+        var one = Assert.Single(tree.Select(Query.Ident("one")));
+        var two = Assert.Single(tree.Select(Query.Ident("two")));
+        var range = Query.Between(Query.Ident("one"), Query.Ident("two"), inclusive: true);
+
+        // Act: boundary insertions are outside the replacement's strict interior.
+        tree.CreateEditor()
+            .InsertBefore(one, "before ")
+            .InsertAfter(two, "after ")
+            .Replace(range, "final")
+            .Commit();
+
+        // Assert: replacing the range preserves content inserted at both original edges.
+        Assert.Equal("head before final after tail", tree.ToText());
+        Assert.Equal(new[] { "head", "before", "final", "after", "tail" },
+            tree.Root.Children.Select(node => Assert.IsType<SyntaxToken>(node).Text));
+    }
+
+    /// <summary>
+    /// Verifies that cancellation leaves newline and indentation trivia as if only the range replacement ran.
+    /// </summary>
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void InsertInsideTriviaBearingRangeThenReplaceRange_PreservesOriginalTrivia(string newline)
+    {
+        // Arrange: the selected range and the inner insertion sit among original newline trivia.
+        var source = $"head{newline}  one{newline}  two{newline}tail";
+        var expectedTree = SyntaxTree.Parse(source);
+        var actualTree = SyntaxTree.Parse(source);
+        var expectedRange = Query.Between(Query.Ident("one"), Query.Ident("two"), inclusive: true);
+        var actualRange = Query.Between(Query.Ident("one"), Query.Ident("two"), inclusive: true);
+        var one = Assert.Single(actualTree.Select(Query.Ident("one")));
+
+        // Act: compare the cancellation result with the same replacement applied to the untouched source.
+        expectedTree.CreateEditor().Replace(expectedRange, "final").Commit();
+        actualTree.CreateEditor()
+            .InsertAfter(one, $"injected;{newline}")
+            .Replace(actualRange, "final")
+            .Commit();
+
+        // Assert: no inserted content leaks through, and the replacement keeps the original trivia.
+        Assert.Equal(expectedTree.ToText(), actualTree.ToText());
+    }
+
+    /// <summary>
+    /// Verifies that cancellation history restores the original tree and replays the pruned batch.
+    /// </summary>
+    [Fact]
+    public void CanceledDescendantEdit_SupportsUndoAndRedo()
+    {
+        // Arrange: the child edit is superseded by the queued replacement of its original block.
+        var tree = SyntaxTree.Parse("{alpha}");
+        var alpha = Assert.Single(tree.Select(Query.Ident("alpha")));
+        var block = Assert.IsType<SyntaxBlock>(Assert.Single(tree.Select(Query.BraceBlock)));
+
+        // Act: commit both commands, then traverse the history in both directions.
+        tree.CreateEditor()
+            .Replace(alpha, "changed")
+            .Replace(block, "{final}")
+            .Commit();
+        var committedText = tree.ToText();
+        var undoSucceeded = tree.Undo();
+        var textAfterUndo = tree.ToText();
+        var redoSucceeded = tree.Redo();
+
+        // Assert: history retains the atomic result of the batch, not the superseded intermediate edit.
+        Assert.True(undoSucceeded);
+        Assert.Equal("{alpha}", textAfterUndo);
+        Assert.True(redoSucceeded);
+        Assert.Equal("{final}", committedText);
+        Assert.Equal(committedText, tree.ToText());
     }
 
     #endregion
